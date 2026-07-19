@@ -28,6 +28,7 @@
     "build:full": "bun run build:vendor && bun run build",
     "start": "bun run build && bunx electron .",
     "typecheck": "tsc --noEmit",
+    "generate:icons": "cd resources && ./generate-icons.sh",
     "pack": "bun run build:cli-resource && electron-builder --dir",
     "dist": "bun run build:cli-resource && electron-builder",
     "dist:mac": "bun run build:cli-resource && electron-builder --mac",

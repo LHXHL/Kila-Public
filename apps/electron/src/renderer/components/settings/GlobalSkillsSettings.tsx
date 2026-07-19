@@ -1,45 +1,21 @@
 import * as React from 'react'
 import { useSetAtom } from 'jotai'
-import { Blocks, Download, FolderOpen, RefreshCw, Search, Trash2, Wand2 } from 'lucide-react'
+import { Blocks, Download, FolderOpen, Search, Wand2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { workspaceCapabilitiesVersionAtom } from '@/atoms/agent-atoms'
-import { MessageResponse } from '@/components/ai-elements/message'
 import { EntityMetadataChip } from '@/components/ui/entity-metadata-chip'
 import { SettingsSection } from './primitives'
+import { SkillDetailDialog } from './SkillDetailDialog'
 import { cn } from '@/lib/utils'
 import type {
-  GlobalSkillDetail,
   GlobalSkillEntry,
   GlobalSkillEntryKind,
   GlobalSkillEntrySource,
+  GlobalSkillDetail,
 } from '@kila/shared'
 
 const SOURCE_ORDER: GlobalSkillEntrySource[] = ['kila', 'codex', 'claude']
-
-function stripSkillFrontmatter(content: string): string {
-  return content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '')
-}
-
-function normalizePath(value: string): string {
-  return value.replace(/\\/g, '/')
-}
-
-function resolveRelativePath(path: string, rootDir?: string): string {
-  if (!rootDir) return normalizePath(path)
-
-  const normalizedPath = normalizePath(path)
-  const normalizedRoot = normalizePath(rootDir)
-
-  if (normalizedRoot && normalizedPath.startsWith(normalizedRoot)) {
-    const relative = normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '')
-    return relative || normalizedPath
-  }
-
-  return normalizedPath
-}
 
 function getEntryTypeLabel(kind: GlobalSkillEntryKind): string {
   return kind === 'plugin' ? 'Plugin' : 'Skill'
@@ -49,19 +25,6 @@ function getEntryIcon(kind: GlobalSkillEntryKind): React.ReactElement {
   return kind === 'plugin'
     ? <Blocks className="size-4" />
     : <Wand2 className="size-4" />
-}
-
-function formatContentPreview(detail: GlobalSkillDetail | null): string {
-  if (!detail) return ''
-  if (detail.contentType === 'json') {
-    try {
-      return JSON.stringify(JSON.parse(detail.content), null, 2)
-    } catch {
-      return detail.content
-    }
-  }
-
-  return stripSkillFrontmatter(detail.content)
 }
 
 interface LibraryListItemProps {
@@ -114,7 +77,7 @@ function LibraryListItem({ entry, selected, onSelect }: LibraryListItemProps): R
             )}
           </div>
 
-          <div className="mt-1 truncate text-[12px] leading-5 text-muted-foreground">
+          <div className="mt-1 line-clamp-2 min-h-10 break-words text-[12px] leading-5 text-muted-foreground">
             {preview}
           </div>
 
@@ -126,23 +89,6 @@ function LibraryListItem({ entry, selected, onSelect }: LibraryListItemProps): R
         </div>
       </div>
     </button>
-  )
-}
-
-interface MetadataRowProps {
-  label: string
-  value: React.ReactNode
-  mono?: boolean
-}
-
-function MetadataRow({ label, value, mono = false }: MetadataRowProps): React.ReactElement {
-  return (
-    <div className="grid gap-2 border-b border-border/45 px-4 py-3 last:border-b-0 md:grid-cols-[104px_minmax(0,1fr)] md:gap-4">
-      <div className="text-[12px] text-muted-foreground">{label}</div>
-      <div className={cn('min-w-0 text-[14px] leading-6 text-foreground', mono && 'font-mono text-[13px]')}>
-        {value}
-      </div>
-    </div>
   )
 }
 
@@ -204,25 +150,9 @@ export function GlobalSkillsSettings(): React.ReactElement {
   }, [entries, search])
 
   React.useEffect(() => {
-    if (filteredEntries.length === 0) {
-      setSelectedId(null)
-      setSelectedDetail(null)
-      return
-    }
-
-    if (!selectedId || !filteredEntries.some((entry) => entry.id === selectedId)) {
-      setSelectedId(filteredEntries[0]?.id ?? null)
-    }
-  }, [filteredEntries, selectedId])
-
-  React.useEffect(() => {
     if (!selectedId) return
     void loadDetail(selectedId)
   }, [loadDetail, selectedId])
-
-  const selectedMeta = React.useMemo(() => (
-    selectedId ? entries.find((entry) => entry.id === selectedId) ?? null : null
-  ), [entries, selectedId])
 
   const groupedEntries = React.useMemo(() => {
     const groups = SOURCE_ORDER.map((source) => ({
@@ -250,15 +180,6 @@ export function GlobalSkillsSettings(): React.ReactElement {
     [entries],
   )
 
-  const canManageSelected = selectedDetail?.managementMode === 'managed' && selectedDetail.kind === 'skill'
-  const contentPreview = React.useMemo(() => formatContentPreview(selectedDetail), [selectedDetail])
-  const detailLocation = React.useMemo(() => (
-    selectedDetail ? resolveRelativePath(selectedDetail.path, selectedDetail.sourceRoot ?? skillsDir) : ''
-  ), [selectedDetail, skillsDir])
-  const detailContentFile = React.useMemo(() => (
-    selectedDetail ? resolveRelativePath(selectedDetail.contentPath, selectedDetail.sourceRoot ?? skillsDir) : ''
-  ), [selectedDetail, skillsDir])
-
   const handleDeleteSkill = React.useCallback(async (detail: GlobalSkillDetail): Promise<void> => {
     if (detail.managementMode !== 'managed' || detail.kind !== 'skill') return
     if (!confirm(`确定删除 Skill「${detail.name}」？此操作不可恢复。`)) return
@@ -266,13 +187,10 @@ export function GlobalSkillsSettings(): React.ReactElement {
     try {
       await window.electronAPI.deleteGlobalAgentSkill(detail.slug)
       bumpCapabilitiesVersion((value) => value + 1)
-      const nextEntries = await loadList()
+      await loadList()
       if (selectedId === detail.id) {
-        const nextSelected = nextEntries[0]?.id ?? null
-        setSelectedId(nextSelected)
-        if (!nextSelected) {
-          setSelectedDetail(null)
-        }
+        setSelectedId(null)
+        setSelectedDetail(null)
       }
     } catch (error) {
       console.error('[全局 Skills 设置] 删除失败:', error)
@@ -291,6 +209,17 @@ export function GlobalSkillsSettings(): React.ReactElement {
       console.error('[全局 Skills 设置] 切换状态失败:', error)
     }
   }, [bumpCapabilitiesVersion, loadDetail, loadList])
+
+  const handleSelectEntry = React.useCallback((entryId: string): void => {
+    setSelectedDetail(null)
+    setSelectedId(entryId)
+  }, [])
+
+  const handleDetailOpenChange = React.useCallback((open: boolean): void => {
+    if (open) return
+    setSelectedId(null)
+    setSelectedDetail(null)
+  }, [])
 
   const handleInstallSkill = React.useCallback(async (): Promise<void> => {
     const repoUrl = installRepoUrl.trim()
@@ -337,7 +266,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
     <div className="space-y-8">
       <SettingsSection
         title="技能库"
-        description="统一浏览 Kila、Codex、Claude 三套能力来源。左侧浏览 Skill / Plugin，右侧查看详情；只有 Kila 自己管理的 Skill 支持启停和删除。"
+        description="统一浏览 Kila、Codex、Claude 三套能力来源。点击 Skill 或 Plugin 后在弹窗中查看完整详情；只有 Kila 管理的 Skill 支持启停和删除。"
         action={skillsDir ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -354,7 +283,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
         ) : undefined}
       >
         <div className="space-y-4">
-          <div className="grid gap-3 rounded-[var(--kila-panel-radius)] border border-border/45 bg-card/70 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto]">
+          <div className="grid gap-3 rounded-[var(--kila-panel-radius)] border border-border/45 bg-card/70 p-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto]">
             <Input
               value={installRepoUrl}
               onChange={(event) => setInstallRepoUrl(event.target.value)}
@@ -384,7 +313,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
             </button>
           </div>
 
-          <div className="grid items-center gap-4 rounded-[var(--kila-panel-radius)] border border-border/45 bg-card/70 p-4 [grid-template-columns:minmax(0,1fr)_auto]">
+          <div className="grid items-center gap-4 rounded-[var(--kila-panel-radius)] border border-border/45 bg-card/70 p-4 xl:grid-cols-[minmax(0,1fr)_auto]">
             <div className="relative min-w-0">
               <Search className="absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -395,222 +324,67 @@ export function GlobalSkillsSettings(): React.ReactElement {
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <EntityMetadataChip tone="accent">{totalSkills} Skills</EntityMetadataChip>
               <EntityMetadataChip>{totalPlugins} Plugins</EntityMetadataChip>
               <EntityMetadataChip>{sourceCount} 来源</EntityMetadataChip>
             </div>
           </div>
 
-          <div className="grid h-[min(74vh,860px)] min-h-[580px] gap-6 [grid-template-columns:minmax(300px,340px)_minmax(0,1fr)]">
-            <div className="surface-panel flex min-h-0 flex-col overflow-hidden bg-card/82 p-0">
-              <div className="px-4 pb-2.5 pt-4">
-                <div className="text-[15px] font-semibold text-foreground">所有能力</div>
-                <div className="mt-0.5 text-[12px] text-muted-foreground">
-                  按来源聚合显示可见 Skill 与 Plugin
-                </div>
+          <div className="rounded-[var(--kila-panel-radius)] border border-border/45 bg-card/70 p-3 sm:p-4">
+            {loadingList ? (
+              <div className="flex min-h-[280px] items-center justify-center text-sm text-muted-foreground">
+                加载中...
               </div>
-
-              {loadingList ? (
-                <div className="flex h-full items-center justify-center py-12 text-sm text-muted-foreground">
-                  加载中...
-                </div>
-              ) : groupedEntries.length === 0 ? (
-                <div className="m-3 flex h-full items-center justify-center rounded-[20px] border border-dashed border-border/60 px-4 py-14 text-center text-sm text-muted-foreground">
-                  没有匹配的条目。
-                </div>
-              ) : (
-                <ScrollArea className="min-h-0 flex-1">
-                  <div className="space-y-4 p-2.5">
-                    {groupedEntries.map((group) => (
-                      <section key={group.source} className="space-y-2">
-                        <div className="flex items-center justify-between px-2 py-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/78">
-                            {group.label}
-                          </div>
-                          <div className="text-[10.5px] tabular-nums text-muted-foreground/62">
-                            {group.entries.length}
-                          </div>
+            ) : groupedEntries.length === 0 ? (
+              <div className="flex min-h-[280px] items-center justify-center rounded-[20px] border border-dashed border-border/60 px-4 text-center text-sm text-muted-foreground">
+                没有匹配的条目。
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {groupedEntries.map((group) => (
+                  <section key={group.source} className="space-y-3">
+                    <div className="flex items-center justify-between px-1">
+                      <div>
+                        <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/78">
+                          {group.label}
                         </div>
-
-                        <div className="space-y-1.5">
-                          {group.entries.map((entry) => (
-                            <LibraryListItem
-                              key={entry.id}
-                              entry={entry}
-                              selected={selectedId === entry.id}
-                              onSelect={() => setSelectedId(entry.id)}
-                            />
-                          ))}
+                        <div className="mt-0.5 text-[12px] text-muted-foreground/70">
+                          点击卡片查看完整详情
                         </div>
-                      </section>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-            </div>
-
-            <div className="surface-panel min-h-0 min-w-0 overflow-hidden bg-card/88">
-              <ScrollArea className="h-full">
-                <div className="space-y-6 p-6">
-                  {!selectedId || !selectedMeta ? (
-                    <div className="flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-[20px] border border-dashed border-border/60 px-6 text-center">
-                      <div className="text-sm font-medium text-foreground">选择一个条目查看详情</div>
-                      <div className="max-w-md text-sm text-muted-foreground">
-                        右侧会显示来源、类型、路径，以及 `SKILL.md` 或 `plugin.json` 原始内容。
                       </div>
+                      <EntityMetadataChip>{group.entries.length}</EntityMetadataChip>
                     </div>
-                  ) : loadingDetail ? (
-                    <div className="flex min-h-[320px] items-center justify-center text-sm text-muted-foreground">
-                      正在加载详情...
+
+                    <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {group.entries.map((entry) => (
+                        <LibraryListItem
+                          key={entry.id}
+                          entry={entry}
+                          selected={selectedId === entry.id}
+                          onSelect={() => handleSelectEntry(entry.id)}
+                        />
+                      ))}
                     </div>
-                  ) : selectedDetail ? (
-                    <>
-                      <div className="rounded-[20px] border border-border/55 bg-background/72 p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex min-w-0 items-start gap-4">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-[hsl(var(--kila-accent-muted))] text-primary">
-                              {selectedDetail.kind === 'plugin'
-                                ? <Blocks className="size-5" />
-                                : <Wand2 className="size-5" />}
-                            </div>
-
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <div className="truncate text-[30px] font-medium tracking-tight text-foreground">
-                                  {selectedDetail.name}
-                                </div>
-                                <EntityMetadataChip>{selectedDetail.sourceLabel}</EntityMetadataChip>
-                                <EntityMetadataChip tone="accent">{getEntryTypeLabel(selectedDetail.kind)}</EntityMetadataChip>
-                                {canManageSelected && (
-                                  <EntityMetadataChip tone={selectedDetail.enabled ? 'accent' : 'neutral'}>
-                                    {selectedDetail.enabled ? '已启用' : '已停用'}
-                                  </EntityMetadataChip>
-                                )}
-                                {!canManageSelected && (
-                                  <EntityMetadataChip>只读</EntityMetadataChip>
-                                )}
-                              </div>
-
-                              <div className="mt-2 inline-flex max-w-full rounded-full border border-border/55 bg-background/72 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground/78">
-                                <span className="truncate">{selectedDetail.slug}</span>
-                              </div>
-
-                              <div className="mt-3 max-w-3xl text-[14px] leading-6 text-muted-foreground">
-                                {selectedDetail.description ?? '该条目未提供简介，建议直接查看下方原始内容。'}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  onClick={() => { void window.electronAPI.openGlobalAgentPath(selectedDetail.path) }}
-                                  className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-[hsl(var(--kila-accent-muted))] hover:text-foreground"
-                                >
-                                  <FolderOpen className="size-4" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>打开所在目录</TooltipContent>
-                            </Tooltip>
-
-                            {canManageSelected && (
-                              <>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      onClick={() => { void handleUpdateSkill(selectedDetail) }}
-                                      disabled={installing}
-                                      className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-[hsl(var(--kila-accent-muted))] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      <RefreshCw className="size-4" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>根据来源锁更新 Skill</TooltipContent>
-                                </Tooltip>
-
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      onClick={() => { void handleDeleteSkill(selectedDetail) }}
-                                      className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-destructive/25 hover:bg-destructive/10 hover:text-destructive"
-                                    >
-                                      <Trash2 className="size-4" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>删除 Skill</TooltipContent>
-                                </Tooltip>
-
-                                <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3 py-2">
-                                  <span className="text-[12px] text-muted-foreground">启用</span>
-                                  <Switch
-                                    checked={selectedDetail.enabled}
-                                    onCheckedChange={(enabled) => { void handleToggleSkill(selectedDetail, enabled) }}
-                                  />
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="px-1 text-[13px] font-semibold text-foreground">元数据</div>
-                        <div className="overflow-hidden rounded-[18px] border border-border/55 bg-background/65">
-                          <MetadataRow label="标识符" value={selectedDetail.id} mono />
-                          <MetadataRow label="名称" value={selectedDetail.name} />
-                          <MetadataRow label="来源" value={selectedDetail.sourceLabel} />
-                          <MetadataRow label="类型" value={getEntryTypeLabel(selectedDetail.kind)} />
-                          <MetadataRow label="模式" value={selectedDetail.managementMode === 'managed' ? 'Kila 管理' : '只读浏览'} />
-                          <MetadataRow label="位置" value={<span className="break-all">{detailLocation}</span>} mono />
-                          <MetadataRow label="目录" value={<span className="break-all">{selectedDetail.path}</span>} mono />
-                          <MetadataRow label="内容文件" value={<span className="break-all">{detailContentFile}</span>} mono />
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="px-1 text-[13px] font-semibold text-foreground">内容</div>
-                        <div className="overflow-hidden rounded-[18px] border border-border/55 bg-background/65">
-                          <div className="border-b border-border/45 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
-                            {selectedDetail.contentType === 'json' ? 'plugin.json' : 'SKILL.md'}
-                          </div>
-                          <div className="min-w-0 px-5 py-5">
-                            {selectedDetail.contentType === 'json' ? (
-                              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-[16px] border border-border/45 bg-[hsl(var(--code-surface))] p-4 font-mono text-[12px] leading-6 text-foreground">
-                                {contentPreview}
-                              </pre>
-                            ) : (
-                              <MessageResponse
-                                basePath={selectedDetail.path}
-                                className={cn(
-                                  '[&_h1]:font-sans [&_h2]:font-sans [&_h3]:font-sans',
-                                  '[&_h1]:text-[28px] [&_h2]:text-[22px] [&_h3]:text-[17px]',
-                                  '[&_p]:text-[14px] [&_pre]:bg-[hsl(var(--code-surface))]',
-                                )}
-                                compact
-                              >
-                                {contentPreview}
-                              </MessageResponse>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex min-h-[220px] items-center justify-center text-sm text-muted-foreground">
-                      详情加载失败。
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
+                  </section>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </SettingsSection>
+
+      <SkillDetailDialog
+        open={selectedId !== null}
+        detail={selectedDetail}
+        loading={loadingDetail || (selectedId !== null && selectedDetail === null)}
+        installing={installing}
+        skillsDir={skillsDir}
+        onOpenChange={handleDetailOpenChange}
+        onUpdate={(detail) => { void handleUpdateSkill(detail) }}
+        onDelete={(detail) => { void handleDeleteSkill(detail) }}
+        onToggle={(detail, enabled) => { void handleToggleSkill(detail, enabled) }}
+      />
     </div>
   )
 }
