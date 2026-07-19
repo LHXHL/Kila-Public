@@ -119,8 +119,8 @@ export function GlobalPendingRequestsButton({
           className={cn(
             'titlebar-no-drag transition-colors',
             collapsed
-              ? 'relative rounded-2xl p-2 text-foreground/70 hover:bg-background hover:text-foreground'
-              : 'flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-[13px] text-foreground/70 hover:bg-background hover:text-foreground',
+              ? 'relative rounded-lg p-2 text-foreground/70 hover:bg-background hover:text-foreground'
+              : 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-foreground/70 hover:bg-background hover:text-foreground',
           )}
           aria-label={`待处理请求 ${total}`}
         >

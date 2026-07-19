@@ -29,7 +29,6 @@ import { shouldInspectMermaidCodeBlock, shouldRenderMermaidCodeBlock } from '@/l
 import { Button } from '@/components/ui/button'
 import { useElementWidth } from '@/hooks/use-element-width'
 import { useAttachmentImage } from '@/hooks/use-attachment-image'
-import { useSessionWebPreview } from '@/hooks/useSessionWebPreview'
 import { getElementFontSpec } from '@/lib/pretext/font-spec'
 import { normalizeMeasurementText } from '@/lib/pretext/measurement-text'
 import { measurePreWrapText } from '@/lib/pretext/text-layout'
@@ -52,6 +51,9 @@ import type { BlockInfo, StreamAnimatedOptions } from '@kila/ui'
 import type { Pluggable, PluggableList } from 'unified'
 import type { Options as MarkdownOptions } from 'react-markdown'
 import { FilePathChip, isAbsoluteFilePath, isRelativeFilePath } from './file-path-chip'
+import { RichLinkChip } from './rich-link-chip'
+import { transformMarkdownUrl } from './rich-link-presentation'
+import { normalizeMessageRichLinks, parseRichTextTokens } from './rich-link-text-parser'
 import { LazyMermaidBlock } from './LazyMermaidBlock'
 import type { HTMLAttributes, ComponentProps, ReactNode } from 'react'
 import type { FileAttachment } from '@kila/shared'
@@ -242,33 +244,6 @@ const REHYPE_PLUGINS = [rehypeKatex]
 
 // ===== Memo'd Markdown 子组件（稳定引用，避免 react-markdown 每帧重建组件映射） =====
 
-/** 外部链接渲染器 */
-const SessionPreviewMarkdownLink = React.memo(function SessionPreviewMarkdownLink({
-  href,
-  children: linkChildren,
-  ...linkProps
-}: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
-  const { openExternal, openUrlInSessionBrowser } = useSessionWebPreview()
-
-  return (
-    <a
-      {...linkProps}
-      href={href}
-      onClick={(e) => {
-        e.preventDefault()
-        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-          void openUrlInSessionBrowser(href).catch(() => {
-            void openExternal(href)
-          })
-        }
-      }}
-      title={href}
-    >
-      {linkChildren}
-    </a>
-  )
-})
-
 function MarkdownTable({
   children,
   ...props
@@ -358,7 +333,9 @@ export const MessageResponse = React.memo(
   }: MessageResponseProps): React.ReactElement {
     // 稳定引用的 components 对象，避免 react-markdown 每帧重建组件映射
     const components = React.useMemo(() => ({
-      a: SessionPreviewMarkdownLink,
+      a: (props: React.ComponentProps<typeof RichLinkChip>) => (
+        <RichLinkChip {...props} basePath={basePath} />
+      ),
       table: MarkdownTable,
       pre: MarkdownPre,
       code: (props: React.HTMLAttributes<HTMLElement>) => (
@@ -369,6 +346,11 @@ export const MessageResponse = React.memo(
     const typographyClassName = compact
       ? 'prose dark:prose-invert max-w-none text-[0.8125rem] prose-p:my-1 prose-p:leading-[1.6] prose-li:my-0.5 prose-li:leading-[1.6] prose-pre:my-0 prose-headings:my-1 prose-headings:font-sans prose-headings:font-medium prose-blockquote:my-2 prose-blockquote:rounded-md prose-blockquote:border-l-2 prose-blockquote:bg-muted/35 prose-blockquote:px-3 prose-blockquote:py-2'
       : 'prose dark:prose-invert max-w-none text-[0.9375rem] prose-p:my-1.5 prose-p:leading-[1.62] prose-li:leading-[1.62] prose-pre:my-0 prose-headings:my-2 prose-headings:font-sans prose-headings:font-medium prose-blockquote:my-3 prose-blockquote:rounded-md prose-blockquote:border-l-2 prose-blockquote:bg-muted/35 prose-blockquote:px-3 prose-blockquote:py-2'
+
+    const processedContent = React.useMemo(
+      () => normalizeMessageRichLinks(children),
+      [children],
+    )
 
     return (
       <div
@@ -389,8 +371,9 @@ export const MessageResponse = React.memo(
           remarkPlugins={REMARK_PLUGINS}
           rehypePlugins={REHYPE_PLUGINS}
           components={components}
+          urlTransform={transformMarkdownUrl}
         >
-          {children}
+          {processedContent}
         </Markdown>
       </div>
     )
@@ -405,27 +388,36 @@ export const MessageResponse = React.memo(
 /** 折叠行数阈值 */
 const COLLAPSE_LINE_THRESHOLD = 4
 
-/** 将文本中的 @file:路径、/skill:名称、#mcp:名称 替换为样式化 chip */
+/** 将普通文本片段中的明确链接替换为 Codex 风格富链接。 */
+function renderRichLinks(text: string, basePath: string | undefined, keyPrefix: string): React.ReactNode[] {
+  return parseRichTextTokens(text).map((token, index) => {
+    if (token.kind === 'text') return token.value
+    return (
+      <RichLinkChip key={`${keyPrefix}-link-${index}`} href={token.href} basePath={basePath}>
+        {token.label}
+      </RichLinkChip>
+    )
+  })
+}
+
+/** 将用户消息中的 Mention 与链接统一渲染为样式化 chip。 */
 const MENTION_RE = /@file:(\S+)|\/skill:(\S+)|#mcp:(\S+)/g
 
-function renderTextWithMentions(text: string): React.ReactNode {
+function renderTextWithMentions(text: string, basePath?: string): React.ReactNode {
   const parts: React.ReactNode[] = []
   let lastIndex = 0
   let match: RegExpExecArray | null
 
-  // 重置 lastIndex（全局正则复用时需要）
   MENTION_RE.lastIndex = 0
 
   while ((match = MENTION_RE.exec(text)) !== null) {
-    // 添加 match 前的纯文本
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index))
+      parts.push(...renderRichLinks(text.slice(lastIndex, match.index), basePath, `text-${lastIndex}`))
     }
 
     const key = `mention-${match.index}`
 
     if (match[1]) {
-      // @file: 文件引用 — 轻品牌 chip
       const filePath = match[1]
       const fileName = filePath.split('/').pop() || filePath
       parts.push(
@@ -439,7 +431,6 @@ function renderTextWithMentions(text: string): React.ReactNode {
         </span>
       )
     } else if (match[2]) {
-      // /skill: Skill 引用 — 紫色 chip
       const skillName = formatGlobalSkillMentionLabel(match[2])
       parts.push(
         <span key={key} className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]">
@@ -448,7 +439,6 @@ function renderTextWithMentions(text: string): React.ReactNode {
         </span>
       )
     } else if (match[3]) {
-      // #mcp: MCP 引用 — 绿色 chip
       const mcpName = match[3]
       parts.push(
         <span key={key} className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]">
@@ -461,9 +451,8 @@ function renderTextWithMentions(text: string): React.ReactNode {
     lastIndex = match.index + match[0].length
   }
 
-  // 添加剩余文本
   if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex))
+    parts.push(...renderRichLinks(text.slice(lastIndex), basePath, `text-${lastIndex}`))
   }
 
   return parts.length > 0 ? parts : text
@@ -472,6 +461,7 @@ function renderTextWithMentions(text: string): React.ReactNode {
 interface UserMessageContentProps extends HTMLAttributes<HTMLDivElement> {
   children: string
   attachmentsNode?: React.ReactNode
+  basePath?: string
 }
 
 /**
@@ -480,7 +470,7 @@ interface UserMessageContentProps extends HTMLAttributes<HTMLDivElement> {
  * - 点击展开/收起，带渐变遮罩
  */
 export const UserMessageContent = React.memo(
-  function UserMessageContent({ children, className, attachmentsNode, ...props }: UserMessageContentProps): React.ReactElement {
+  function UserMessageContent({ children, className, attachmentsNode, basePath, ...props }: UserMessageContentProps): React.ReactElement {
     const [isExpanded, setIsExpanded] = React.useState(false)
     const [shouldCollapse, setShouldCollapse] = React.useState(false)
     const contentRef = React.useRef<HTMLDivElement | null>(null)
@@ -524,7 +514,7 @@ export const UserMessageContent = React.memo(
     return (
       <div
         className={cn(
-          'relative inline-flex w-fit max-w-[min(100%,42rem)] min-w-0 flex-col rounded-[14px] border border-[hsl(var(--kila-user-bubble-border)/0.72)] bg-[hsl(var(--kila-user-bubble))] px-3.5 py-2.5 text-[hsl(var(--kila-user-bubble-foreground))]',
+          'relative inline-flex w-fit max-w-[min(100%,42rem)] min-w-0 flex-col rounded-xl border border-[hsl(var(--kila-user-bubble-border)/0.72)] bg-[hsl(var(--kila-user-bubble))] px-3.5 py-2.5 text-[hsl(var(--kila-user-bubble-foreground))]',
           shouldCollapse && !isExpanded && 'pb-6',
           className
         )}
@@ -539,7 +529,7 @@ export const UserMessageContent = React.memo(
             shouldCollapse && !isExpanded && 'max-h-[6.5em]'
           )}
         >
-          {renderTextWithMentions(children)}
+          {renderTextWithMentions(children, basePath)}
         </div>
         {shouldCollapse && (
           <button
@@ -548,7 +538,7 @@ export const UserMessageContent = React.memo(
             className={cn(
               'mt-1 flex items-center gap-1 text-xs text-[hsl(var(--kila-user-bubble-foreground)/0.72)] transition-colors hover:text-[hsl(var(--kila-user-bubble-foreground))]',
               !isExpanded &&
-                'absolute bottom-0 left-0 right-0 rounded-b-[14px] bg-gradient-to-t from-[hsl(var(--kila-user-bubble))] via-[hsl(var(--kila-user-bubble))] to-transparent px-3.5 pb-2.5 pt-4'
+                'absolute bottom-0 left-0 right-0 rounded-b-xl bg-gradient-to-t from-[hsl(var(--kila-user-bubble))] via-[hsl(var(--kila-user-bubble))] to-transparent px-3.5 pb-2.5 pt-4'
             )}
           >
             {isExpanded ? (
@@ -788,6 +778,7 @@ const StreamdownBlock = React.memo<MarkdownOptions>(
   (prev, next) =>
     prev.children === next.children &&
     prev.components === next.components &&
+    prev.urlTransform === next.urlTransform &&
     isSamePlugins(prev.rehypePlugins as PluggableList | undefined, next.rehypePlugins as PluggableList | undefined) &&
     isSamePlugins(prev.remarkPlugins as PluggableList | undefined, next.remarkPlugins as PluggableList | undefined),
 )
@@ -821,7 +812,9 @@ export const StreamingMessageResponse = React.memo(
 
     // 稳定引用的 components 对象
     const components = React.useMemo(() => ({
-      a: SessionPreviewMarkdownLink,
+      a: (props: React.ComponentProps<typeof RichLinkChip>) => (
+        <RichLinkChip {...props} basePath={basePath} />
+      ),
       table: MarkdownTable,
       pre: MarkdownPre,
       code: (props: React.HTMLAttributes<HTMLElement>) => (
@@ -835,7 +828,7 @@ export const StreamingMessageResponse = React.memo(
 
     // remend 修复截断的 Markdown 语法
     const processedContent = React.useMemo(() => {
-      return remend(children || '')
+      return normalizeMessageRichLinks(remend(children || ''))
     }, [children])
 
     // marked.lexer 拆 block
@@ -977,6 +970,7 @@ export const StreamingMessageResponse = React.memo(
               components={components}
               rehypePlugins={plugins}
               remarkPlugins={remarkPlugins}
+              urlTransform={transformMarkdownUrl}
             >
               {block.content}
             </StreamdownBlock>

@@ -1,0 +1,209 @@
+name: "kami-kila"
+description: "Kami-inspired warm paper editorial style for Kila WeChat articles"
+colors:
+  primary: "#1B365D"
+  secondary: "#3D3D3A"
+  text: "#3D3D3A"
+  text_light: "#6B6A64"
+  background: "#FFFFFF"
+  code_bg: "#EEEBE2"
+  code_color: "#1B365D"
+  quote_border: "#1B365D"
+  quote_bg: "#FFFFFF"
+  border_radius: "2px"
+  summary_bg: "#EEF1F2"
+  summary_border: "#D7DEE5"
+  highlight_bg: "#F0EFE8"
+  highlight_border: "#DFDDD2"
+  darkmode:
+    background: "#1D2024"
+    text: "#E8E4DB"
+    text_light: "#B7B2A7"
+    primary: "#AEBFD5"
+    code_bg: "#292D32"
+    code_color: "#D2DFED"
+    quote_bg: "#252A30"
+    quote_border: "#AEBFD5"
+base_css: |
+  body {
+    font-family: "TsangerJinKai02", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif;
+    font-size: 16px;
+    line-height: 1.92;
+    letter-spacing: 0.35px;
+    color: #3D3D3A;
+    background: #FFFFFF;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 28px 22px 46px;
+    word-wrap: break-word;
+  }
+
+  h1 {
+    font-family: "TsangerJinKai02", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif;
+    font-size: 29px;
+    font-weight: 600;
+    color: #141413;
+    margin: 40px 0 22px;
+    padding: 0 0 20px;
+    border-bottom: 1px solid #D9D7CE;
+    line-height: 1.42;
+    letter-spacing: 0.045em;
+  }
+
+  h2 {
+    font-family: "TsangerJinKai02", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: #141413;
+    margin: 40px 0 16px;
+    padding: 4px 0 4px 13px;
+    border-left: 4px solid #1B365D;
+    line-height: 1.5;
+    letter-spacing: 0.015em;
+  }
+
+  h3 {
+    font-family: "TsangerJinKai02", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1B365D;
+    margin: 30px 0 12px;
+    line-height: 1.55;
+  }
+
+  h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1B365D;
+    margin: 24px 0 10px;
+    line-height: 1.6;
+  }
+
+  p {
+    font-size: 16px;
+    line-height: 1.92;
+    color: #3D3D3A;
+    margin: 13px 0;
+  }
+
+  strong {
+    font-weight: 600;
+    color: #1B365D;
+  }
+
+  em {
+    font-style: normal;
+    color: #504E49;
+  }
+
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    color: #1B365D;
+    background: #EEEBE2;
+    padding: 2px 5px;
+    border-radius: 2px;
+  }
+
+  pre {
+    background: #242A31;
+    color: #E7E9E6;
+    padding: 16px;
+    border-radius: 2px;
+    overflow-x: auto;
+    margin: 18px 0;
+    line-height: 1.65;
+    border: 1px solid #313942;
+  }
+
+  pre code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    background: none;
+    color: #E7E9E6;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  blockquote {
+    border-left: 3px solid #1B365D;
+    background: #FFFFFF;
+    margin: 20px 0;
+    padding: 13px 17px;
+    border-radius: 0;
+    color: #3D3D3A;
+  }
+
+  blockquote p {
+    margin: 7px 0;
+    color: #3D3D3A;
+  }
+
+  ul {
+    padding-left: 24px;
+    margin: 14px 0;
+    color: #1B365D;
+  }
+
+  ol {
+    padding-left: 24px;
+    margin: 14px 0;
+  }
+
+  li {
+    font-size: 16px;
+    line-height: 1.88;
+    color: #3D3D3A;
+    margin: 7px 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0;
+    font-size: 15px;
+    background: #FFFFFF;
+  }
+
+  thead {
+    background: #1B365D;
+    color: #FFFFFF;
+  }
+
+  th {
+    color: #FFFFFF;
+    font-weight: 600;
+    padding: 10px 12px;
+    text-align: left;
+    border: 1px solid #1B365D;
+  }
+
+  td {
+    padding: 10px 12px;
+    border: 1px solid #DFDDD2;
+    color: #3D3D3A;
+  }
+
+  tr {
+    background: #FFFFFF;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 26px auto;
+    border-radius: 2px;
+  }
+
+  a {
+    color: #1B365D;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid #D9D7CE;
+    margin: 30px 0;
+  }

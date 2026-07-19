@@ -194,7 +194,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
             <button
               type="button"
               aria-label="关闭右侧栏"
-              className="flex size-8 items-center justify-center rounded-xl border border-transparent text-muted-foreground/52 transition-colors duration-150 hover:border-border/55 hover:bg-muted/45 hover:text-foreground/72"
+              className="flex size-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground/52 transition-colors duration-150 hover:border-border/55 hover:bg-muted/45 hover:text-foreground/72"
               onClick={handleClose}
             >
               <X className="size-3.5" />

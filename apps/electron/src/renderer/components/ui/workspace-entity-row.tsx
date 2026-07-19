@@ -58,8 +58,8 @@ export function WorkspaceEntityRow({
     >
       {icon && (
         <div className={cn(
-          'mt-0.5 flex shrink-0 items-center justify-center rounded-lg border border-border/45 bg-background/65 text-muted-foreground',
-          compact ? 'size-6' : 'size-8',
+          'mt-0.5 flex shrink-0 items-center justify-center border border-border/45 bg-background/65 text-muted-foreground',
+          compact ? 'size-6 rounded-md' : 'size-8 rounded-lg',
         )}
         >
           {icon}

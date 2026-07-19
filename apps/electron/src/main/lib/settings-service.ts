@@ -7,7 +7,8 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { getSettingsPath } from './config-paths'
-import { getBuiltinTheme } from '@kila/shared'
+import { DEFAULT_THEME_ID, isBuiltinThemeId, isCustomThemeId } from '@kila/shared'
+import { resolveTheme } from './theme-service'
 import { DEFAULT_THEME_MODE, DEFAULT_LOCALE, DEFAULT_THEME_ID_SETTING } from '../../types'
 import type { AppSettings } from '../../types'
 
@@ -32,10 +33,11 @@ function normalizePositiveNumber(value: unknown): number | undefined {
 }
 
 function normalizeThemeId(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim()) {
-    return DEFAULT_THEME_ID_SETTING
-  }
-  return getBuiltinTheme(value.trim()).id
+  if (typeof value !== 'string' || !value.trim()) return DEFAULT_THEME_ID_SETTING
+  const themeId = value.trim()
+  if (isBuiltinThemeId(themeId)) return themeId
+  if (isCustomThemeId(themeId) && resolveTheme(themeId).id === themeId) return themeId
+  return DEFAULT_THEME_ID
 }
 
 function normalizePermissionMode(value: unknown): AppSettings['agentPermissionMode'] {
@@ -129,7 +131,27 @@ export function getSettings(): AppSettings {
 }
 
 /**
- * 更新应用设置
+ * 修复持久化设置中的失效主题 ID。
+ *
+ * 主题目录监听触发时调用；只有原始值与归一化结果不一致才写盘。
+ */
+export function repairStoredThemeId(): AppSettings | null {
+  const filePath = getSettingsPath()
+  if (!existsSync(filePath)) return null
+
+  try {
+    const data = JSON.parse(readFileSync(filePath, 'utf-8')) as Partial<AppSettings>
+    const normalizedThemeId = normalizeThemeId(data.themeId)
+    if (data.themeId === normalizedThemeId) return null
+    return updateSettings({ themeId: normalizedThemeId })
+  } catch {
+    // 设置文件本身损坏时沿用 getSettings() 的完整降级逻辑，不在主题监听中覆盖其他字段。
+    return null
+  }
+}
+
+/**
+ * 更新应用设置。
  *
  * 合并更新字段并写入文件。
  */

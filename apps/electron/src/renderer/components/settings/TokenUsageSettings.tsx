@@ -411,8 +411,8 @@ export function TokenUsageSettings(): React.ReactElement {
             <button
               type="button"
               className={selectedProvider === 'all'
-                ? 'rounded-full bg-[hsl(var(--brand-soft))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--brand-soft-foreground))]'
-                : 'rounded-full border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground'}
+                ? 'rounded-lg bg-[hsl(var(--brand-soft))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--brand-soft-foreground))]'
+                : 'rounded-lg border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground'}
               onClick={() => setSelectedProvider('all')}
             >
               All channels
@@ -422,8 +422,8 @@ export function TokenUsageSettings(): React.ReactElement {
                 key={provider.provider}
                 type="button"
                 className={selectedProvider === provider.provider
-                  ? 'rounded-full bg-[hsl(var(--brand-soft))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--brand-soft-foreground))]'
-                  : 'rounded-full border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground'}
+                  ? 'rounded-lg bg-[hsl(var(--brand-soft))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--brand-soft-foreground))]'
+                  : 'rounded-lg border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground'}
                 onClick={() => setSelectedProvider(provider.provider)}
               >
                 {formatProviderLabel(provider)} · {formatInteger(provider.totalTokens)}

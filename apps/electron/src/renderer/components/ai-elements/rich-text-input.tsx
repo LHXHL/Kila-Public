@@ -35,6 +35,7 @@ import { normalizeMeasurementText } from '@/lib/pretext/measurement-text'
 import { measurePreWrapText } from '@/lib/pretext/text-layout'
 import { PredictiveCaretOverlay } from './PredictiveCaretOverlay'
 import { htmlToPlainText, plainTextToDocument } from './rich-text-input-plain-text'
+import { RichLinkNode } from './rich-link-node'
 import { usePredictiveCaret } from './use-predictive-caret'
 
 // 创建 lowlight 实例，使用常见语言
@@ -251,7 +252,8 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   }, [setMeasurementElement])
 
   const editor = useEditor({
-    enableInputRules: false,
+    // 只启用富链接输入规则，继续禁用 StarterKit 的 Markdown 快捷格式。
+    enableInputRules: [RichLinkNode],
     enablePasteRules: false,
     extensions: [
       StarterKit.configure({
@@ -262,6 +264,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
         underline: false,
       }),
       Underline,
+      RichLinkNode,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -626,6 +629,50 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
           50% {
             caret-color: hsl(var(--primary));
           }
+        }
+        .composer-rich-link-chip {
+          --composer-link-bg: hsl(var(--kila-link-chip-background));
+          --composer-link-fg: hsl(var(--kila-link-chip-foreground));
+          max-width: min(100%, 34rem);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin: 0 1px;
+          padding: 3px 10px;
+          border-radius: 14px;
+          background-color: var(--composer-link-bg);
+          color: var(--composer-link-fg);
+          box-shadow: 0 1px 2px hsl(var(--kila-shadow-low) / 0.08);
+          font-size: 0.92em;
+          font-weight: 500;
+          line-height: 1.35;
+          white-space: nowrap;
+          vertical-align: -0.18em;
+          cursor: text;
+          transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+        }
+        .composer-rich-link-chip:hover {
+          --composer-link-bg: hsl(var(--kila-link-chip-hover));
+        }
+        .composer-rich-link-chip::before {
+          content: '';
+          width: 1.05em;
+          height: 1.05em;
+          flex-shrink: 0;
+          background-color: currentColor;
+          mask-size: contain;
+          mask-position: center;
+          mask-repeat: no-repeat;
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20'/%3E%3C/svg%3E");
+        }
+        .composer-rich-link-chip[data-rich-link-kind='document']::before,
+        .composer-rich-link-chip[data-rich-link-kind='spreadsheet']::before,
+        .composer-rich-link-chip[data-rich-link-kind='presentation']::before,
+        .composer-rich-link-chip[data-rich-link-kind='image']::before,
+        .composer-rich-link-chip[data-rich-link-kind='video']::before,
+        .composer-rich-link-chip[data-rich-link-kind='code']::before,
+        .composer-rich-link-chip[data-rich-link-kind='local-file']::before {
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E");
         }
         .mention-chip {
           background-color: hsl(var(--primary) / 0.1);

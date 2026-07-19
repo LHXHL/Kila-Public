@@ -226,7 +226,7 @@ export function ThinkingLevelSelector({
           aria-label={tooltipText}
           className={cn(
             'relative overflow-visible transition-colors duration-200',
-            buttonClassName ?? 'size-[30px] rounded-full',
+            buttonClassName ?? 'size-[30px] rounded-lg',
             currentOption.buttonClassName,
             open && 'ring-1 ring-border/50',
           )}

@@ -768,7 +768,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="truncate text-sm font-medium text-foreground">{model.name}</span>
                           {metadata.deprecated && (
-                            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                               已弃用
                             </span>
                           )}
@@ -777,7 +777,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                           {model.id}
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                          <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                             {formatTokenCount(metadata.contextWindowTokens)}
                           </span>
                           {ABILITY_ITEMS.map(({ key, label, icon: Icon }) => {
@@ -786,7 +786,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                               <span
                                 key={key}
                                 className={cn(
-                                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]',
+                                  'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px]',
                                   status === 'supported'
                                     ? 'bg-primary/10 text-primary'
                                     : status === 'unsupported'
@@ -799,7 +799,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                               </span>
                             )
                           })}
-                          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                             <DollarSign size={10} />
                             {formatModelPrice(metadata.pricing)}
                           </span>

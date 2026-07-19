@@ -205,7 +205,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 rounded-full px-3 text-xs"
+            className="h-8 gap-1.5 rounded-lg px-3 text-xs"
             onClick={() => { void handleStart() }}
             disabled={state.serverStatus === 'starting'}
             aria-label="启动本地预览服务"
@@ -218,7 +218,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 rounded-full px-3 text-xs"
+            className="h-8 gap-1.5 rounded-lg px-3 text-xs"
             onClick={handleStop}
             disabled={state.serverStatus === 'idle' && !state.serverBaseUrl}
             aria-label="停止本地预览服务"
@@ -231,7 +231,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full"
+            className="h-8 w-8 rounded-lg"
             onClick={handleBack}
             disabled={!state.canGoBack}
             aria-label="后退"
@@ -243,7 +243,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full"
+            className="h-8 w-8 rounded-lg"
             onClick={handleForward}
             disabled={!state.canGoForward}
             aria-label="前进"
@@ -255,7 +255,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full"
+            className="h-8 w-8 rounded-lg"
             onClick={handleReload}
             disabled={!state.currentUrl}
             aria-label="刷新网页"
@@ -275,14 +275,14 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             }}
             placeholder="Enter URL or start a preview server..."
             aria-label="预览地址"
-            className="h-8 min-w-[180px] flex-1 rounded-full border-border/55 bg-background/75 px-3 text-xs"
+            className="h-8 min-w-[180px] flex-1 rounded-lg border-border/55 bg-background/75 px-3 text-xs"
           />
 
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="h-8 w-8 rounded-full"
+            className="h-8 w-8 rounded-lg"
             onClick={handleOpenExternal}
             disabled={!state.currentUrl}
             aria-label="在外部浏览器打开"

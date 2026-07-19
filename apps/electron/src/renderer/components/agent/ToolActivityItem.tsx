@@ -630,14 +630,14 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
           <button
             type="button"
             onClick={handleCopy}
-            className="rounded-full px-2 py-1 text-[11px] text-foreground/42 transition-colors hover:bg-background/50 hover:text-foreground"
+            className="rounded-md px-2 py-1 text-[11px] text-foreground/42 transition-colors hover:bg-background/50 hover:text-foreground"
           >
             {copied ? '已复制' : '复制完整内容'}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full px-2 py-1 text-[11px] text-foreground/42 transition-colors hover:bg-background/50 hover:text-foreground"
+            className="rounded-md px-2 py-1 text-[11px] text-foreground/42 transition-colors hover:bg-background/50 hover:text-foreground"
           >
             关闭
           </button>

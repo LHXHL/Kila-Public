@@ -107,7 +107,7 @@ function MemoryRow({ item, onSelect, onDelete }: MemoryRowProps): React.ReactEle
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">{item.title || item.category}</span>
           <span className="text-xs text-muted-foreground">{formatTime(item.updatedAt)}</span>
-          {!isLocalMemoryUri(item.uri) && <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">Nowledge</span>}
+          {!isLocalMemoryUri(item.uri) && <span className="rounded-md bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">Nowledge</span>}
         </div>
         <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{item.content}</p>
         <Button variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => onSelect(item)}>
@@ -515,7 +515,7 @@ export function MemorySettings(): React.ReactElement {
           {selectedMemory && (
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-2">
               <div className="flex flex-wrap gap-1.5">
-                {selectedMemory.tags.map((tag) => <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">#{tag}</span>)}
+                {selectedMemory.tags.map((tag) => <span key={tag} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">#{tag}</span>)}
               </div>
               <div className="rounded-lg bg-muted/35 p-4 text-sm leading-6 text-foreground">
                 <p className="whitespace-pre-wrap break-words">{selectedMemory.content}</p>

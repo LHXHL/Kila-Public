@@ -11,7 +11,8 @@
  */
 
 import { atom } from 'jotai'
-import { DEFAULT_THEME_ID, buildThemeStyleText, deriveThemeVars, getBuiltinTheme } from '@kila/shared'
+import { DEFAULT_THEME_ID, buildThemeStyleText, deriveThemeVars, getBuiltinTheme, getBuiltinThemes, isThemeId } from '@kila/shared'
+import type { ThemeCatalog, ThemeRecord } from '@kila/shared'
 import type { ThemeMode } from '../../types'
 import { DEFAULT_FONT_SIZE } from './font-atoms'
 
@@ -37,7 +38,8 @@ function getCachedThemeMode(): ThemeMode {
 
 function getCachedThemeId(): string {
   try {
-    return getBuiltinTheme(localStorage.getItem(THEME_ID_CACHE_KEY)).id
+    const cached = localStorage.getItem(THEME_ID_CACHE_KEY)
+    return isThemeId(cached) ? cached : DEFAULT_THEME_ID
   } catch {
     return DEFAULT_THEME_ID
   }
@@ -79,6 +81,15 @@ export const themeIdAtom = atom<string>(getCachedThemeId())
 /** 系统当前是否为深色模式 */
 export const systemIsDarkAtom = atom<boolean>(true)
 
+const INITIAL_THEME_RECORDS: ThemeRecord[] = getBuiltinThemes().map((theme) => ({
+  source: 'builtin',
+  readonly: true,
+  theme,
+}))
+
+/** 内置与用户主题目录 */
+export const themeCatalogAtom = atom<ThemeCatalog>({ themes: INITIAL_THEME_RECORDS, issues: [] })
+
 /** 派生：最终解析的主题（light | dark） */
 export const resolvedThemeAtom = atom<'light' | 'dark'>((get) => {
   const mode = get(themeModeAtom)
@@ -89,7 +100,11 @@ export const resolvedThemeAtom = atom<'light' | 'dark'>((get) => {
 })
 
 /** 当前选中的主题定义 */
-export const themeDefinitionAtom = atom((get) => getBuiltinTheme(get(themeIdAtom)))
+export const themeDefinitionAtom = atom((get) => {
+  const themeId = get(themeIdAtom)
+  return get(themeCatalogAtom).themes.find((item) => item.theme.id === themeId)?.theme
+    ?? getBuiltinTheme(DEFAULT_THEME_ID)
+})
 
 /** 当前主题导出的 CSS 变量 */
 export const themeCSSVarsAtom = atom((get) => {
@@ -139,9 +154,14 @@ export async function initializeTheme(
   setThemeMode: (mode: ThemeMode) => void,
   setThemeId: (themeId: string) => void,
   setSystemIsDark: (isDark: boolean) => void,
+  setThemeCatalog: (catalog: ThemeCatalog) => void,
   setFontFamily?: (family: string) => void,
   setFontSize?: (size: number) => void,
 ): Promise<() => void> {
+  // 先加载主题目录，确保自定义主题 ID 可以被正确解析。
+  const catalog = await window.electronAPI.listThemes()
+  setThemeCatalog(catalog)
+
   // 从主进程加载持久化设置
   const settings = await window.electronAPI.getSettings()
   setThemeMode(settings.themeMode)
@@ -154,6 +174,10 @@ export async function initializeTheme(
   // 获取系统主题
   const isDark = await window.electronAPI.getSystemTheme()
   setSystemIsDark(isDark)
+
+  const cleanupThemes = window.electronAPI.onThemesChanged((nextCatalog) => {
+    setThemeCatalog(nextCatalog)
+  })
 
   const cleanupSettings = window.electronAPI.onSettingsChanged((settings) => {
     setThemeMode(settings.themeMode)
@@ -170,6 +194,7 @@ export async function initializeTheme(
   })
 
   return () => {
+    cleanupThemes()
     cleanupSettings()
     cleanupSystemTheme()
   }
@@ -186,7 +211,7 @@ export async function updateThemeMode(mode: ThemeMode): Promise<void> {
 }
 
 export async function updateThemeId(themeId: string): Promise<void> {
-  const resolved = getBuiltinTheme(themeId).id
-  cacheThemeId(resolved)
-  await window.electronAPI.updateSettings({ themeId: resolved })
+  if (!isThemeId(themeId)) throw new Error('无效的主题 ID')
+  cacheThemeId(themeId)
+  await window.electronAPI.updateSettings({ themeId })
 }

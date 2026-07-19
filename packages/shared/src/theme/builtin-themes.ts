@@ -4,6 +4,33 @@ export const DEFAULT_THEME_ID = 'porcelain'
 
 export const BUILTIN_THEMES: ThemeDefinition[] = [
   {
+    id: 'codex',
+    name: 'Codex',
+    description: 'Codex 原生浅色与深色预设，纯净中性色搭配高识别度蓝色强调',
+    author: 'OpenAI',
+    accentSurfaces: 'neutral',
+    colors: {
+      base: 'oklch(1.000 0.000 89.9)',
+      ink: 'oklch(0.159 0.000 89.9)',
+      accent: 'oklch(0.529 0.173 255.0)',
+      positive: 'oklch(0.621 0.180 148.0)',
+      caution: 'oklch(0.666 0.157 58.3)',
+      critical: 'oklch(0.590 0.213 27.7)',
+      notice: 'oklch(0.492 0.249 296.3)',
+    },
+    dark: {
+      colors: {
+        base: 'oklch(0.178 0.000 89.9)',
+        ink: 'oklch(0.991 0.000 89.9)',
+        accent: 'oklch(0.529 0.173 255.0)',
+        positive: 'oklch(0.621 0.180 148.0)',
+        caution: 'oklch(0.769 0.165 70.1)',
+        critical: 'oklch(0.590 0.213 27.7)',
+        notice: 'oklch(0.672 0.211 302.2)',
+      },
+    },
+  },
+  {
     id: 'porcelain',
     name: '雾瓷石墨',
     description: '冷白雾灰 + 深钢青气泡，现代浅色工作台',

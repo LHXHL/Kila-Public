@@ -15,7 +15,8 @@
  */
 
 import { BrowserWindow, shell, nativeTheme } from 'electron'
-import { deriveThemeVarsForThemeId, type ThemeVarMap } from '@kila/shared'
+import { deriveThemeVars, type ThemeVarMap } from '@kila/shared'
+import { resolveTheme } from './theme-service'
 import { resolve, basename, extname, join } from 'node:path'
 import { readFileSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -101,7 +102,7 @@ function resolvePreviewTheme(): ResolvedPreviewAppearance {
 
   return {
     mode,
-    vars: deriveThemeVarsForThemeId(settings.themeId, mode),
+    vars: deriveThemeVars(resolveTheme(settings.themeId), mode),
   }
 }
 

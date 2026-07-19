@@ -123,7 +123,7 @@ function IncognitoToggle(): React.ReactElement {
           variant="ghost"
           size="icon"
           className={cn(
-            'size-[30px] rounded-full transition-colors',
+            'size-[30px] rounded-lg transition-colors',
             incognitoMode
               ? 'text-primary bg-primary/10 hover:bg-primary/15'
               : 'text-foreground/30 hover:text-foreground/60'
@@ -1525,7 +1525,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 rounded-xl px-3 text-xs"
+                className="h-8 rounded-lg px-3 text-xs"
                 onClick={handleCancelEditTurn}
               >
                 取消
@@ -1668,7 +1668,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="size-[30px] rounded-full text-foreground/60 hover:text-foreground"
+                          className="size-[30px] rounded-lg text-foreground/60 hover:text-foreground"
                           onClick={handleOpenFileDialog}
                           aria-label="添加附件"
                         >
@@ -1682,19 +1682,19 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                     <SkillTriggerButton
                       onSelectSkill={handleInsertSkillMention}
                       onManageSkills={() => { void window.electronAPI.openSettingsWindow('skills') }}
-                      buttonClassName="size-[30px] rounded-full"
+                      buttonClassName="size-[30px] rounded-lg"
                       iconClassName="size-5"
                     />
                     <ToolSelectorPopover
-                      buttonClassName="size-[30px] rounded-full"
+                      buttonClassName="size-[30px] rounded-lg"
                       iconClassName="size-5"
                     />
                     <ThinkingLevelSelector
-                      buttonClassName="size-[30px] rounded-full"
+                      buttonClassName="size-[30px] rounded-lg"
                       iconClassName="size-5"
                     />
                     <SystemPromptSelector
-                      buttonClassName="size-[30px] rounded-full"
+                      buttonClassName="size-[30px] rounded-lg"
                       iconClassName="size-5"
                     />
                     <ModelSelector
@@ -1713,7 +1713,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="size-[30px] rounded-full text-destructive hover:bg-destructive/10"
+                    className="size-[30px] rounded-lg text-destructive hover:bg-destructive/10"
                     onClick={handleStop}
                     aria-label="停止生成"
                   >
@@ -1728,7 +1728,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                       variant="ghost"
                       size="icon"
                       className={cn(
-                        'size-[30px] rounded-full',
+                        'size-[30px] rounded-lg',
                         canSend
                           ? 'text-primary hover:bg-primary/10'
                           : 'text-foreground/30 cursor-not-allowed'

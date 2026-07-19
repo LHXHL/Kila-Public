@@ -14,6 +14,7 @@ import {
   systemIsDarkAtom,
   resolvedThemeAtom,
   themeStyleTextAtom,
+  themeCatalogAtom,
   applyThemeToDOM,
   applyThemeVarsToDOM,
   initializeTheme,
@@ -70,6 +71,7 @@ function ThemeInitializer(): null {
   const setThemeMode = useSetAtom(themeModeAtom)
   const setThemeId = useSetAtom(themeIdAtom)
   const setSystemIsDark = useSetAtom(systemIsDarkAtom)
+  const setThemeCatalog = useSetAtom(themeCatalogAtom)
   const resolvedTheme = useAtomValue(resolvedThemeAtom)
   const themeStyleText = useAtomValue(themeStyleTextAtom)
   const setFontFamily = useSetAtom(fontFamilyAtom)
@@ -82,7 +84,7 @@ function ThemeInitializer(): null {
     let isMounted = true
     let cleanup: (() => void) | undefined
 
-    initializeTheme(setThemeMode, setThemeId, setSystemIsDark, setFontFamily, setFontSize).then((fn) => {
+    initializeTheme(setThemeMode, setThemeId, setSystemIsDark, setThemeCatalog, setFontFamily, setFontSize).then((fn) => {
       if (isMounted) {
         cleanup = fn
       } else {
@@ -95,7 +97,7 @@ function ThemeInitializer(): null {
       isMounted = false
       cleanup?.()
     }
-  }, [setThemeMode, setThemeId, setSystemIsDark, setFontFamily, setFontSize])
+  }, [setThemeMode, setThemeId, setSystemIsDark, setThemeCatalog, setFontFamily, setFontSize])
 
   // 响应式应用主题到 DOM
   useEffect(() => {

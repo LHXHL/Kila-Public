@@ -534,7 +534,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => setSidebarCollapsed(false)}
-                    className="titlebar-no-drag rounded-xl p-2 text-foreground/60 transition-colors hover:bg-muted/60 hover:text-foreground"
+                    className="titlebar-no-drag rounded-lg p-2 text-foreground/60 transition-colors hover:bg-muted/60 hover:text-foreground"
                   >
                     <PanelLeftOpen size={18} />
                   </button>
@@ -548,7 +548,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => { void handleCreateSession() }}
-                    className="workspace-floating-control titlebar-no-drag rounded-xl p-2 text-foreground/70 transition-colors"
+                    className="workspace-floating-control titlebar-no-drag rounded-lg p-2 text-foreground/70 transition-colors"
                   >
                     <Plus size={16} />
                   </button>
@@ -570,7 +570,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => { void window.electronAPI.openSettingsWindow('general') }}
-                    className="workspace-floating-control titlebar-no-drag relative rounded-xl p-2 text-foreground/78 transition-colors hover:text-foreground"
+                    className="workspace-floating-control titlebar-no-drag relative rounded-lg p-2 text-foreground/78 transition-colors hover:text-foreground"
                   >
                     <Settings size={18} />
                     {(hasUpdate || hasEnvironmentIssues) && (
@@ -598,7 +598,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
             <div className="flex items-center gap-1 pl-3 pr-1">
               <button
                 onClick={() => { void handleCreateSession() }}
-                className="workspace-floating-control titlebar-no-drag flex h-10 flex-1 items-center gap-2 rounded-xl px-3 text-[13px] font-medium text-foreground/70 transition-colors hover:text-foreground"
+                className="workspace-floating-control titlebar-no-drag flex h-10 flex-1 items-center gap-2 rounded-lg px-3 text-[13px] font-medium text-foreground/70 transition-colors hover:text-foreground"
               >
                 <Plus size={14} />
                 <span>新会话</span>
@@ -607,7 +607,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => { void handleImportSession() }}
-                    className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-xl text-foreground/45 transition-colors hover:bg-muted/55 hover:text-foreground/70"
+                    className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-lg text-foreground/45 transition-colors hover:bg-muted/55 hover:text-foreground/70"
                   >
                     <Upload size={16} />
                   </button>
@@ -619,7 +619,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                   <button
                     onClick={() => { void handleExportCurrentSession() }}
                     disabled={!currentSessionId}
-                    className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-xl text-foreground/45 transition-colors hover:bg-muted/55 hover:text-foreground/70 disabled:cursor-not-allowed disabled:opacity-35"
+                    className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-lg text-foreground/45 transition-colors hover:bg-muted/55 hover:text-foreground/70 disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <Download size={16} />
                   </button>
@@ -630,7 +630,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => setSidebarCollapsed(true)}
-                    className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-xl text-foreground/40 transition-colors hover:bg-muted/55 hover:text-foreground/60"
+                    className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-lg text-foreground/40 transition-colors hover:bg-muted/55 hover:text-foreground/60"
                   >
                     <PanelLeftClose size={18} />
                   </button>
@@ -648,11 +648,11 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                   value={sessionSearch}
                   onChange={(event) => setSessionSearch(event.target.value)}
                   placeholder="搜索会话与消息"
-                  className="workspace-floating-control h-9 w-full rounded-xl pl-8 pr-3 text-[12.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/62 focus:border-primary/35 focus:bg-[hsl(var(--workspace))]"
+                  className="workspace-floating-control h-9 w-full rounded-lg pl-8 pr-3 text-[12.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/62 focus:border-primary/35 focus:bg-[hsl(var(--workspace))]"
                 />
               </div>
               {sessionSearch.trim().length >= 2 && (
-                <div className="workspace-floating-control mt-2 overflow-hidden rounded-xl bg-[hsl(var(--workspace))]">
+                <div className="workspace-floating-control mt-2 overflow-hidden rounded-lg bg-[hsl(var(--workspace))]">
                   {sessionSearchLoading && (
                     <div className="px-3 py-2 text-[12px] text-muted-foreground">搜索中…</div>
                   )}
@@ -700,7 +700,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 <button
                   type="button"
                   onClick={() => setPinnedExpanded((prev) => !prev)}
-                  className="titlebar-no-drag flex items-center justify-between rounded-xl px-3 py-2 text-[12px] font-medium text-foreground/60 transition-colors hover:bg-muted/55 hover:text-foreground"
+                  className="titlebar-no-drag flex items-center justify-between rounded-lg px-3 py-2 text-[12px] font-medium text-foreground/60 transition-colors hover:bg-muted/55 hover:text-foreground"
                 >
                   <span className="flex items-center gap-2">
                     <Pin size={15} />
@@ -734,7 +734,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                   </div>
                 ))}
                 {filteredSessions.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-border/70 px-4 py-8 text-center text-xs leading-5 text-muted-foreground">
+                  <div className="rounded-lg border border-dashed border-border/70 px-4 py-8 text-center text-xs leading-5 text-muted-foreground">
                     当前筛选下没有会话。
                   </div>
                 )}
@@ -752,7 +752,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
             <button
               type="button"
               onClick={() => { void window.electronAPI.openSettingsWindow('general') }}
-              className="titlebar-no-drag flex h-10 w-full items-center gap-2 rounded-xl px-3 text-[13px] font-medium text-foreground/55 transition-colors hover:bg-muted/50 hover:text-foreground/78"
+              className="titlebar-no-drag flex h-10 w-full items-center gap-2 rounded-lg px-3 text-[13px] font-medium text-foreground/55 transition-colors hover:bg-muted/50 hover:text-foreground/78"
             >
               <Settings size={16} />
               <span>设置</span>

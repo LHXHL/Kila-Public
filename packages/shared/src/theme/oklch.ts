@@ -167,3 +167,42 @@ export function formatHslTriplet(color: OklchColor): string {
   const hsl = toHsl(color)
   return `${formatHue(hsl.h)} ${formatPercent(hsl.s)} ${formatPercent(hsl.l)}`
 }
+
+export function rgbToOklch(rgb: { r: number; g: number; b: number }): OklchColor {
+  const r = srgbToLinear(clamp(rgb.r, 0, 1))
+  const g = srgbToLinear(clamp(rgb.g, 0, 1))
+  const b = srgbToLinear(clamp(rgb.b, 0, 1))
+
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+
+  return oklabToOklch({
+    l: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  })
+}
+
+export function hexToOklch(input: string): OklchColor {
+  const normalized = input.trim().replace(/^#/, '')
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) throw new Error(`Invalid HEX color: ${input}`)
+  return rgbToOklch({
+    r: Number.parseInt(normalized.slice(0, 2), 16) / 255,
+    g: Number.parseInt(normalized.slice(2, 4), 16) / 255,
+    b: Number.parseInt(normalized.slice(4, 6), 16) / 255,
+  })
+}
+
+export function oklchToHex(color: OklchColor): string {
+  const rgb = oklchToRgb(color)
+  const channel = (value: number): string => Math.round(clamp(value, 0, 1) * 255).toString(16).padStart(2, '0')
+  return `#${channel(rgb.r)}${channel(rgb.g)}${channel(rgb.b)}`
+}
+
+export function formatOklch(color: OklchColor): string {
+  const l = Math.round(clamp(color.l, 0, 1) * 1000) / 1000
+  const c = Math.round(clamp(color.c, 0, 0.4) * 1000) / 1000
+  const h = Math.round(clampHue(color.h) * 10) / 10
+  return `oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)})`
+}

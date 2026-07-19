@@ -113,7 +113,7 @@ export function BridgeGeneralSettings({
                 <div className="text-sm font-medium text-foreground">连接生命周期</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">启动条件、凭据状态和最近连接状态。</div>
               </div>
-              <span className="rounded-full border border-border/60 bg-muted/35 px-2.5 py-1 text-[11px] text-muted-foreground">
+              <span className="rounded-md border border-border/60 bg-muted/35 px-2.5 py-1 text-[11px] text-muted-foreground">
                 {status.lifecycle.filter((item) => item.healthy).length}/{status.lifecycle.length} 正常
               </span>
             </div>
@@ -132,13 +132,13 @@ export function BridgeGeneralSettings({
                     )}
                   </div>
                   <span className={cn(
-                    'rounded-full px-2 py-1 text-center text-[11px]',
+                    'rounded-md px-2 py-1 text-center text-[11px]',
                     item.enabled ? 'bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]' : 'bg-muted/55 text-muted-foreground',
                   )}>
                     {item.enabled ? '已启用' : '未启用'}
                   </span>
                   <span className={cn(
-                    'rounded-full px-2 py-1 text-center text-[11px]',
+                    'rounded-md px-2 py-1 text-center text-[11px]',
                     item.configured ? 'bg-muted/45 text-foreground/75' : 'bg-destructive/10 text-destructive',
                   )}>
                     {item.configured ? '已配置' : '缺少配置'}

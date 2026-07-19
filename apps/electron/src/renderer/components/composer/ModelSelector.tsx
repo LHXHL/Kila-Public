@@ -311,7 +311,7 @@ export function ModelSelector({
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="flex h-[30px] items-center gap-1.5 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      className="flex h-[30px] items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
     >
       {currentModelInfo ? (
         <img
@@ -444,7 +444,7 @@ export function ModelSelector({
                                     className={cn(
                                       compact
                                         ? 'inline-flex items-center gap-1 text-[10px] leading-3 text-muted-foreground/60'
-                                        : 'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                                        : 'inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium',
                                       !compact && (
                                         isSelected
                                           ? 'border-primary/20 bg-primary/10 text-primary/80'

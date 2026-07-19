@@ -64,7 +64,7 @@ export function SkillTriggerButton({
           size="icon"
           aria-label="技能"
           className={cn(
-            buttonClassName ?? 'size-[30px] rounded-full',
+            buttonClassName ?? 'size-[30px] rounded-lg',
             'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
             open && 'bg-muted/50',
           )}

@@ -62,7 +62,7 @@ export function TabBarItem({
       tabIndex={isActive ? 0 : -1}
       className={cn(
         'group relative flex h-8 min-w-[112px] max-w-[220px] shrink-0 items-center gap-1.5 px-3',
-        'select-none rounded-xl border text-xs transition-colors',
+        'select-none rounded-lg border text-xs transition-colors',
         isActive
           ? 'border-primary/25 bg-card text-foreground'
           : 'border-transparent text-muted-foreground/70 hover:border-border/55 hover:bg-muted/35 hover:text-foreground/82',

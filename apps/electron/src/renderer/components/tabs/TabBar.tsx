@@ -287,7 +287,7 @@ export function TabBar(): React.ReactElement {
                   aria-pressed={active}
                   disabled={!activeSessionId}
                   className={cn(
-                    'size-8 rounded-xl border border-transparent text-muted-foreground/70 transition-colors',
+                    'size-8 rounded-lg border border-transparent text-muted-foreground/70 transition-colors',
                     active
                       ? 'border-primary/25 bg-[hsl(var(--kila-accent-muted))] text-primary'
                       : 'hover:border-border/55 hover:bg-muted/35 hover:text-foreground/82',

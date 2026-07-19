@@ -578,6 +578,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
         <MessageContent>
           {messageText && (
             <UserMessageContent
+              basePath={sessionPath || undefined}
               attachmentsNode={attachedFiles.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {attachedFiles.map((file) => (

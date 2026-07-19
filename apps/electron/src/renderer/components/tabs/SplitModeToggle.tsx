@@ -83,7 +83,7 @@ export function SplitModeToggle(): React.ReactElement {
             <Button
               variant="ghost"
               size="icon"
-              className="size-8 shrink-0 rounded-xl border border-border/55 bg-card/75 text-muted-foreground/72 hover:bg-[hsl(var(--kila-accent-muted))] hover:text-primary titlebar-no-drag"
+              className="size-8 shrink-0 rounded-lg border border-border/55 bg-card/75 text-muted-foreground/72 hover:bg-[hsl(var(--kila-accent-muted))] hover:text-primary titlebar-no-drag"
             >
               <LayoutIcon mode={layout.mode} />
             </Button>

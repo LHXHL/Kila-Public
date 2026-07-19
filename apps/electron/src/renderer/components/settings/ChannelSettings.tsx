@@ -519,7 +519,7 @@ export function ChannelSettings(): React.ReactElement {
                           <div className="truncate text-[28px] font-semibold tracking-tight text-foreground">
                             {selectedPreset.name}
                           </div>
-                          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          <span className="rounded-md bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                             Preset
                           </span>
                         </div>
@@ -554,12 +554,12 @@ export function ChannelSettings(): React.ReactElement {
                               <div className="truncate text-[28px] font-semibold tracking-tight text-foreground">
                                 {selectedChannel.name}
                               </div>
-                              <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                              <span className="rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground">
                                 {PROVIDER_LABELS[selectedChannel.provider]}
                               </span>
                               <span
                                 className={cn(
-                                  'rounded-full px-3 py-1 text-xs',
+                                  'rounded-md px-3 py-1 text-xs',
                                   selectedChannel.enabled
                                     ? 'bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]'
                                     : 'bg-muted text-muted-foreground',

@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, AGENT_IPC_CHANNELS, SESSION_IPC_CHANNELS, SESSION_BOARD_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, PERSONALITY_IPC_CHANNELS, AGENT_TOOL_IPC_CHANNELS, FEISHU_BRIDGE_IPC_CHANNELS, IM_BRIDGE_IPC_CHANNELS, WECHAT_BRIDGE_IPC_CHANNELS, TOKEN_USAGE_IPC_CHANNELS, NOTIFICATION_IPC_CHANNELS, SCHEDULED_TASK_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CUA_DRIVER_IPC_CHANNELS } from '@kila/shared/ipc'
+import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, AGENT_IPC_CHANNELS, SESSION_IPC_CHANNELS, SESSION_BOARD_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, PERSONALITY_IPC_CHANNELS, AGENT_TOOL_IPC_CHANNELS, FEISHU_BRIDGE_IPC_CHANNELS, IM_BRIDGE_IPC_CHANNELS, WECHAT_BRIDGE_IPC_CHANNELS, TOKEN_USAGE_IPC_CHANNELS, NOTIFICATION_IPC_CHANNELS, SCHEDULED_TASK_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CUA_DRIVER_IPC_CHANNELS, THEME_IPC_CHANNELS } from '@kila/shared/ipc'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SETTINGS_TABS } from '../types'
 import type {
   RuntimeStatus,
@@ -122,6 +122,10 @@ import type {
   CuaDriverInstallResult,
   ProviderDbModel,
   ProviderDbProvider,
+  ThemeCatalog,
+  ThemeDefinition,
+  ThemeImportResult,
+  ThemeMutationResult,
 } from '@kila/shared'
 import type { UserProfile, AppSettings } from '../types'
 import type { OpenSessionInMainWindowInput, SettingsTab, WindowContext, WindowMode } from '../types'
@@ -388,6 +392,30 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
 
   /** 发送原生桌面通知 */
   showDesktopNotification: (input: DesktopNotificationInput) => Promise<boolean>
+
+  /** 获取内置与自定义主题目录 */
+  listThemes: () => Promise<ThemeCatalog>
+
+  /** 创建自定义主题 */
+  createTheme: (theme: ThemeDefinition) => Promise<ThemeMutationResult>
+
+  /** 更新自定义主题 */
+  updateTheme: (themeId: string, theme: ThemeDefinition) => Promise<ThemeMutationResult>
+
+  /** 删除自定义主题 */
+  deleteTheme: (themeId: string) => Promise<ThemeCatalog>
+
+  /** 从本地 JSON 文件导入主题 */
+  importTheme: () => Promise<ThemeImportResult>
+
+  /** 导出自定义主题 */
+  exportTheme: (themeId: string) => Promise<boolean>
+
+  /** 打开本地主题目录 */
+  openThemesDirectory: () => Promise<void>
+
+  /** 监听主题目录变化 */
+  onThemesChanged: (callback: (catalog: ThemeCatalog) => void) => () => void
 
   /** 获取记忆后端状态 */
   getMemoryStatus: () => Promise<{
@@ -1132,6 +1160,20 @@ const electronAPI: ElectronAPI = {
 
   showDesktopNotification: (input: DesktopNotificationInput) => {
     return ipcRenderer.invoke(SETTINGS_IPC_CHANNELS.SHOW_DESKTOP_NOTIFICATION, input)
+  },
+
+
+  listThemes: () => invoke(THEME_IPC_CHANNELS.LIST),
+  createTheme: (theme: ThemeDefinition) => invoke(THEME_IPC_CHANNELS.CREATE, theme),
+  updateTheme: (themeId: string, theme: ThemeDefinition) => invoke(THEME_IPC_CHANNELS.UPDATE, themeId, theme),
+  deleteTheme: (themeId: string) => invoke(THEME_IPC_CHANNELS.DELETE, themeId),
+  importTheme: () => invoke(THEME_IPC_CHANNELS.IMPORT),
+  exportTheme: (themeId: string) => invoke(THEME_IPC_CHANNELS.EXPORT, themeId),
+  openThemesDirectory: () => invoke(THEME_IPC_CHANNELS.OPEN_DIRECTORY),
+  onThemesChanged: (callback: (catalog: ThemeCatalog) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, catalog: ThemeCatalog): void => callback(catalog)
+    ipcRenderer.on(THEME_IPC_CHANNELS.ON_CHANGED, listener)
+    return () => { ipcRenderer.removeListener(THEME_IPC_CHANNELS.ON_CHANGED, listener) }
   },
 
   getMemoryStatus: () => {

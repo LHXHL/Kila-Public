@@ -206,6 +206,15 @@ export function resolveAttachmentPath(localPath: string, options: { allowAbsolut
 
 // ===== 目录路径（含自动创建） =====
 
+export function getThemesDir(): string {
+  const dir = join(getConfigDir(), 'themes')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+    log.info(`[配置] 已创建主题目录: ${dir}`)
+  }
+  return dir
+}
+
 export function getAttachmentsDir(): string {
   const dir = join(getConfigDir(), 'attachments')
   if (!existsSync(dir)) {

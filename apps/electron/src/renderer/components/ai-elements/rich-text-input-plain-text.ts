@@ -1,3 +1,6 @@
+import { createRichLinkPresentation } from './rich-link-presentation'
+import { parseRichTextTokens } from './rich-link-text-parser'
+
 function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&nbsp;/gi, ' ')
@@ -15,6 +18,31 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
 }
 
+function escapeHtmlAttribute(text: string): string {
+  return escapeHtml(text)
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderInlineRichText(text: string): string {
+  return parseRichTextTokens(text).map((token) => {
+    if (token.kind === 'text') return escapeHtml(token.value)
+
+    const presentation = createRichLinkPresentation(token.href, token.label)
+    return [
+      '<span',
+      ' data-type=\"rich-link\"',
+      ` data-rich-link-href=\"${escapeHtmlAttribute(token.href)}\"`,
+      ` data-rich-link-label=\"${escapeHtmlAttribute(presentation.label)}\"`,
+      ` data-rich-link-source=\"${escapeHtmlAttribute(token.value)}\"`,
+      ` data-rich-link-kind=\"${presentation.kind}\"`,
+      ' class=\"composer-rich-link-chip\"',
+      ` title=\"${escapeHtmlAttribute(token.href)}\"`,
+      `>${escapeHtml(presentation.label)}</span>`,
+    ].join('')
+  }).join('')
+}
+
 function normalizePlainText(text: string): string {
   return text.replace(/\r\n?/g, '\n')
 }
@@ -30,7 +58,7 @@ export function plainTextToHtml(text: string): string {
 
   return normalized
     .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .map((paragraph) => `<p>${paragraph.split('\n').map(renderInlineRichText).join('<br>')}</p>`)
     .join('')
 }
 
@@ -38,6 +66,11 @@ export function htmlToPlainText(html: string): string {
   if (!html || html === '<p></p>') return ''
 
   const withMentions = html.replace(/<span\b([^>]*)>([\s\S]*?)<\/span>/gi, (_full, attrs, children) => {
+    const richLinkSource = readAttr(attrs, 'data-rich-link-source')
+    if (/data-type=(["'])rich-link\1/i.test(attrs) && richLinkSource) {
+      return richLinkSource
+    }
+
     if (!/data-type=(["'])mention\1/i.test(attrs)) {
       return children
     }

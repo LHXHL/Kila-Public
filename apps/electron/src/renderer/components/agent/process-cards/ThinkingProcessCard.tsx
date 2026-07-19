@@ -3,12 +3,12 @@
  *
  * 对标 LobeHub Thinking 组件：
  * - Accordion 手风琴折叠，标题行轻量无边框
- * - 图标：思考中 Loader2 旋转 / 完成后 AtomIcon
+ * - 图标：思考中 Loader2 旋转 / 完成后 Brain
  * - 展开内容：限高滚动区域，弱化文字色
  */
 
 import * as React from 'react'
-import { Loader2, Atom, ChevronDown } from 'lucide-react'
+import { Brain, ChevronDown, Loader2 } from 'lucide-react'
 import { MessageResponse, StreamingMessageResponse } from '@/components/ai-elements/message'
 import { useSmoothStreamContent } from '@kila/ui'
 import { cn } from '@/lib/utils'
@@ -39,7 +39,7 @@ function StatusIcon({
       {running ? (
         <Loader2 className="size-3.5 animate-spin" />
       ) : (
-        <Atom className="size-3.5" />
+        <Brain className="size-3.5" />
       )}
     </div>
   )

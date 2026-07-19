@@ -80,7 +80,7 @@ export function ToolSelectorPopover({
           aria-label="工具"
           disabled={disabled}
           className={cn(
-            buttonClassName ?? 'size-[30px] rounded-full',
+            buttonClassName ?? 'size-[30px] rounded-lg',
             disabled && 'cursor-not-allowed opacity-45',
             hasActiveTools
               ? 'bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]'
@@ -247,7 +247,7 @@ function CapabilityBadgeList({
       {items.map((item) => (
         <span
           key={item}
-          className="rounded-full bg-muted px-2 py-1 text-[11px] text-foreground/80"
+          className="rounded-md bg-muted px-2 py-1 text-[11px] text-foreground/80"
         >
           {item}
         </span>

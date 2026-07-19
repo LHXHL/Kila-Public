@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preview</title>
+    <style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #333333;
+  background: #ffffff;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px;
+  word-wrap: break-word;
+}
+
+h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 32px 0 16px 0;
+  padding: 8px 0 8px 14px;
+  border-left: 5px solid #7c3aed;
+  line-height: 1.4;
+}
+
+h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 28px 0 14px 0;
+  padding-bottom: 10px;
+  border-bottom: 2px solid transparent;
+  background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%);
+  background-size: 100% 2px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  line-height: 1.4;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333333;
+  margin: 24px 0 12px 0;
+  padding-left: 12px;
+  border-left: 3px solid #7c3aed;
+  line-height: 1.4;
+}
+
+h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333333;
+  margin: 20px 0 10px 0;
+  line-height: 1.4;
+}
+
+p {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #333333;
+  margin: 12px 0;
+}
+
+strong {
+  font-weight: 700;
+  color: #7c3aed;
+}
+
+em {
+  font-style: italic;
+  color: #333333;
+}
+
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-size: 14px;
+  background: #f5f5f5;
+  color: #e83e8c;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+pre {
+  background: #282c34;
+  color: #abb2bf;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 16px 0;
+  line-height: 1.6;
+}
+
+pre code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-size: 14px;
+  background: none;
+  color: #abb2bf;
+  padding: 0;
+  border-radius: 0;
+}
+
+blockquote {
+  border-left: 4px solid #7c3aed;
+  background: #f8f5ff;
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  color: #333333;
+}
+
+blockquote p {
+  margin: 8px 0;
+  color: #333333;
+}
+
+ul {
+  padding-left: 24px;
+  margin: 12px 0;
+  list-style-type: disc;
+  color: #7c3aed;
+}
+
+ol {
+  padding-left: 24px;
+  margin: 12px 0;
+}
+
+li {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #333333;
+  margin: 6px 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 15px;
+}
+
+thead {
+  background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+  color: #ffffff;
+}
+
+th {
+  color: #ffffff;
+  font-weight: 600;
+  padding: 10px 14px;
+  text-align: left;
+  border: 1px solid #7c3aed;
+}
+
+td {
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  color: #333333;
+}
+
+tr {
+  background: #ffffff;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 24px auto;
+  border-radius: 8px;
+}
+
+a {
+  color: #7c3aed;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+hr {
+  border: none;
+  height: 2px;
+  background: linear-gradient(90deg, #7c3aed, #3b82f6, transparent);
+  margin: 24px 0;
+}
+
+    </style>
+</head>
+<body>
+    <p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">摘要</span></strong><span leaf="">：</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">很多 AI 很能说，却总像第一次认识你：项目背景要重讲，工作习惯要重设，做到一半的任务下次还得从头捡。 Kila 想做的是另一种体验——把项目、文件、长期记忆、个人偏好、工具、定时任务和飞书 / 微信等消息入口，放进同一个工作台里。你可以把它当代码搭档、安全研究助手、内容助理，或者一个会慢慢长成你自己的 Agent 。</span></p>
+<section style="margin: 24px 0; padding: 20px 24px; background: #e8f5f0; border: 1px solid rgba(26,107,90,0.15); border-radius: 6px;"><p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="margin: 0; font-size: 16px; line-height: 1.8; color: #333"><strong data-darkmode-color="#a78bfa" style="color: #7c3aed; font-weight: 700"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">先说结论</span></strong></strong></p><p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="margin: 8px 0 0 0; font-size: 16px; line-height: 1.8; color: #333"><span leaf="">Kila 不是又一个“问一句、答一句”的聊天框。它更像一个本地优先的 AI 工作台：给它一个项目、一套习惯、一份记忆和一组能力，让它在桌面、终端和 IM 消息里，持续陪你把事情做下去。</span></p></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">前阵子我又一次被 AI “气笑了”。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">我问它：</span></p>
+<section style="display: flex; justify-content: flex-start; margin-bottom: 12px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="background: #f3f4f6; color: #333; padding: 10px 14px; border-radius: 12px 12px 12px 2px; max-width: 80%; font-size: 15px; line-height: 1.6"><span leaf="">继续处理昨天那个问题，按上次说的方式来。</span></section></section>
+<section style="display: flex; justify-content: flex-end; margin-bottom: 12px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="background: #7c3aed; color: white; padding: 10px 14px; border-radius: 12px 12px 2px 12px; max-width: 80%; font-size: 15px; line-height: 1.6"><span leaf="">好的，请问昨天的问题是什么？</span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">这其实不能怪它。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">绝大多数 AI 产品，本质上都是一间临时会客室：你走进去，聊一会儿，拿到答案，离开。下次再来，它可能还记得一点片段，但往往不知道你手上到底在做什么、哪些事已经做过、哪些规则不能碰。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">于是我们每天都在给 AI 做同一件事：补背景。</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">“这是一个老项目，别大改。”</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">“这个目录别动。”</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">“上次说过了，日志里不能打印密钥。”</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">“代码先别写，先帮我分析。”</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">“我不喜欢这种太像机器人的表达。”</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">说到最后， AI 当然能做事，但它更像一个能力很强、记性一般、每天都要重新入职的同事。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 想解决的，正是这个问题。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它不是想再做一个更花哨的聊天窗口，而是想把 AI 放回真实工作里：你正在处理的项目、正在看的文件、已经形成的判断、习惯使用的工具、每天接收消息的飞书和微信，都应该成为同一件事的一部分。</span></p>
+<section style="margin: 24px 0; padding: 20px 24px; border-left: 4px solid #7c3aed; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 0 8px 8px 0"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 18px; line-height: 1.8; color: #333; font-style: italic"><span leaf="">"</span><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">Kila 想做的，是一个能长期陪你推进工作的 AI 工作台，而不只是一个回答问题的 AI </span></strong><span leaf="">。"</span></section></section>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">01 · 先把 AI 调成“像你”的样子</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">它会慢慢知道，你是怎么做事的</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">很多产品也讲“个性化”。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">但大多数时候，个性化只是换一种语气：更活泼、更专业、更像某个角色。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">这当然有趣，但真正让人离不开一个助手的，通常不是它会不会讲段子，而是它是否知道：</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你写代码时最在乎什么；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你做报告时希望怎么组织；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你不喜欢什么表达；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你希望它在哪一步先停下来问你；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">哪些事情可以直接做，哪些事情一定要确认；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你过去已经做过哪些决定，不想再反复讨论。</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">在 Kila 里，你可以给 Agent 写下长期有效的工作规则。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">如果你是开发者，可以是这样的：</span></p>
+<section style="background: #ecfdf5; border-left: 4px solid #059669; padding: 14px 16px; border-radius: 4px; margin: 16px 0; font-size: 15px; line-height: 1.7"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-weight: 700; color: #059669; margin-bottom: 6px"><span leaf="">💡 TIP</span></section><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">给代码助手的规则</span></strong><span leaf="">
+默认用中文。先给结论，再给分析。修改代码前先说准备动哪些文件；不要为了一个小问题顺手重构半个项目；改完必须告诉我怎么验证；不确定的地方直接说不确定。</span></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">如果你是做安全研究的：</span></p>
+<section style="background: #fffbeb; border-left: 4px solid #d97706; padding: 14px 16px; border-radius: 4px; margin: 16px 0; font-size: 15px; line-height: 1.7"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-weight: 700; color: #d97706; margin-bottom: 6px"><span leaf="">⚠️ WARNING</span></section><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">给安全助手的规则</span></strong><span leaf="">
+只处理已授权目标。先列证据，再下结论；把“已确认”和“待验证”分开；每个发现都要有触发条件、影响、验证思路和修复建议；高风险动作先问我。</span></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">如果你写内容：</span></p>
+<section style="background: #eff6ff; border-left: 4px solid #2563eb; padding: 14px 16px; border-radius: 4px; margin: 16px 0; font-size: 15px; line-height: 1.7"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-weight: 700; color: #2563eb; margin-bottom: 6px"><span leaf="">ℹ️ INFO</span></section><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">给写作助手的规则</span></strong><span leaf="">
+不要套话，不要硬凹金句；先用一个真实场景把读者拉进来；少说“赋能”“颠覆”；观点可以直接，但不要假装无所不知；结尾不要强行煽情。</span></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">这些规则不是一次性 Prompt ，用完就丢。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它们会成为你自己的助手性格。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">更重要的是， Kila 不要求你只有一个“万能助手”。你可以让不同项目拥有不同的工作方式。</span></p>
+<section style="margin: 20px 0"><section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">1</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">开源项目</span></strong><span leaf="">：它是谨慎的维护者，优先小改动、可验证、不乱动架构。</span></section></section>
+<section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">2</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">安全审计</span></strong><span leaf="">：它是证据优先的研究搭档，先范围、再证据、最后结论。</span></section></section>
+<section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">3</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">内容创作</span></strong><span leaf="">：它是知道你不喜欢“官方腔”的编辑，帮你保住自己的表达。</span></section></section>
+<section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">4</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">个人事务</span></strong><span leaf="">：它是轻量助理，记录、整理、提醒，把零散事情接住。</span></section></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">不是每个任务都该用同一种 AI 。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 更像是给你一套能力：把 AI 调成适合</span><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">你当前工作</span></strong><span leaf="">的样子。</span></p>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">02 · 记住有用的，忘掉不重要的</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">记忆不是保存聊天记录，而是少让你解释一点</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">“长期记忆”很容易被说得很玄。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">但对普通人来说，最好理解的标准其实只有一个：</span><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">下次你来，它有没有少让你解释一点</span></strong><span leaf="">？</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">比如，你正在长期维护一个项目。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你希望 AI 能记住：</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">这个项目不想引入数据库；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">文件和配置优先本地保存；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">改 IPC 要同时检查前后端几处调用；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">不要输出敏感日志；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">某个方案之前试过，已经证明不合适；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你当前正在做的是重构，不是加功能；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你喜欢小改动、可验证、别过度设计。</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">又比如，你是内容创作者。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你希望它逐渐理解：</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你的读者是谁；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">什么题材你最常写；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">哪种开头你觉得尴尬；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你有哪些常用表达；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你为什么会把一篇文章改成另一个版本；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你做过哪些选题，不想再写重复的。</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 的记忆并不是把每一段聊天都原封不动塞回来。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">更像是把长期有用的信息沉淀下来：项目约束、用户偏好、已确认的事实、尚未完成的任务，以及你主动保存的笔记。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你可以直接对它说：</span></p>
+<section style="display: flex; justify-content: flex-start; margin-bottom: 12px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="background: #f3f4f6; color: #333; padding: 10px 14px; border-radius: 12px 12px 12px 2px; max-width: 80%; font-size: 15px; line-height: 1.6"><span leaf="">请记住：以后给我写技术文章时，先写人能感受到的场景，再解释原理；不要一上来堆概念。</span></section></section>
+<section style="display: flex; justify-content: flex-end; margin-bottom: 12px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="background: #7c3aed; color: white; padding: 10px 14px; border-radius: 12px 12px 2px 12px; max-width: 80%; font-size: 15px; line-height: 1.6"><span leaf="">已记住。之后写技术文章时，我会先用具体场景切入，再展开原理和方法。</span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">也可以说：</span></p>
+<blockquote data-darkmode-bgcolor="#232340" data-darkmode-color="#c8c8c8" style="border-left: 4px solid #7c3aed; background: #f8f5ff; margin: 16px 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #333">
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">请记住：这个项目所有外部请求都必须有超时和错误处理。</span></p>
+</blockquote>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">下一次再开始类似任务，它就有机会把这些内容带回来。</span></p>
+<h3 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 18px; font-weight: 600; color: #333; margin: 24px 0 12px 0; padding-left: 12px; border-left: 3px solid #7c3aed; line-height: 1.4"><span leaf="">记忆也应该能关、能看、能整理</span></h3>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">“记住你”听起来很美好，但前提是：这件事必须由你掌控。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 的长期记忆和本地笔记可以查看、整理和删除。你可以决定是否自动检索相关记忆，也可以在某一轮对话里临时不写入记忆。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">有些内容值得长期留下：</span></p>
+<blockquote data-darkmode-bgcolor="#232340" data-darkmode-color="#c8c8c8" style="border-left: 4px solid #7c3aed; background: #f8f5ff; margin: 16px 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #333">
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">我们这个项目不使用数据库，优先采用本地 JSON 和 JSONL 。</span><br/><span leaf="">
+所有敏感操作先确认。</span><br/><span leaf="">
+文章默认用中文。</span><br/><span leaf="">
+我更看重可读性，不喜欢过度设计。</span></p>
+</blockquote>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">有些内容则只是临时聊聊，不需要留下痕迹。</span></p>
+<section style="margin: 24px 0; padding: 20px 24px; background: #fef7e8; border: 1px solid rgba(196,130,14,0.2); border-radius: 6px;"><p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="margin: 0; font-size: 16px; line-height: 1.8; color: #333"><strong data-darkmode-color="#a78bfa" style="color: #3b82f6; font-weight: 700"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">好的记忆系统，不是“什么都存”</span></strong><span leaf="">。</span></strong></p><p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="margin: 8px 0 0 0; font-size: 16px; line-height: 1.8; color: #333"><span leaf="">而是让你逐渐训练出一个更懂自己、又不越界的助手。</span></p></section>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">03 · 每个项目，都有自己的工作现场</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">它不只记得你，还记得你正在做什么</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 的一个很朴素的设计是：</span><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">一个 Session 绑定一个项目目录</span></strong><span leaf="">。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">听起来没有那么酷，但实际体验非常不一样。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你可以把一个 Session 理解成一个独立工作现场：里面有你正在做的项目、相关文件、你和 Agent 的对话、附件、工具调用过程，以及这项工作专属的模型、技能和权限。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">比如你同时有四件事：</span></p>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">开源项目</span></strong><span leaf="">：维护代码、排查 Bug 、准备下一个版本。</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">授权安全测试</span></strong><span leaf="">：固定范围、证据链、验证过程与报告格式。</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">内容选题</span></strong><span leaf="">：一组资料、长期风格和一批还没写完的想法。</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">个人知识整理</span></strong><span leaf="">：零散笔记、待办、值得以后复用的经验。</span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">以前，你可能靠四个聊天窗口、十几个浏览器标签、几个终端和一堆临时笔记来回切换。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">在 Kila 里，它们可以是四个互不打扰的 Session 。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你回到“开源项目”时， AI 看到的是那份代码和你们之前的讨论；你回到“安全审计”时，它看到的是另一个明确授权的工作范围和报告格式；你打开“内容选题”时，又是另一套资料、表达风格和写作目标。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它不会把你安全项目里的上下文带进日常写作，也不会把某个客户需求混进个人笔记。</span></p>
+<blockquote data-darkmode-bgcolor="#232340" data-darkmode-color="#c8c8c8" style="border-left: 4px solid #7c3aed; background: #f8f5ff; margin: 16px 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #333">
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">真正消耗注意力的，往往不是提问本身，而是不断把正确的上下文放回正确的位置。</span></p>
+</blockquote>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 就是在替你接住这部分工作。</span></p>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">04 · 给安全研究者的一种更顺手的协作方式</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">对安全研究者来说，它更像一个不会丢上下文的研究搭档</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">安全工作里，最容易发生的一件事，是“事情做到一半散掉了”。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你看了一遍代码，发现某个入口可疑；翻了配置，觉得权限边界有问题；写了一个验证脚本；又在日志里找到了新的线索；最后还要写复现步骤、影响范围、修复建议和报告。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">每个环节都不难，难的是它们彼此有关。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 很适合放进这种连续任务里。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你可以在已授权范围内，先让它帮你做一轮“只读”的整理：</span></p>
+<section><pre data-darkmode-bgcolor="#1e1e2e" data-darkmode-color="#c8cad8" style="background: #282c34; color: #abb2bf; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 16px 0; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word"><span><span leaf=""><br/></span></span><code data-darkmode-color="#c8cad8" style='font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; font-size: 14px; background: #f5f5f5; color: #e83e8c; padding: 2px 6px; border-radius: 4px'>这是一个授权测试项目。先别修改文件，也不要执行外部扫描。
+请阅读代码和配置，找出认证、权限、文件上传、外部请求、
+模板渲染相关的入口。把“已经确认的事实”和“需要继续验证的假设”分开。
+</code></pre></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">然后继续追问：</span></p>
+<section><pre data-darkmode-bgcolor="#1e1e2e" data-darkmode-color="#c8cad8" style="background: #282c34; color: #abb2bf; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 16px 0; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word"><span><span leaf=""><br/></span></span><code data-darkmode-color="#c8cad8" style='font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; font-size: 14px; background: #f5f5f5; color: #e83e8c; padding: 2px 6px; border-radius: 4px'>继续看文件上传链路。不要直接说存在漏洞，先按触发条件、证据、
+验证方式、影响和修复建议整理。
+</code></pre></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">再往后：</span></p>
+<section><pre data-darkmode-bgcolor="#1e1e2e" data-darkmode-color="#c8cad8" style="background: #282c34; color: #abb2bf; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 16px 0; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word"><span><span leaf=""><br/></span></span><code data-darkmode-color="#c8cad8" style='font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; font-size: 14px; background: #f5f5f5; color: #e83e8c; padding: 2px 6px; border-radius: 4px'>帮我把这次发现整理成报告草稿。PoC 不要写成攻击教程，重点说明
+授权范围、复现前提、受影响组件和修复优先级。
+</code></pre></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它能帮到你的地方，不只是写几段脚本或报告文字。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">更重要的是，它可以陪你把研究过程串起来：</span></p>
+<section style="margin: 20px 0"><section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">1</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">先找入口</span></strong><span leaf="">：认证、权限、上传、外部请求、模板和配置。</span></section></section>
+<section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">2</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">再梳理数据流</span></strong><span leaf="">：输入从哪里来，经过什么边界，最后到了哪里。</span></section></section>
+<section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">3</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">再建立假设</span></strong><span leaf="">：明确哪些是事实，哪些只是需要验证的可能性。</span></section></section>
+<section style="display: flex; margin-bottom: 14px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 10px"><span leaf="">4</span></section><section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">最后沉淀结论</span></strong><span leaf="">：把发现整理成别人能理解、能复现、能修复的问题。</span></section></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">对安全团队来说，这种“持续上下文”很有价值。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它能减少重复翻项目、重复解释范围、重复整理格式的时间，让研究者把精力留给真正需要判断的部分。</span></p>
+<section style="background: #fffbeb; border-left: 4px solid #d97706; padding: 14px 16px; border-radius: 4px; margin: 16px 0; font-size: 15px; line-height: 1.7"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-weight: 700; color: #d97706; margin-bottom: 6px"><span leaf="">⚠️ WARNING</span></section><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">边界要说清楚</span></strong><span leaf="">
+Kila 适合已授权的安全测试、代码审计、 CTF 、应急响应和防御工程。 AI 可以加快研究，但不能替代授权、判断和责任。</span></section>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">05 · 把工具接进来，把方法留下来</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">MCP 和 Skills ：不只是让 AI “会得更多”</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">用 AI 做事久了，很快就会遇到一个问题：单靠聊天不够。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你希望它能读项目文档、查资料、处理文件、对接某个服务，或者按你团队的固定流程来做事情。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 提供了两种很实用的扩展方式：</span><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">MCP 和 Skills </span></strong><span leaf="">。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">不用把它们理解得很技术。</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">MCP</span></strong><span leaf=""> 更像是给 AI 接上外部工具和数据源的插座；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">Skills</span></strong><span leaf=""> 更像是你教它的一套“做事方法”。</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">例如，一个代码审查 Skill 可以要求它：先看相关代码和测试，再给问题；没有证据就不要下结论；每个问题要写影响和修复建议。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">一个内容写作 Skill 可以要求它：先确定目标读者和文章主张；把事实和观点分开；写完先自检，不要给你一篇看似完整但空洞的稿子。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">一个安全审计 Skill 可以要求它：先确认授权范围；输出必须包含入口、数据流、验证步骤、影响评估和修复建议。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你可以把 Skills 理解为：把你经常重复说的“请按这个方式做”，变成以后随时能复用的工作流程。</span></p>
+<section style="margin: 24px 0; padding: 20px 24px; background: #e8f5f0; border: 1px solid rgba(26,107,90,0.15); border-radius: 6px;"><p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="margin: 0; font-size: 16px; line-height: 1.8; color: #333"><strong data-darkmode-color="#a78bfa" style="color: #7c3aed; font-weight: 700"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">这也是 Kila 和普通聊天工具很不一样的一点</span></strong><span leaf="">。</span></strong></p><p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="margin: 8px 0 0 0; font-size: 16px; line-height: 1.8; color: #333"><span leaf="">它不只让 AI 有更多工具，也让你的经验能够被沉淀下来。</span></p></section>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">06 · 同一个工作台，按任务选择不同模型</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">不同任务，用不同模型；不想上云时，也可以选自己的方式</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">有时你需要一个更擅长推理和代码分析的模型；有时只想快速整理一段文本；有时你在处理比较敏感的本地资料，更希望使用自己的本地模型或受控渠道。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 支持接入不同的模型渠道，包括常见的云端模型和兼容接口，也支持本地模型路线。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">对普通用户来说，最实用的不是“模型列表有多长”，而是你终于不用把所有工作都塞给同一个模型。</span></p>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">复杂代码分析</span></strong><span leaf="">：选择更擅长推理、长上下文和代码理解的模型。</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">日常资料整理</span></strong><span leaf="">：选择更快、更省的模型，把成本花在真正需要的地方。</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">敏感本地资料</span></strong><span leaf="">：优先使用本地模型或自己信任的受控渠道。</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">内容创作</span></strong><span leaf="">：选择更符合自己表达需求的模型，再叠加你的个性化规则。</span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">不同 Session 可以有不同偏好。你不必每次新开对话都重新切来切去，也不必为了一个简单任务消耗不必要的成本。</span></p>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">07 · 不只坐在电脑前，工作也不断线</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">飞书、微信、 Telegram 、 Discord 里的消息，也能进到正确的工作里</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">真正的工作不会只发生在桌面端。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你可能在飞书群里被问到一个项目问题；在微信里突然想到一句要记下来的规则；在 Telegram 或 Discord 收到一条远程消息；离开电脑时还想让 AI 帮你记录一个任务。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">如果所有事情最后都要靠“复制粘贴回桌面”，那 AI 依旧只是孤岛。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 可以把飞书、微信、 Telegram 、 Discord 等远程渠道连接进来。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">但它做的不是一个简单的“机器人自动回复”。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">更有用的地方在于：不同来源的消息，可以进入不同的 Kila Session 。</span></p>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">飞书研发群</span></strong><span leaf=""> → 进入研发项目 Session</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">飞书安全群</span></strong><span leaf=""> → 进入安全审计 Session</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">微信个人消息</span></strong><span leaf=""> → 进入个人助理 Session</span></section></section>
+<section style="display: flex; margin-bottom: 16px"><section style="flex-shrink: 0; width: 12px; display: flex; flex-direction: column; align-items: center"><section style="width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; margin-top: 6px"><span leaf=""><br/></span></section><section style="width: 2px; flex: 1; background: #e5e7eb; margin-top: 4px"><span leaf=""><br/></span></section><span leaf=""><br/></span></section><section style="flex: 1; padding-left: 12px; padding-bottom: 8px; font-size: 15px; line-height: 1.7"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">Telegram 远程指令</span></strong><span leaf=""> → 进入指定项目的维护 Session</span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">这意味着， AI 不会因为你从不同 App 发消息，就失去正在做的事情。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你在飞书里问：</span></p>
+<blockquote data-darkmode-bgcolor="#232340" data-darkmode-color="#c8c8c8" style="border-left: 4px solid #7c3aed; background: #f8f5ff; margin: 16px 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #333">
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">上周那个构建问题最后怎么处理的？</span></p>
+</blockquote>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它可以回到对应项目的上下文里找答案。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你在微信里发：</span></p>
+<blockquote data-darkmode-bgcolor="#232340" data-darkmode-color="#c8c8c8" style="border-left: 4px solid #7c3aed; background: #f8f5ff; margin: 16px 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #333">
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">记住：以后周报先写本周结论，再列风险和下周计划。</span></p>
+</blockquote>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它可以把这当成你的长期工作偏好。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你在远程渠道发起一个任务，回到桌面端后，也可以继续查看它的过程和结果。</span></p>
+<section style="margin: 24px 0; padding: 20px 24px; border-left: 4px solid #7c3aed; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 0 8px 8px 0"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 18px; line-height: 1.8; color: #333; font-style: italic"><span leaf="">"</span><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">不是让 AI 到处都能聊天，而是让你的工作在不同入口之间不断线</span></strong><span leaf="">。"</span></section></section>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">08 · 把总会忘的事，交给能理解上下文的 Agent</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">它还能替你盯着那些“总是忘记做”的事</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">有一类工作，没什么技术含量，但特别消耗人：重复、定时、容易忘。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">比如：</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">每天早上总结当前项目进度；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">每周五整理本周的变更和待办；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">定期检查某个任务的状态；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">每天把零散记录整理成一份笔记；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">在固定时间跑一次检查，再把结果发回对应 Session 。</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 提供了定时任务能力。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你可以先用自然语言描述你想要什么：</span></p>
+<section style="display: flex; justify-content: flex-start; margin-bottom: 12px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="background: #f3f4f6; color: #333; padding: 10px 14px; border-radius: 12px 12px 12px 2px; max-width: 80%; font-size: 15px; line-height: 1.6"><span leaf="">每天上午 9 点，总结当前项目的进度、阻塞项和今天最值得优先做的三件事。</span></section></section>
+<section style="display: flex; justify-content: flex-end; margin-bottom: 12px"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="background: #7c3aed; color: white; padding: 10px 14px; border-radius: 12px 12px 2px 12px; max-width: 80%; font-size: 15px; line-height: 1.6"><span leaf="">我先为你生成一个可核对的任务草稿，确认后再创建和启动。</span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它会先帮你准备一个可核对的任务草稿，而不是一上来就替你创建和启动。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">确认后，任务可以按时间运行，结果回到相应 Session 。你也能看到它什么时候执行、最近是否成功、失败后能不能重新运行。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">很多时候，我们不是不会做，而是每天都要重新想起来去做。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">把这些琐事交给一个已经理解项目上下文的 Agent ，才更有意义。</span></p>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">09 · 你的工作资产，应该留在自己手里</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">本地优先，不是口号</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">AI 工具用久了，很多人都会开始在意一件事：我的对话、项目背景、笔记、偏好和配置，最后到底在哪里？</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 选择本地优先。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你的会话、项目配置、记忆、附件和工作数据，默认保存在本机。它更像一个你可以自己整理、备份、迁移的工作目录，而不是一个看不见、带不走的黑箱。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">这对长期使用很重要。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">因为你积累下来的不只是聊天记录，而是：</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">一个项目推进过的历史；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你训练出来的个人助手；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你写下的工作规则；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你沉淀的长期记忆；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你接入的 Skills 和工具；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你在不同任务里形成的方法。</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">当然，本地优先不代表你调用云端模型时数据就不会经过网络。你用什么模型、连什么服务，仍然需要自己判断。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">但至少， Kila 不会把“你的工作现场”默认变成一个不可见、不可搬走的东西。</span></p>
+<section style="margin: 28px 0 14px"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; letter-spacing: 1px"><span leaf="">10 · 它适合谁？</span></span></section>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">如果你已经不满足于“帮我生成一段内容”</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">如果你只是偶尔问 AI 一个问题，任何聊天工具都够用。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">但如果你已经开始出现下面这些感受， Kila 可能会更适合你：</span></p>
+<section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你总在给 AI 重复项目背景；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你有多个长期任务，不想把上下文混在一起；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你希望 AI 逐渐理解你的做事方式；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你需要它读文件、看项目、调用工具，而不仅是聊天；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你做代码开发、安全研究、内容创作、资料整理或日常自动化；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你希望在飞书、微信、 Telegram 、 Discord 里也能继续推进工作；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你希望把一些重复流程交给定时任务；</span></span></section><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="display: flex; align-items: flex-start; margin-bottom: 8px; color: #333333"><span data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="color: #7c3aed; margin-right: 8px; flex-shrink: 0; font-size: 18px; line-height: 1.6"><span leaf="">•</span></span><span style="flex: 1"><span leaf="">你在意自己的工作数据能否留在本地、被查看、备份和迁移。</span></span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它尤其适合那些已经不满足于“让 AI 帮我生成一段内容”，而是开始希望：</span></p>
+<section style="margin: 24px 0; padding: 20px 24px; background: #fef7e8; border: 1px solid rgba(196,130,14,0.2); border-radius: 6px;"><p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="margin: 0; font-size: 16px; line-height: 1.8; color: #333"><strong data-darkmode-color="#a78bfa" style="color: #3b82f6; font-weight: 700"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">这个 AI 能不能理解我正在做的事，然后持续陪我把它做完</span></strong><span leaf="">？</span></strong></p></section>
+<hr style="border: none; height: 2px; background: linear-gradient(90deg, #7c3aed, #3b82f6, transparent); margin: 24px 0"/>
+<h2 data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 28px 0 14px 0; padding-bottom: 10px; border-bottom: 2px solid transparent; background-image: linear-gradient(90deg, #7c3aed 0%, #3b82f6 50%, transparent 50%); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; line-height: 1.4"><span leaf="">最后： AI 最该记住的，不是你的上一句话，而是你的工作方式</span></h2>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">我们不缺一个会回答问题的模型。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">我们真正缺的，是一个能留在项目里、留在工作流里、留在每天真实协作里的 Agent 。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">它知道你昨天做到哪；</span><br/><span leaf="">
+知道你不喜欢什么；</span><br/><span leaf="">
+知道哪个项目该用哪套规则；</span><br/><span leaf="">
+知道什么能直接做，什么该先问；</span><br/><span leaf="">
+知道你在飞书里发来的一句话属于哪项工作；</span><br/><span leaf="">
+也知道你下周回来时，不应该再从“你好，有什么可以帮你”开始。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">Kila 想做的，就是这样一个工作台。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">你可以从一个真实任务开始。</span></p>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><span leaf="">给它一个项目，告诉它你的习惯，留下几条真正重要的记忆，然后对它说：</span></p>
+<section style="margin: 24px 0; padding: 20px 24px; border-left: 4px solid #7c3aed; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 0 8px 8px 0"><section data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 18px; line-height: 1.8; color: #333; font-style: italic"><span leaf="">"</span><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">先理解我在做什么。以后，我们不要每次都从头开始</span></strong><span leaf="">。"</span></section></section>
+<p data-darkmode-bgcolor="transparent" data-darkmode-color="#c8c8c8" style="font-size: 16px; line-height: 1.8; color: #333; margin: 12px 0"><strong data-darkmode-color="#a78bfa" style="font-weight: 700; color: #7c3aed"><span leaf="">Kila ：让 AI 不只会回答，而是慢慢成为真正适合你的工作伙伴</span></strong><span leaf="">。</span></p>
+<p style="text-align: center; font-size: 13px; color: #9ca3af; margin-top: 48px; padding-top: 24px; border-top: 1px solid #e5e7eb;"><span leaf="">本文由 AI 辅助创作，作者进行了实测验证和编辑修改。</span></p>
+
+<script>
+(() => {
+  const article = document.querySelector('article') || document.querySelector('.article-content') || document.body;
+  const copyButton = document.createElement('button');
+  copyButton.type = 'button';
+  copyButton.textContent = '复制正文到公众号编辑器';
+  copyButton.style.cssText = [
+    'position:fixed', 'right:18px', 'bottom:18px', 'z-index:9999',
+    'border:0', 'border-radius:999px', 'padding:12px 16px',
+    'font:600 14px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif',
+    'color:#fff', 'background:linear-gradient(135deg,#7c3aed,#3b82f6)',
+    'box-shadow:0 10px 28px rgba(79,70,229,.32)', 'cursor:pointer'
+  ].join(';');
+  copyButton.addEventListener('click', async () => {
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(article);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const copied = document.execCommand('copy');
+      selection.removeAllRanges();
+      if (!copied) throw new Error('copy failed');
+      copyButton.textContent = '已复制，可直接粘贴';
+      setTimeout(() => { copyButton.textContent = '复制正文到公众号编辑器'; }, 1800);
+    } catch (error) {
+      copyButton.textContent = '复制失败，请手动全选正文';
+      setTimeout(() => { copyButton.textContent = '复制正文到公众号编辑器'; }, 2400);
+    }
+  });
+  document.body.appendChild(copyButton);
+})();
+</script>
+</body>
+</html>

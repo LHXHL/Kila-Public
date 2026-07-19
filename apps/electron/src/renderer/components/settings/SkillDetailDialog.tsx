@@ -136,7 +136,7 @@ export function SkillDetailDialog({
                     )}
                   </div>
 
-                  <div className="mt-2 inline-flex max-w-full rounded-full border border-border/55 bg-background/72 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground/78">
+                  <div className="mt-2 inline-flex max-w-full rounded-md border border-border/55 bg-background/72 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground/78">
                     <span className="truncate">{detail.slug}</span>
                   </div>
 

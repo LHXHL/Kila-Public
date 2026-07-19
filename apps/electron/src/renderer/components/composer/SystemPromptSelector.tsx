@@ -55,7 +55,7 @@ export function SystemPromptSelector({
           aria-label={tooltipText}
           className={cn(
             'transition-colors duration-200',
-            buttonClassName ?? 'size-[30px] rounded-full',
+            buttonClassName ?? 'size-[30px] rounded-lg',
             hasOverride
               ? 'bg-accent text-accent-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',

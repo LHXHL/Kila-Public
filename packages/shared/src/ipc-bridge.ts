@@ -23,6 +23,7 @@ export { NOTIFICATION_IPC_CHANNELS } from './types/notification'
 export { SCHEDULED_TASK_IPC_CHANNELS } from './types/scheduled-task'
 export { INSTALLER_IPC_CHANNELS } from './types/installer'
 export { SYSTEM_PROMPT_IPC_CHANNELS } from './types/system-prompt'
+export { THEME_IPC_CHANNELS } from './theme/theme-schema'
 
 // 类型安全 IPC 工具函数
 export { typedInvoke, typedHandle, buildTypedApi } from './utils/typed-ipc'

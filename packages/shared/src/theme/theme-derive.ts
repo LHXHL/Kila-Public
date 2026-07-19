@@ -108,16 +108,29 @@ function createThemeColorMap(theme: ThemeDefinition, mode: DerivedThemeMode): Th
   const primaryForeground = pickOnColor(primary, darkText, lightText, 4.5)
   const brandStrong = isDark ? shiftL(scaleC(core.accent, 0.72), -0.30) : mix(core.accent, core.ink, 0.08)
   const brandStrongForeground = pickOnColor(brandStrong, darkText, lightText, 4.5)
-  const brandSoft = mix(core.base, core.accent, isDark ? 0.18 : 0.15)
-  const brandSoftForeground = ensureContrast(mix(core.accent, core.ink, isDark ? 0.18 : 0.35), brandSoft, 4.5)
-  const brandSoftHover = mix(core.base, core.accent, isDark ? 0.24 : 0.22)
+  const usesNeutralAccentSurfaces = theme.accentSurfaces === 'neutral'
+  const brandSoft = usesNeutralAccentSurfaces
+    ? mix(core.base, core.ink, isDark ? 0.12 : 0.06)
+    : mix(core.base, core.accent, isDark ? 0.18 : 0.15)
+  const brandSoftForeground = usesNeutralAccentSurfaces
+    ? ensureContrast(core.ink, brandSoft, 4.5)
+    : ensureContrast(mix(core.accent, core.ink, isDark ? 0.18 : 0.35), brandSoft, 4.5)
+  const brandSoftHover = usesNeutralAccentSurfaces
+    ? mix(core.base, core.ink, isDark ? 0.18 : 0.10)
+    : mix(core.base, core.accent, isDark ? 0.24 : 0.22)
   const processTone = ensureContrast(mix(core.accent, core.ink, isDark ? 0.15 : 0.25), background, 3.0)
   const ring = ensureContrast(scaleC(core.accent, 1.05), background, 3.0)
-  const userBubble = isDark
-    ? setL(scaleC(core.accent, 0.72), 0.32)
-    : setL(scaleC(mix(core.accent, core.ink, 0.10), 0.92), 0.42)
-  const userBubbleForeground = { l: 0.98, c: 0.004, h: core.base.h }
-  const userBubbleBorder = mix(userBubble, core.ink, isDark ? 0.26 : 0.18)
+  const userBubble = usesNeutralAccentSurfaces
+    ? mix(core.base, core.ink, isDark ? 0.12 : 0.06)
+    : isDark
+      ? setL(scaleC(core.accent, 0.72), 0.32)
+      : setL(scaleC(mix(core.accent, core.ink, 0.10), 0.92), 0.42)
+  const userBubbleForeground = usesNeutralAccentSurfaces
+    ? ensureContrast(core.ink, userBubble, 4.5)
+    : { l: 0.98, c: 0.004, h: core.base.h }
+  const userBubbleBorder = usesNeutralAccentSurfaces
+    ? mix(core.base, core.ink, isDark ? 0.18 : 0.12)
+    : mix(userBubble, core.ink, isDark ? 0.26 : 0.18)
 
   const successSoft = mix(core.base, core.positive, isDark ? 0.16 : 0.12)
   const warningSoft = mix(core.base, core.caution, isDark ? 0.16 : 0.12)

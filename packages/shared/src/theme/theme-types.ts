@@ -13,6 +13,8 @@ export interface ThemeDefinition {
   name: string
   description: string
   author?: string
+  /** 大面积弱强调表面的色彩策略；默认使用强调色染色。 */
+  accentSurfaces?: 'tinted' | 'neutral'
   colors: ThemeCoreColors
   dark?: {
     colors: Partial<ThemeCoreColors>

@@ -138,6 +138,7 @@ import type {
 } from './notification'
 import type { InlineFilePreview } from './file-preview'
 import type { CuaDriverStatus, CuaDriverDetectResult, CuaDriverInstallResult } from './agent'
+import type { ThemeCatalog, ThemeDefinition, ThemeImportResult, ThemeMutationResult } from '../theme'
 
 // ===== Utility types =====
 
@@ -278,6 +279,13 @@ export interface IpcContract {
   'settings:get': { args: []; result: unknown }
   'settings:update': { args: [updates: Record<string, unknown>]; result: unknown }
   'settings:get-system-theme': { args: []; result: boolean }
+  'theme:list': { args: []; result: ThemeCatalog }
+  'theme:create': { args: [theme: ThemeDefinition]; result: ThemeMutationResult }
+  'theme:update': { args: [themeId: string, theme: ThemeDefinition]; result: ThemeMutationResult }
+  'theme:delete': { args: [themeId: string]; result: ThemeCatalog }
+  'theme:import': { args: []; result: ThemeImportResult }
+  'theme:export': { args: [themeId: string]; result: boolean }
+  'theme:open-directory': { args: []; result: void }
   'settings:open-window': { args: [tab?: string]; result: void }
   'settings:get-foreground-session': { args: []; result: SessionMeta | null }
   'settings:set-foreground-session': { args: [sessionId: string | null]; result: void }

@@ -227,7 +227,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1.5 rounded-full px-2 text-[11px] text-foreground/65 hover:text-foreground"
+                  className="h-7 gap-1.5 rounded-md px-2 text-[11px] text-foreground/65 hover:text-foreground"
                   onClick={() => { void handleSelectProjectFolder() }}
                   disabled={projectLocked || isSelectingProjectFolder}
                   aria-busy={isSelectingProjectFolder}

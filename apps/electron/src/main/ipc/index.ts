@@ -19,6 +19,7 @@ import { registerSessionBoardHandlers } from './session-board-ipc'
 import { registerScheduledTaskHandlers } from './scheduled-ipc'
 import { registerAttachmentHandlers } from './attachment-ipc'
 import { registerSettingsHandlers } from './settings-ipc'
+import { registerThemeHandlers } from './theme-ipc'
 import { registerCapabilityHandlers } from './capability-ipc'
 import { registerAgentFileHandlers } from './agent-file-ipc'
 import { registerAgentHandlers } from './agent-ipc'
@@ -83,6 +84,7 @@ export function registerIpcHandlers(): void {
   registerScheduledTaskHandlers()
   registerAttachmentHandlers()
   registerSettingsHandlers()
+  registerThemeHandlers()
   registerCapabilityHandlers()
   registerAgentFileHandlers()
   registerAgentHandlers()

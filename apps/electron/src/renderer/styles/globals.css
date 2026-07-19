@@ -26,6 +26,8 @@
     --kila-panel-edge-inset: 10px;
     --kila-panel-radius: 16px;
     --kila-panel-radius-inner: 10px;
+    --kila-control-radius: 8px;
+    --kila-control-radius-sm: 6px;
     --kila-toolbar-height: 40px;
     --kila-side-rail-width: 60px;
     --kila-z-titlebar: 50;
@@ -51,6 +53,10 @@
     --brand-soft: 188.1 17.6% 87.3%;
     --brand-soft-foreground: 187.6 27.1% 24.3%;
     --brand-soft-hover: 187.6 16.3% 82.4%;
+    /* 富链接统一跟随主题 accent，文件类型只通过图标区分。 */
+    --kila-link-chip-background: var(--brand-soft);
+    --kila-link-chip-foreground: var(--brand-soft-foreground);
+    --kila-link-chip-hover: var(--brand-soft-hover);
     --process-tone: 187.1 28.4% 26.2%;
     --kila-canvas: 192.4 40.7% 97.8%;
     --kila-rail: 193.5 12.7% 92.5%;
@@ -280,7 +286,7 @@ textarea,
 
   .interactive-row {
     border: 1px solid transparent;
-    border-radius: var(--kila-panel-radius-inner);
+    border-radius: var(--kila-control-radius);
     transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
   }
 
@@ -305,7 +311,7 @@ textarea,
     align-items: center;
     gap: 0.25rem;
     border: 1px solid hsl(var(--border) / 0.55);
-    border-radius: 999px;
+    border-radius: var(--kila-control-radius-sm);
     background: hsl(var(--muted) / 0.28);
     padding: 0.125rem 0.45rem;
     font-size: 10.5px;

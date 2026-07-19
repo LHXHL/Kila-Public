@@ -246,7 +246,7 @@ export function renderSkillMentionItem(item: SlashMentionItem): React.ReactNode 
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
-          <span className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground/70">
+          <span className="shrink-0 rounded-md border border-border/55 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground/70">
             {item.sourceLabel}
           </span>
         </div>

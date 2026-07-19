@@ -31,7 +31,7 @@ function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactEleme
   ].filter(Boolean)
 
   return (
-    <details className="group rounded-xl bg-muted/35 open:bg-muted/50">
+    <details className="group rounded-lg bg-muted/35 open:bg-muted/50">
       <summary className="flex cursor-pointer list-none items-start gap-2.5 px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/60 [&::-webkit-details-marker]:hidden">
         <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-background/75 text-muted-foreground shadow-sm">
           <Icon className="size-3.5" aria-hidden="true" />
@@ -39,7 +39,7 @@ function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactEleme
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-xs font-medium text-foreground">{item.title}</span>
-            <span className="shrink-0 rounded-full bg-background/70 px-1.5 py-0.5 text-[9px] text-muted-foreground">{label}</span>
+            <span className="shrink-0 rounded-md bg-background/70 px-1.5 py-0.5 text-[9px] text-muted-foreground">{label}</span>
           </span>
           <span className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-[11px] leading-4 text-muted-foreground">
             {item.content || '未返回可展示的内容片段'}
@@ -51,10 +51,10 @@ function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactEleme
       <div className="space-y-2 px-3 pb-3 pl-[3.75rem]">
         <div className="flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
           {metadata.map((value) => (
-            <span key={value} className="rounded-full bg-background/70 px-1.5 py-0.5">{value}</span>
+            <span key={value} className="rounded-md bg-background/70 px-1.5 py-0.5">{value}</span>
           ))}
           {item.tags?.map((tag) => (
-            <span key={tag} className="rounded-full bg-background/70 px-1.5 py-0.5">#{tag}</span>
+            <span key={tag} className="rounded-md bg-background/70 px-1.5 py-0.5">#{tag}</span>
           ))}
         </div>
         <div className="rounded-lg bg-background/70 px-3 py-2 text-xs leading-5 text-foreground shadow-sm">
@@ -83,15 +83,15 @@ export function MemoryRecallDetails({ trace }: { trace: MemoryRunTrace }): React
           <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{recalledCount} 项</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-          <span className="rounded-full bg-muted/60 px-2 py-1">长期记忆 {trace.recalledMemoryCount}</span>
-          <span className="rounded-full bg-muted/60 px-2 py-1">相关会话 {trace.relatedThreadCount}</span>
-          <span className="rounded-full bg-muted/60 px-2 py-1">笔记 {trace.notebookCount}</span>
+          <span className="rounded-md bg-muted/60 px-2 py-1">长期记忆 {trace.recalledMemoryCount}</span>
+          <span className="rounded-md bg-muted/60 px-2 py-1">相关会话 {trace.relatedThreadCount}</span>
+          <span className="rounded-md bg-muted/60 px-2 py-1">笔记 {trace.notebookCount}</span>
         </div>
         {workingMemoryLabels.length > 0 && (
           <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
             <span>工作记忆</span>
             {workingMemoryLabels.map((label) => (
-              <span key={label} className="rounded-full bg-primary/10 px-2 py-0.5 text-foreground/75">{label}</span>
+              <span key={label} className="rounded-md bg-primary/10 px-2 py-0.5 text-foreground/75">{label}</span>
             ))}
           </div>
         )}
@@ -146,7 +146,7 @@ export function MemoryTraceBadge({ trace }: { trace?: MemoryRunTrace }): React.R
         <button
           type="button"
           className={cn(
-            'group mt-2 inline-flex items-center gap-1.5 rounded-full bg-muted/45 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
+            'group mt-2 inline-flex items-center gap-1.5 rounded-lg bg-muted/45 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
             (trace.recallStatus === 'error' || trace.writeStatus === 'failed') && 'text-amber-600 dark:text-amber-400',
           )}
           aria-label={`${[providerLabel, statusLabel, writeLabel].filter(Boolean).join('，')}，点击查看召回详情`}

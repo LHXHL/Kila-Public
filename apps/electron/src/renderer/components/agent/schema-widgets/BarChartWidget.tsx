@@ -45,7 +45,7 @@ export function BarChartWidget({ spec, onBarClick }: BarChartWidgetProps): JSX.E
       {spec.series.length > 1 && (
         <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
           {spec.series.map((series, index) => (
-            <div key={series.key} className="inline-flex items-center gap-1.5 rounded-full border border-border/30 px-2 py-1">
+            <div key={series.key} className="inline-flex items-center gap-1.5 rounded-md border border-border/30 px-2 py-1">
               <span className="size-2 rounded-full" style={{ backgroundColor: getChartColor(series.colorIndex ?? ((index % 5) + 1) as 1 | 2 | 3 | 4 | 5) }} />
               <span>{series.label}</span>
             </div>

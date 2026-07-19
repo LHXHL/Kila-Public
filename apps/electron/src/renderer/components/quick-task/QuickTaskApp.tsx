@@ -104,7 +104,7 @@ export function QuickTaskApp(): React.ReactElement {
                   key={`${file.filename}-${index}`}
                   type="button"
                   onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                  className="max-w-48 truncate rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  className="max-w-48 truncate rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
                   title="点击移除"
                 >
                   {file.filename} ×

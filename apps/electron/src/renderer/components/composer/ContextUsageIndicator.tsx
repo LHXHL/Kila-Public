@@ -42,7 +42,7 @@ interface ContextUsageIndicatorProps {
 
 export function ContextUsageIndicator({
   sessionId,
-  buttonClassName = 'size-[30px] rounded-full',
+  buttonClassName = 'size-[30px] rounded-lg',
   iconClassName = 'size-5',
 }: ContextUsageIndicatorProps) {
   const contextStatus = useAtomValue(agentContextStatusAtomFamily(sessionId))
