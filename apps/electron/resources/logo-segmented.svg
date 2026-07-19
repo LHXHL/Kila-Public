@@ -1,0 +1,44 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-b" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a3a3a"/>
+      <stop offset="0.5" stop-color="#1f4a4a"/>
+      <stop offset="1" stop-color="#2d5e5e"/>
+    </linearGradient>
+    <linearGradient id="seg-b" x1="0" y1="0" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7cc8c8"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <radialGradient id="glow-b" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5aadad" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#5aadad" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-b)"/>
+  <circle cx="256" cy="256" r="220" fill="url(#glow-b)"/>
+
+  <!-- 分段式 K：竖线 + 两条斜臂，间隔分开，现代感 -->
+
+  <!-- 竖线 -->
+  <rect x="140" y="104" width="60" height="304" rx="18" fill="url(#seg-b)"/>
+
+  <!-- 上斜臂 -->
+  <path d="
+    M 228 228
+    L 376 104
+    Q 390 104 390 118
+    L 390 134
+    Q 390 148 376 148
+    L 256 256
+    L 376 364
+    Q 390 378 390 392
+    L 390 394
+    Q 390 408 376 408
+    L 228 284
+    Q 214 270 214 256
+    Q 214 242 228 228
+    Z
+  " fill="url(#seg-b)"/>
+</svg>

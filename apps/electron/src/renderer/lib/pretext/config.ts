@@ -1,0 +1,10 @@
+export const DEFAULT_INTRINSIC_HEIGHT = 200
+export const PRETEXT_ENABLED = true
+export const PRETEXT_DEBUG = false
+
+export const REM_BASE_PX = 16
+export const USER_MESSAGE_MAX_WIDTH_PX = 42 * REM_BASE_PX
+export const ASSISTANT_MESSAGE_MAX_WIDTH_PX = 58 * REM_BASE_PX
+
+export const USER_MESSAGE_HORIZONTAL_PADDING_PX = 28
+export const USER_MESSAGE_VERTICAL_PADDING_PX = 20

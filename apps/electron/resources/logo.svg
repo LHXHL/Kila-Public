@@ -1,0 +1,42 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 背景渐变：石墨绿 → 深青 -->
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a3a3a"/>
+      <stop offset="0.5" stop-color="#1f4a4a"/>
+      <stop offset="1" stop-color="#2d5e5e"/>
+    </linearGradient>
+    <!-- K 标记渐变 -->
+    <linearGradient id="mark" x1="148" y1="108" x2="404" y2="404" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8d8d8"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <!-- 中心光晕 -->
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5aadad" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#5aadad" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 圆角矩形背景 -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- 氛围光晕 -->
+  <circle cx="256" cy="256" r="220" fill="url(#glow)"/>
+
+  <!-- K 字标 -->
+  <path d="
+    M 148 108
+    L 204 108
+    L 204 218
+    L 348 108
+    L 404 108
+    L 228 256
+    L 404 404
+    L 348 404
+    L 204 294
+    L 204 404
+    L 148 404
+    Z
+  " fill="url(#mark)"/>
+</svg>

@@ -1,0 +1,510 @@
+/**
+ * Agent 工作区管理器
+ *
+ * 负责 Agent 工作区的 CRUD 操作。
+ * - 工作区索引：~/.kila/agent-workspaces.json（轻量元数据）
+ * - 工作区目录：~/.kila/agent-workspaces/{slug}/（Agent 的 cwd）
+ *
+ * 沿用统一 session 索引的 readIndex/writeIndex 模式。
+ */
+
+import { readFileSync, writeFileSync, existsSync, readdirSync, cpSync, rmSync, statSync, renameSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
+import {
+  getAgentWorkspacesIndexPath,
+  getAgentWorkspacePath,
+  getWorkspaceMcpPath,
+  getWorkspaceSkillsDir,
+  getInactiveSkillsDir,
+  getGlobalAgentSkillsDir,
+} from './config-paths'
+import type { AgentWorkspace, McpServerEntry, WorkspaceMcpConfig, SkillMeta, WorkspaceCapabilities } from '@kila/shared'
+
+/**
+ * 工作区索引文件格式
+ */
+
+import { createLogger } from './logger'
+const log = createLogger('Agent 工作区')
+
+interface AgentWorkspacesIndex {
+  /** 配置版本号 */
+  version: number
+  /** 工作区元数据列表 */
+  workspaces: AgentWorkspace[]
+}
+
+/** 当前索引版本 */
+const INDEX_VERSION = 1
+
+/**
+ * 读取工作区索引文件
+ */
+function readIndex(): AgentWorkspacesIndex {
+  const indexPath = getAgentWorkspacesIndexPath()
+
+  if (!existsSync(indexPath)) {
+    return { version: INDEX_VERSION, workspaces: [] }
+  }
+
+  try {
+    const raw = readFileSync(indexPath, 'utf-8')
+    return JSON.parse(raw) as AgentWorkspacesIndex
+  } catch (error) {
+    log.error('[Agent 工作区] 读取索引文件失败:', error)
+    return { version: INDEX_VERSION, workspaces: [] }
+  }
+}
+
+/**
+ * 写入工作区索引文件
+ */
+function writeIndex(index: AgentWorkspacesIndex): void {
+  const indexPath = getAgentWorkspacesIndexPath()
+
+  try {
+    writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf-8')
+  } catch (error) {
+    log.error('[Agent 工作区] 写入索引文件失败:', error)
+    throw new Error('写入 Agent 工作区索引失败')
+  }
+}
+
+/**
+ * 将名称转换为 URL-safe 的 slug
+ *
+ * 英文：kebab-case，中文/特殊字符：fallback 为 workspace-{timestamp}
+ */
+function slugify(name: string, existingSlugs: Set<string>): string {
+  let base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  // 中文或其他非 ASCII 名称 fallback
+  if (!base) {
+    base = `workspace-${Date.now()}`
+  }
+
+  // 重复时加数字后缀
+  let slug = base
+  let counter = 1
+  while (existingSlugs.has(slug)) {
+    slug = `${base}-${counter}`
+    counter++
+  }
+
+  return slug
+}
+
+/**
+ * 获取所有工作区（按 updatedAt 降序）
+ */
+export function listAgentWorkspaces(): AgentWorkspace[] {
+  const index = readIndex()
+  return index.workspaces.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/**
+ * 按 ID 获取单个工作区
+ */
+export function getAgentWorkspace(id: string): AgentWorkspace | undefined {
+  const index = readIndex()
+  return index.workspaces.find((w) => w.id === id)
+}
+
+/**
+ * 将全局 Agent Skills 模板复制到工作区 .agents/skills/ 目录
+ *
+ * 从 ~/.kila/global-agent/.agents/skills/ 复制所有内容。
+ * 如果模板目录不存在或为空则跳过。
+ */
+function copyGlobalSkillsTemplate(workspaceSlug: string): void {
+  const globalSkillsDir = getGlobalAgentSkillsDir()
+  const targetDir = getWorkspaceSkillsDir(workspaceSlug)
+
+  try {
+    const entries = readdirSync(globalSkillsDir, { withFileTypes: true })
+    if (entries.length === 0) return
+
+    cpSync(globalSkillsDir, targetDir, { recursive: true })
+    log.info(`[Agent 工作区] 已复制全局 Skills 模板到: ${workspaceSlug}`)
+  } catch {
+    // 模板目录不存在或复制失败，跳过不影响工作区创建
+  }
+}
+
+/**
+ * 创建新工作区
+ */
+export function createAgentWorkspace(name: string): AgentWorkspace {
+  const index = readIndex()
+  const existingSlugs = new Set(index.workspaces.map((w) => w.slug))
+  const slug = slugify(name, existingSlugs)
+  const now = Date.now()
+
+  const workspace: AgentWorkspace = {
+    id: randomUUID(),
+    name,
+    slug,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  // 创建工作区目录
+  getAgentWorkspacePath(slug)
+
+  // 复制全局 Skills 模板
+  copyGlobalSkillsTemplate(slug)
+
+  index.workspaces.push(workspace)
+  writeIndex(index)
+
+  log.info(`[Agent 工作区] 已创建工作区: ${name} (slug: ${slug})`)
+  return workspace
+}
+
+/**
+ * 更新工作区（仅更新名称，不改 slug/目录）
+ */
+export function updateAgentWorkspace(
+  id: string,
+  updates: { name: string },
+): AgentWorkspace {
+  const index = readIndex()
+  const idx = index.workspaces.findIndex((w) => w.id === id)
+
+  if (idx === -1) {
+    throw new Error(`Agent 工作区不存在: ${id}`)
+  }
+
+  const existing = index.workspaces[idx]!
+  const updated: AgentWorkspace = {
+    ...existing,
+    name: updates.name,
+    updatedAt: Date.now(),
+  }
+
+  index.workspaces[idx] = updated
+  writeIndex(index)
+
+  log.info(`[Agent 工作区] 已更新工作区: ${updated.name} (${updated.id})`)
+  return updated
+}
+
+/**
+ * 删除工作区（仅删索引条目，保留目录避免误删用户文件）
+ */
+export function deleteAgentWorkspace(id: string): void {
+  const index = readIndex()
+  const idx = index.workspaces.findIndex((w) => w.id === id)
+
+  if (idx === -1) {
+    throw new Error(`Agent 工作区不存在: ${id}`)
+  }
+
+  const removed = index.workspaces.splice(idx, 1)[0]!
+  writeIndex(index)
+
+  log.info(`[Agent 工作区] 已删除工作区索引: ${removed.name} (slug: ${removed.slug}，目录已保留)`)
+}
+
+/**
+ * 确保默认工作区存在
+ *
+ * 首次启动时自动创建名为"默认工作区"的工作区（slug: default）。
+ * 返回默认工作区的 ID。
+ */
+export function ensureDefaultWorkspace(): AgentWorkspace {
+  const index = readIndex()
+  let defaultWs = index.workspaces.find((w) => w.slug === 'default')
+
+  if (!defaultWs) {
+    const now = Date.now()
+    defaultWs = {
+      id: randomUUID(),
+      name: '默认工作区',
+      slug: 'default',
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    // 创建工作区目录
+    getAgentWorkspacePath('default')
+
+    // 复制全局 Skills 模板
+    copyGlobalSkillsTemplate('default')
+
+    index.workspaces.push(defaultWs)
+    writeIndex(index)
+
+    log.info('[Agent 工作区] 已创建默认工作区')
+  }
+
+  return defaultWs
+}
+
+// ===== MCP 配置管理 =====
+
+/**
+ * 读取工作区 MCP 配置
+ */
+export function getWorkspaceMcpConfig(workspaceSlug: string): WorkspaceMcpConfig {
+  const mcpPath = getWorkspaceMcpPath(workspaceSlug)
+
+  if (!existsSync(mcpPath)) {
+    return { servers: {} }
+  }
+
+  try {
+    const raw = readFileSync(mcpPath, 'utf-8')
+    const parsed = JSON.parse(raw) as Partial<WorkspaceMcpConfig>
+    return { servers: parsed.servers ?? {} }
+  } catch (error) {
+    log.error('[Agent 工作区] 读取 MCP 配置失败:', error)
+    return { servers: {} }
+  }
+}
+
+/**
+ * 保存工作区 MCP 配置
+ */
+export function saveWorkspaceMcpConfig(workspaceSlug: string, config: WorkspaceMcpConfig): void {
+  const mcpPath = getWorkspaceMcpPath(workspaceSlug)
+
+  try {
+    writeFileSync(mcpPath, JSON.stringify(config, null, 2), 'utf-8')
+    log.info(`[Agent 工作区] 已保存 MCP 配置: ${workspaceSlug}`)
+  } catch (error) {
+    log.error('[Agent 工作区] 保存 MCP 配置失败:', error)
+    throw new Error('保存 MCP 配置失败')
+  }
+}
+
+// ===== Skill 目录扫描 =====
+
+/**
+ * 扫描工作区 Skills 目录
+ *
+ * 遍历 .agents/skills/{slug}/SKILL.md，解析 YAML frontmatter 提取元数据。
+ */
+/**
+ * 扫描工作区活跃 Skills 目录
+ *
+ * 仅返回活跃 Skill 目录下的内容，供 prompt builder 和 capabilities 使用。
+ */
+export function getWorkspaceSkills(workspaceSlug: string): SkillMeta[] {
+  return scanSkillsInDir(getWorkspaceSkillsDir(workspaceSlug), true)
+}
+
+/**
+ * 解析 SKILL.md 的 YAML frontmatter
+ */
+function parseSkillFrontmatter(content: string, slug: string, enabled: boolean): SkillMeta {
+  const meta: SkillMeta = { slug, name: slug, enabled }
+
+  const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/)
+  if (!fmMatch) return meta
+
+  const yaml = fmMatch[1]
+  if (!yaml) return meta
+
+  for (const line of yaml.split('\n')) {
+    const colonIdx = line.indexOf(':')
+    if (colonIdx === -1) continue
+
+    const key = line.slice(0, colonIdx).trim()
+    const value = line.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, '')
+
+    if (key === 'name' && value) meta.name = value
+    if (key === 'description' && value) meta.description = value
+    if (key === 'icon' && value) meta.icon = value
+  }
+
+  return meta
+}
+
+// ===== 工作区能力摘要 =====
+
+/**
+ * 获取工作区能力摘要（MCP + Skill 计数）
+ */
+export function getWorkspaceCapabilities(workspaceSlug: string): WorkspaceCapabilities {
+  const mcpConfig = getWorkspaceMcpConfig(workspaceSlug)
+  const skills = getWorkspaceSkills(workspaceSlug)
+
+  const mcpServers = Object.entries(mcpConfig.servers ?? {}).map(([name, entry]) => ({
+    name,
+    enabled: entry.enabled,
+    type: entry.type,
+  }))
+
+  return { mcpServers, skills }
+}
+
+/**
+ * 删除工作区 Skill
+ *
+ * 删除活跃 Skill 目录下的指定 Skill。
+ */
+export function deleteWorkspaceSkill(workspaceSlug: string, skillSlug: string): void {
+  const skillsDir = getWorkspaceSkillsDir(workspaceSlug)
+  const skillPath = join(skillsDir, skillSlug)
+
+  if (!existsSync(skillPath)) {
+    throw new Error(`Skill 不存在: ${skillSlug}`)
+  }
+
+  rmSync(skillPath, { recursive: true, force: true })
+  log.info(`[Agent 工作区] 已删除 Skill: ${workspaceSlug}/${skillSlug}`)
+}
+
+/**
+ * 扫描指定目录下的 Skills
+ *
+ * 通用扫描逻辑，供 getWorkspaceSkills 和 getAllWorkspaceSkills 复用。
+ */
+function scanSkillsInDir(dir: string, enabled: boolean): SkillMeta[] {
+  const skills: SkillMeta[] = []
+
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const isDir = entry.isDirectory() || (entry.isSymbolicLink() && statSync(join(dir, entry.name)).isDirectory())
+      if (!isDir) continue
+
+      const skillMdPath = join(dir, entry.name, 'SKILL.md')
+      if (!existsSync(skillMdPath)) continue
+
+      try {
+        const content = readFileSync(skillMdPath, 'utf-8')
+        const meta = parseSkillFrontmatter(content, entry.name, enabled)
+        skills.push(meta)
+      } catch {
+        log.warn(`[Agent 工作区] 解析 Skill 失败: ${entry.name}`)
+      }
+    }
+  } catch {
+    // 目录可能不存在
+  }
+
+  return skills
+}
+
+/**
+ * 获取工作区所有 Skills（含活跃和不活跃）
+ *
+ * 同时扫描活跃/停用 Skill 目录，返回带 enabled 标记的完整列表。
+ * 用于设置页 UI 展示。
+ */
+export function getAllWorkspaceSkills(workspaceSlug: string): SkillMeta[] {
+  const activeSkills = scanSkillsInDir(getWorkspaceSkillsDir(workspaceSlug), true)
+  const inactiveSkills = scanSkillsInDir(getInactiveSkillsDir(workspaceSlug), false)
+  return [...activeSkills, ...inactiveSkills]
+}
+
+/**
+ * 切换工作区 Skill 的启用/禁用状态
+ *
+ * 在活跃/停用 Skill 目录之间移动文件夹。
+ */
+export function toggleWorkspaceSkill(workspaceSlug: string, skillSlug: string, enabled: boolean): void {
+  const activeDir = getWorkspaceSkillsDir(workspaceSlug)
+  const inactiveDir = getInactiveSkillsDir(workspaceSlug)
+
+  const srcDir = enabled ? inactiveDir : activeDir
+  const destDir = enabled ? activeDir : inactiveDir
+
+  const srcPath = join(srcDir, skillSlug)
+  const destPath = join(destDir, skillSlug)
+
+  if (!existsSync(srcPath)) {
+    throw new Error(`Skill 不存在: ${skillSlug}`)
+  }
+
+  if (existsSync(destPath)) {
+    throw new Error(`目标目录已存在同名 Skill: ${skillSlug}`)
+  }
+
+  renameSync(srcPath, destPath)
+  log.info(`[Agent 工作区] Skill ${enabled ? '启用' : '禁用'}: ${workspaceSlug}/${skillSlug}`)
+}
+
+/** 工作区配置文件格式 */
+interface WorkspaceConfig {
+  attachedDirectories?: string[]
+}
+
+/**
+ * 获取工作区配置文件路径
+ */
+function getWorkspaceConfigPath(workspaceSlug: string): string {
+  return join(getAgentWorkspacePath(workspaceSlug), 'config.json')
+}
+
+/**
+ * 读取工作区配置
+ */
+function readWorkspaceConfig(workspaceSlug: string): WorkspaceConfig {
+  const configPath = getWorkspaceConfigPath(workspaceSlug)
+
+  if (!existsSync(configPath)) {
+    return {}
+  }
+
+  try {
+    const raw = readFileSync(configPath, 'utf-8')
+    return JSON.parse(raw) as WorkspaceConfig
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 写入工作区配置
+ */
+function writeWorkspaceConfig(workspaceSlug: string, config: WorkspaceConfig): void {
+  const configPath = getWorkspaceConfigPath(workspaceSlug)
+  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+}
+
+// ===== 工作区级附加目录管理 =====
+
+/**
+ * 获取工作区附加目录列表
+ */
+export function getWorkspaceAttachedDirectories(workspaceSlug: string): string[] {
+  const config = readWorkspaceConfig(workspaceSlug)
+  return config.attachedDirectories ?? []
+}
+
+/**
+ * 附加目录到工作区（所有会话可访问）
+ */
+export function attachWorkspaceDirectory(workspaceSlug: string, directoryPath: string): string[] {
+  const config = readWorkspaceConfig(workspaceSlug)
+  const existing = config.attachedDirectories ?? []
+
+  if (existing.includes(directoryPath)) {
+    return existing
+  }
+
+  const updated = [...existing, directoryPath]
+  writeWorkspaceConfig(workspaceSlug, { ...config, attachedDirectories: updated })
+  log.info(`[Agent 工作区] 已附加工作区目录: ${directoryPath} → ${workspaceSlug}`)
+  return updated
+}
+
+/**
+ * 从工作区移除附加目录
+ */
+export function detachWorkspaceDirectory(workspaceSlug: string, directoryPath: string): string[] {
+  const config = readWorkspaceConfig(workspaceSlug)
+  const existing = config.attachedDirectories ?? []
+  const updated = existing.filter((d) => d !== directoryPath)
+  writeWorkspaceConfig(workspaceSlug, { ...config, attachedDirectories: updated })
+  log.info(`[Agent 工作区] 已移除工作区目录: ${directoryPath} ← ${workspaceSlug}`)
+  return updated
+}

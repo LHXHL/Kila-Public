@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://esm.sh; style-src 'unsafe-inline'; img-src https: data: blob:; font-src https: data:; media-src https: data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'"
+  />
+  <style id="__widget_style"></style>
+</head>
+<body style="margin: 0; padding: 0; background: transparent;">
+  <div id="__widget_root"></div>
+  <script>
+(function () {
+  'use strict';
+
+  var root = document.getElementById('__widget_root');
+  var themeStyle = document.getElementById('__widget_style');
+  var resizeTimer = null;
+  var renderGeneration = 0;
+  var activeRenderFailed = false;
+  var SCRIPT_TIMEOUT_MS = 15000;
+
+  function postMessage(type, payload) {
+    parent.postMessage(Object.assign({ type: type }, payload || {}), '*');
+  }
+
+  function normalizeError(value, fallback) {
+    if (value && typeof value.message === 'string' && value.message.trim()) {
+      return value.message.trim();
+    }
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    return fallback;
+  }
+
+  function reportError(message) {
+    if (activeRenderFailed) return;
+    activeRenderFailed = true;
+    postMessage('widget:error', { message: normalizeError(message, 'Widget 脚本执行失败') });
+  }
+
+  function postHeight() {
+    if (!root) return;
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      var nextHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      if (nextHeight > 0) {
+        postMessage('widget:resize', { height: nextHeight });
+      }
+    }, 40);
+  }
+
+  var resizeObserver = new ResizeObserver(postHeight);
+  resizeObserver.observe(document.body);
+
+  function applyHtml(html) {
+    if (!root) return;
+    renderGeneration += 1;
+    activeRenderFailed = false;
+    root.innerHTML = html;
+    postHeight();
+  }
+
+  window.__promaDraftMessage = function (prompt, label) {
+    var normalizedPrompt = typeof prompt === 'string' ? prompt.trim() : '';
+    if (!normalizedPrompt || normalizedPrompt.length > 600) return;
+
+    var normalizedLabel = typeof label === 'string' ? label.trim().slice(0, 80) : '';
+    postMessage('widget:intent', {
+      intent: {
+        type: 'draft_message',
+        prompt: normalizedPrompt,
+        label: normalizedLabel || undefined
+      }
+    });
+  };
+
+  function copySafeScriptAttributes(target, attributes) {
+    for (var index = 0; index < attributes.length; index += 1) {
+      var attribute = attributes[index];
+      var name = String(attribute.name || '').toLowerCase();
+      if (name === 'src' || name === 'async' || name === 'defer' || name.indexOf('on') === 0) continue;
+      target.setAttribute(attribute.name, attribute.value);
+    }
+  }
+
+  function runScriptsInOrder(scripts, index, generation) {
+    if (!root || generation !== renderGeneration || activeRenderFailed) return;
+
+    if (index >= scripts.length) {
+      postHeight();
+      postMessage('widget:rendered');
+      return;
+    }
+
+    var descriptor = scripts[index];
+    var script = document.createElement('script');
+    var isModule = descriptor.type === 'module';
+    var needsLoadEvent = Boolean(descriptor.src) || isModule;
+    var settled = false;
+    var timeout = null;
+
+    copySafeScriptAttributes(script, descriptor.attrs);
+    script.async = false;
+
+    function cleanup() {
+      if (timeout) clearTimeout(timeout);
+      script.onload = null;
+      script.onerror = null;
+    }
+
+    function continueNext() {
+      if (settled || generation !== renderGeneration) return;
+      settled = true;
+      cleanup();
+      runScriptsInOrder(scripts, index + 1, generation);
+    }
+
+    function fail(reason) {
+      if (settled || generation !== renderGeneration) return;
+      settled = true;
+      cleanup();
+      var source = descriptor.src ? '：' + descriptor.src : '';
+      reportError(normalizeError(reason, 'Widget 脚本加载或执行失败') + source);
+    }
+
+    if (needsLoadEvent) {
+      script.onload = continueNext;
+      script.onerror = function () { fail('Widget 脚本加载失败'); };
+      timeout = setTimeout(function () { fail('Widget 脚本加载超时'); }, SCRIPT_TIMEOUT_MS);
+    }
+
+    if (descriptor.src) script.src = descriptor.src;
+    else script.textContent = descriptor.text;
+
+    try {
+      root.appendChild(script);
+      if (!needsLoadEvent) continueNext();
+    } catch (error) {
+      fail(error);
+    }
+  }
+
+  function finalizeHtml(html) {
+    if (!root) return;
+
+    renderGeneration += 1;
+    var generation = renderGeneration;
+    activeRenderFailed = false;
+
+    var temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    var scripts = [];
+    var scriptNodes = temp.querySelectorAll('script');
+    for (var index = 0; index < scriptNodes.length; index += 1) {
+      var scriptNode = scriptNodes[index];
+      scripts.push({
+        src: scriptNode.getAttribute('src') || '',
+        text: scriptNode.textContent || '',
+        type: (scriptNode.getAttribute('type') || '').toLowerCase(),
+        attrs: Array.prototype.map.call(scriptNode.attributes || [], function (attribute) {
+          return { name: attribute.name, value: attribute.value };
+        })
+      });
+      scriptNode.remove();
+    }
+
+    root.innerHTML = temp.innerHTML;
+    postHeight();
+    runScriptsInOrder(scripts, 0, generation);
+  }
+
+  window.addEventListener('error', function (event) {
+    reportError(event.error || event.message);
+  });
+
+  window.addEventListener('unhandledrejection', function (event) {
+    reportError(event.reason || 'Widget Promise 执行失败');
+  });
+
+  window.addEventListener('message', function (event) {
+    if (event.source !== parent || !event.data || typeof event.data.type !== 'string') return;
+
+    switch (event.data.type) {
+      case 'widget:update':
+        applyHtml(String(event.data.html || ''));
+        break;
+      case 'widget:finalize':
+        finalizeHtml(String(event.data.html || ''));
+        break;
+      case 'widget:theme':
+        if (themeStyle && typeof event.data.styleBlock === 'string') {
+          themeStyle.textContent = event.data.styleBlock;
+        }
+        if (event.data.vars && typeof event.data.vars === 'object') {
+          for (var key in event.data.vars) {
+            document.documentElement.style.setProperty(key, event.data.vars[key]);
+          }
+        }
+        if (typeof event.data.isDark === 'boolean') {
+          document.documentElement.className = event.data.isDark ? 'dark' : '';
+        }
+        postHeight();
+        break;
+    }
+  });
+
+  document.addEventListener('click', function (event) {
+    var target = event.target;
+    var anchor = target && target.closest ? target.closest('a[href]') : null;
+    if (!anchor) return;
+
+    var href = anchor.getAttribute('href');
+    if (!href || href.charAt(0) === '#') return;
+
+    event.preventDefault();
+    postMessage('widget:link', { href: href });
+  });
+
+  postMessage('widget:ready');
+  postHeight();
+})();
+  </script>
+</body>
+</html>

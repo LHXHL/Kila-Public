@@ -1,0 +1,85 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5efe8"/>
+      <stop offset="1" stop-color="#ece5dc"/>
+    </linearGradient>
+    <radialGradient id="blush-l" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#000" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 白色背景 -->
+  <rect width="512" height="512" fill="#fff"/>
+
+  <!-- ===== 头发（后层）：覆盖头部的深色体积 ===== -->
+  <path d="
+    M 120 310
+    C 120 165, 178 72, 256 72
+    C 334 72, 392 165, 392 310
+    C 392 355, 375 385, 352 405
+    L 328 368
+    C 345 348, 354 320, 354 290
+    C 354 192, 312 118, 256 118
+    C 200 118, 158 192, 158 290
+    C 158 320, 167 348, 184 368
+    L 160 405
+    C 137 385, 120 355, 120 310
+    Z
+  " fill="#111"/>
+
+  <!-- ===== 脸 ===== -->
+  <circle cx="256" cy="278" r="116" fill="url(#skin)"/>
+
+  <!-- ===== 刘海 ===== -->
+  <path d="
+    M 148 255
+    C 155 178, 198 130, 256 126
+    C 314 130, 357 178, 364 255
+    L 346 242
+    C 341 192, 308 155, 256 150
+    C 204 155, 171 192, 166 242
+    Z
+  " fill="#111"/>
+
+  <!-- ===== 眼睛 ===== -->
+  <ellipse cx="214" cy="282" rx="15" ry="19" fill="#111"/>
+  <circle cx="219" cy="276" r="6" fill="#fff"/>
+  <circle cx="210" cy="288" r="3" fill="#fff" opacity="0.5"/>
+
+  <ellipse cx="298" cy="282" rx="15" ry="19" fill="#111"/>
+  <circle cx="303" cy="276" r="6" fill="#fff"/>
+  <circle cx="294" cy="288" r="3" fill="#fff" opacity="0.5"/>
+
+  <!-- ===== 睫毛 ===== -->
+  <path d="M 196 268 Q 200 264 205 266" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 307 266 Q 312 264 316 268" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- ===== 腮红 ===== -->
+  <ellipse cx="186" cy="308" rx="22" ry="11" fill="url(#blush-l)"/>
+  <ellipse cx="326" cy="308" rx="22" ry="11" fill="url(#blush-l)"/>
+
+  <!-- ===== 嘴巴 ===== -->
+  <path d="M 242 316 Q 256 332 270 316" fill="none" stroke="#111" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- ===== 脖子 ===== -->
+  <rect x="236" y="388" width="40" height="28" rx="8" fill="url(#skin)"/>
+
+  <!-- ===== 上衣 ===== -->
+  <path d="
+    M 148 472
+    Q 148 430, 215 410
+    L 244 402
+    Q 256 412, 268 402
+    L 297 410
+    Q 364 430, 364 472
+    Z
+  " fill="#111"/>
+
+  <!-- 衣领 V 形 -->
+  <path d="M 238 406 L 256 448 L 274 406" fill="none" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- 衣服中间纽扣 -->
+  <circle cx="256" cy="440" r="4" fill="#fff" opacity="0.5"/>
+</svg>

@@ -1,0 +1,70 @@
+import type { ModelAbilities, ModelCatalogEntry } from '../types'
+
+const CLAUDE_ABILITIES: ModelAbilities = {
+  tools: 'supported',
+  vision: 'supported',
+  video: 'unsupported',
+  reasoning: 'supported',
+  fileInput: 'supported',
+  imageOutput: 'unsupported',
+}
+
+export const ANTHROPIC_MODELS: ModelCatalogEntry[] = [
+  {
+    provider: 'anthropic',
+    id: 'claude-opus-4-1-20250805',
+    displayName: 'Claude Opus 4.1',
+    aliases: ['claude-opus-4-1', 'claude opus 4.1'],
+    releasedAt: '2025-08-05',
+    contextWindowTokens: 200000,
+    maxOutputTokens: 32000,
+    abilities: CLAUDE_ABILITIES,
+    pricing: {
+      inputPerMillionUsd: 15,
+      outputPerMillionUsd: 75,
+      cacheReadPerMillionUsd: 1.5,
+      cacheWritePerMillionUsd: 18.75,
+    },
+    iconKey: 'claude',
+    source: 'builtin',
+    catalogUpdatedAt: '2026-05-30',
+  },
+  {
+    provider: 'anthropic',
+    id: 'claude-sonnet-4-5-20250929',
+    displayName: 'Claude Sonnet 4.5',
+    aliases: ['claude-sonnet-4-5', 'claude sonnet 4.5'],
+    releasedAt: '2025-09-29',
+    contextWindowTokens: 200000,
+    maxOutputTokens: 64000,
+    abilities: CLAUDE_ABILITIES,
+    pricing: {
+      inputPerMillionUsd: 3,
+      outputPerMillionUsd: 15,
+      cacheReadPerMillionUsd: 0.3,
+      cacheWritePerMillionUsd: 3.75,
+    },
+    iconKey: 'claude',
+    source: 'builtin',
+    catalogUpdatedAt: '2026-05-30',
+  },
+  {
+    provider: 'anthropic',
+    id: 'claude-haiku-4-5-20251001',
+    displayName: 'Claude Haiku 4.5',
+    aliases: ['claude-haiku-4-5', 'claude haiku 4.5'],
+    releasedAt: '2025-10-01',
+    contextWindowTokens: 200000,
+    maxOutputTokens: 64000,
+    abilities: CLAUDE_ABILITIES,
+    pricing: {
+      inputPerMillionUsd: 1,
+      outputPerMillionUsd: 5,
+      cacheReadPerMillionUsd: 0.1,
+      cacheWritePerMillionUsd: 1.25,
+    },
+    iconKey: 'claude',
+    source: 'builtin',
+    catalogUpdatedAt: '2026-05-30',
+  },
+]

@@ -1,0 +1,212 @@
+# Release CI — 推送 v* tag 触发，三平台编译并直接发布到 GitHub Release
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "发布版本 tag（如 v1.1.37），留空则使用当前最新 tag"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================
+  # macOS — arm64 (Apple Silicon)
+  # ============================================
+  build-macos-arm64:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download Bun vendor (darwin-arm64)
+        working-directory: apps/electron
+        run: bun run scripts/download-bun.ts --platform darwin-arm64
+
+      - name: Build CLI resource
+        run: bun run --cwd apps/cli build
+
+      - name: Build (main + preload + renderer)
+        working-directory: apps/electron
+        run: |
+          bun run build:main
+          bun run build:preload
+          bun run build:renderer
+          bun run build:resources
+          bun run scripts/copy-external-deps.ts
+
+      - name: Package (macOS arm64 DMG)
+        working-directory: apps/electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12 != '' }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [ "${CSC_IDENTITY_AUTO_DISCOVERY}" = "false" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          bunx electron-builder --mac --arm64 --publish never
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-arm64-dmg
+          path: apps/electron/out/*.dmg
+          retention-days: 7
+
+  # ============================================
+  # macOS — x64 (Intel)
+  # ============================================
+  build-macos-x64:
+    runs-on: macos-13  # Intel runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download Bun vendor (darwin-x64)
+        working-directory: apps/electron
+        run: bun run scripts/download-bun.ts --platform darwin-x64
+
+      - name: Build CLI resource
+        run: bun run --cwd apps/cli build
+
+      - name: Build (main + preload + renderer)
+        working-directory: apps/electron
+        run: |
+          bun run build:main
+          bun run build:preload
+          bun run build:renderer
+          bun run build:resources
+          bun run scripts/copy-external-deps.ts
+
+      - name: Package (macOS x64 DMG)
+        working-directory: apps/electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12 != '' }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [ "${CSC_IDENTITY_AUTO_DISCOVERY}" = "false" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          bunx electron-builder --mac --x64 --publish never
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-x64-dmg
+          path: apps/electron/out/*.dmg
+          retention-days: 7
+
+  # ============================================
+  # Windows (x64)
+  # ============================================
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download Bun vendor (win32-x64)
+        working-directory: apps/electron
+        run: bun run scripts/download-bun.ts --platform win32-x64
+
+      - name: Download Windows bash (busybox)
+        working-directory: apps/electron
+        run: bun run scripts/download-bash.ts
+
+      - name: Build CLI resource
+        run: bun run --cwd apps/cli build
+
+      - name: Build (main + preload + renderer)
+        working-directory: apps/electron
+        run: |
+          bun run build:main
+          bun run build:preload
+          bun run build:renderer
+          bun run build:resources
+          bun run scripts/copy-external-deps.ts
+
+      - name: Package (Windows x64)
+        working-directory: apps/electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WIN_CERT_P12 != '' }}
+          CSC_LINK: ${{ secrets.WIN_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          if [ "${CSC_IDENTITY_AUTO_DISCOVERY}" = "false" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          bunx electron-builder --win --publish never
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-x64-exe
+          path: apps/electron/out/*.exe
+          retention-days: 7
+
+  # ============================================
+  # 汇总发布到 GitHub Release
+  # ============================================
+  release:
+    needs: [build-macos-arm64, build-macos-x64, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

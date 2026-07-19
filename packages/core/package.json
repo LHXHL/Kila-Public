@@ -1,0 +1,30 @@
+{
+  "name": "@kila/core",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "description": "kila core types,storage and core logic with agents",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./utils": "./src/utils/index.ts",
+    "./providers": "./src/providers/index.ts",
+    "./highlight": "./src/highlight/index.ts"
+  },
+  "dependencies": {
+    "@kila/shared": "workspace:*",
+    "shiki": "^3.22.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/uuid": "^11.0.0"
+  }
+}
