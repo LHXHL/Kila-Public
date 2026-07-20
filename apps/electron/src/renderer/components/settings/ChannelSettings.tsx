@@ -280,8 +280,26 @@ export function ChannelSettings(): React.ReactElement {
     setDoctorResult(null)
 
     try {
+      const enabledModels = channel.models.filter((model) => model.enabled)
+      const preferredModel = agentChannelId === channel.id
+        ? enabledModels.find((model) => model.id === agentModelId)
+        : undefined
+      const testedModel = preferredModel ?? enabledModels[0]
+
+      if (!testedModel) {
+        setDoctorResult({
+          channelId: channel.id,
+          ok: false,
+          lines: ['真实推理：失败 - 当前渠道没有启用模型，请先启用至少一个模型'],
+        })
+        return
+      }
+
       const [connection, apiKey] = await Promise.all([
-        window.electronAPI.testChannel(channel.id),
+        window.electronAPI.testChannel({
+          channelId: channel.id,
+          modelId: testedModel.id,
+        }),
         window.electronAPI.decryptApiKey(channel.id),
       ])
       const modelFetch = await window.electronAPI.fetchModels({
@@ -289,17 +307,19 @@ export function ChannelSettings(): React.ReactElement {
         baseUrl: channel.baseUrl,
         apiKey,
       })
-      const enabledModels = channel.models.filter((model) => model.enabled)
       const lines = [
-        `连接测试：${connection.success ? '通过' : '失败'} - ${connection.message}`,
-        `模型拉取：${modelFetch.success ? '通过' : '失败'} - ${modelFetch.message}`,
+        `真实推理：${connection.success ? '通过' : '失败'} - ${connection.message}`,
+        `协议：${connection.resolvedApi ?? channel.apiType ?? '自动推断'}`,
+        `测试模型：${connection.modelId ?? testedModel.id}`,
+        `模型列表：${modelFetch.success ? '可达' : '失败'} - ${modelFetch.message}`,
         `远端模型数：${modelFetch.models.length}`,
         `本地启用模型：${enabledModels.length}/${channel.models.length}`,
         `默认选择：${agentChannelId === channel.id ? (agentModelId || '未指定模型') : '不是当前默认渠道'}`,
       ]
       setDoctorResult({
         channelId: channel.id,
-        ok: connection.success && modelFetch.success && enabledModels.length > 0,
+        // Healthy 只由真实推理决定；模型列表接口可能被网关关闭。
+        ok: connection.success,
         lines,
       })
     } catch (error) {

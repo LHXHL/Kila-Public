@@ -58,6 +58,7 @@ import {
   agentModelIdAtom,
   agentPendingPromptAtom,
   agentPendingFilesMapAtom,
+  getSessionPendingFiles,
   setSessionPendingFilesMap,
   agentStreamErrorsAtom,
   agentSessionDraftsAtom,
@@ -160,7 +161,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const [agentModelId, setAgentModelId] = useAtom(agentModelIdAtom)
   const [pendingPrompt, setPendingPrompt] = useAtom(agentPendingPromptAtom)
   const [pendingFilesMap, setPendingFilesMap] = useAtom(agentPendingFilesMapAtom)
-  const pendingFiles = pendingFilesMap.get(sessionId) ?? []
+  const pendingFiles = getSessionPendingFiles(pendingFilesMap, sessionId)
   const setPendingFiles = React.useCallback((
     update: AgentPendingFile[] | ((previous: AgentPendingFile[]) => AgentPendingFile[]),
   ): void => {

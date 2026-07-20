@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AgentPendingFile } from '@kila/shared'
 import {
   disposePendingFiles,
+  getSessionPendingFiles,
   setSessionPendingFilesMap,
 } from './agent-ui-atoms'
 
@@ -15,6 +16,23 @@ function file(id: string): AgentPendingFile {
 }
 
 describe('Session 待发送附件隔离', () => {
+  test('Given Session 没有附件, When 连续读取, Then 复用同一个空数组引用', () => {
+    const map = new Map<string, AgentPendingFile[]>()
+
+    const first = getSessionPendingFiles(map, 'session-a')
+    const second = getSessionPendingFiles(map, 'session-a')
+
+    expect(first).toBe(second)
+    expect(first).toEqual([])
+  })
+
+  test('Given Session 已有附件, When 读取, Then 返回原附件数组引用', () => {
+    const files = [file('a')]
+    const map = new Map<string, AgentPendingFile[]>([['session-a', files]])
+
+    expect(getSessionPendingFiles(map, 'session-a')).toBe(files)
+  })
+
   test('Given 两个 Session 各有附件, When 更新其中一个, Then 不影响另一个 Session', () => {
     const initial = new Map<string, AgentPendingFile[]>([
       ['session-a', [file('a')]],

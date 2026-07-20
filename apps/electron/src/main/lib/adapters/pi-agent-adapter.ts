@@ -50,6 +50,7 @@ import {
 
 import { createLogger } from '../logger'
 import { loadExternalEsm } from '../external-esm-loader'
+import { classifyProviderError } from '../provider-error-classifier'
 const log = createLogger('Pi Agent')
 
 type PiModel = Model<Api>
@@ -376,7 +377,7 @@ function createTypedError(
   }
 }
 
-function mapPiErrorMessageToKilaEvent(message: string): AgentEvent {
+export function mapPiErrorMessageToKilaEvent(message: string): AgentEvent {
   const friendly = friendlyErrorMessage(message)
   const lowered = friendly.toLowerCase()
 
@@ -384,27 +385,6 @@ function mapPiErrorMessageToKilaEvent(message: string): AgentEvent {
     return {
       type: 'typed_error',
       error: createTypedError('prompt_too_long', '上下文过长', '当前对话的上下文已超出模型限制，请压缩上下文或开启新会话', false),
-    }
-  }
-
-  if (/401|403|unauthorized|authentication|invalid api key|api key/i.test(lowered)) {
-    return {
-      type: 'typed_error',
-      error: createTypedError('invalid_api_key', '认证失败', '无法通过 API 认证，请检查当前渠道的 API Key 或 Base URL', true),
-    }
-  }
-
-  if (/429|rate limit|too many requests/i.test(lowered)) {
-    return {
-      type: 'typed_error',
-      error: createTypedError('rate_limited', '请求频率限制', '请求过于频繁，请稍后再试', true),
-    }
-  }
-
-  if (/timeout|network|socket|fetch failed|econnreset|enotfound/i.test(lowered)) {
-    return {
-      type: 'typed_error',
-      error: createTypedError('network_error', '网络错误', friendly, true),
     }
   }
 
@@ -419,6 +399,19 @@ function mapPiErrorMessageToKilaEvent(message: string): AgentEvent {
     return {
       type: 'typed_error',
       error: createTypedError('image_not_supported', '模型不支持图片', '当前模型不支持图片输入，无法识别图片内容。请切换到支持视觉的模型（如 Claude、GPT-4o、Gemini）。', false),
+    }
+  }
+
+  const classification = classifyProviderError(friendly)
+  if (classification.failureKind !== 'provider_error') {
+    return {
+      type: 'typed_error',
+      error: createTypedError(
+        classification.errorCode,
+        classification.title,
+        classification.message,
+        classification.canRetry,
+      ),
     }
   }
 

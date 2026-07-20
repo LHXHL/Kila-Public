@@ -32,6 +32,7 @@ import { emitSessionRuntimeRunStart, emitSessionRuntimeStream } from './session-
 import { getSettings } from './settings-service'
 import { cloneSessionMessageAttachments } from './session-attachment-clone'
 import { clearPiSessionState } from './pi-session-state'
+import { switchesActiveRuntimeSelection } from './agent-runtime-selection'
 
 
 import { createLogger } from './logger'
@@ -611,6 +612,18 @@ export class SessionService {
     const nextThinkingLevel = input.thinkingLevel
     const nextHistoryTurns = input.historyTurns
 
+    const runtimeActive = this.deps.isAgentRuntimeActive
+      ? await this.deps.isAgentRuntimeActive(session.id)
+      : false
+    const switchesActiveRuntime = runtimeActive && switchesActiveRuntimeSelection(
+      { channelId: session.channelId ?? '', modelId: session.modelId },
+      { channelId: nextChannelId, modelId: nextModelId },
+    )
+    if (switchesActiveRuntime) {
+      // 必须在持久化 SessionMeta 前拒绝，避免消息未送达但默认渠道/模型已被改写。
+      throw new Error('当前任务仍在使用原渠道和模型，请等待任务结束或停止后再切换')
+    }
+
     assignIfChanged('channelId', nextChannelId)
     assignIfChanged('modelId', nextModelId)
     assignIfChanged('thinkingLevel', nextThinkingLevel)
@@ -643,10 +656,6 @@ export class SessionService {
       enabledToolIds: input.enabledToolIds ?? resolvedSession.enabledToolIds,
       additionalDirectories: input.additionalDirectories ?? resolvedSession.attachedDirectories,
     }
-
-    const runtimeActive = this.deps.isAgentRuntimeActive
-      ? await this.deps.isAgentRuntimeActive(resolvedSession.id)
-      : false
 
     if (runtimeActive) {
       if (!this.deps.steerAgentRuntime) {

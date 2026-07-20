@@ -6,6 +6,7 @@ import {
   createKilaModelRuntime,
   createKilaPiProviderId,
   updateKilaModelRuntimeApiKey,
+  resolveKilaRuntimeBaseUrl,
 } from './pi-model-runtime'
 
 const model: Model<Api> = {
@@ -25,6 +26,13 @@ describe('Kila Pi ModelRuntime', () => {
   test('使用独立 providerId，不覆盖 Pi 内置 provider catalog', () => {
     expect(createKilaPiProviderId({ provider: 'openai', baseUrl: model.baseUrl })).toBe('kila-openai')
     expect(createKilaPiProviderId({ provider: 'custom', baseUrl: model.baseUrl })).toBe('kila-custom')
+  })
+
+  test('Given Anthropic Base URL 已包含 v1 When 创建 runtime Then SDK 只接收根路径', () => {
+    expect(resolveKilaRuntimeBaseUrl(
+      { provider: 'anthropic', apiType: 'anthropic', baseUrl: 'https://gateway.example.com/anthropic/v1' },
+      { ...model, api: 'anthropic-messages' },
+    )).toBe('https://gateway.example.com/anthropic')
   })
 
   test('通过官方 CredentialStore + ModelRuntime 注册模型和认证', async () => {

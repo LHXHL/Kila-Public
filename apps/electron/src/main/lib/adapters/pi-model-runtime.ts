@@ -9,13 +9,14 @@
 import type { Api, CredentialStore, InMemoryCredentialStore, Model } from '@earendil-works/pi-ai'
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { Channel } from '@kila/shared'
+import { normalizeAnthropicBaseUrlForSdk } from '@kila/core'
 
 export type PiModel = Model<Api>
 
 type PiAiModule = typeof import('@earendil-works/pi-ai')
 type PiCodingAgentModule = typeof import('@earendil-works/pi-coding-agent')
 
-type PiQueryChannel = Pick<Channel, 'provider' | 'baseUrl'>
+type PiQueryChannel = Pick<Channel, 'provider' | 'baseUrl' | 'apiType'>
 
 export interface KilaModelRuntime {
   credentials: InMemoryCredentialStore
@@ -44,6 +45,14 @@ export function createKilaPiProviderId(channel: PiQueryChannel): string {
   return `kila-${safeProviderSegment(channel.provider)}`
 }
 
+/** 统一 Pi SDK 使用的 Base URL，避免 Doctor 与真实运行时命中不同路径。 */
+export function resolveKilaRuntimeBaseUrl(channel: PiQueryChannel, model: PiModel): string {
+  if (model.api === 'anthropic-messages') {
+    return normalizeAnthropicBaseUrlForSdk(channel.baseUrl)
+  }
+  return channel.baseUrl.trim().replace(/\/+$/, '')
+}
+
 async function setRuntimeCredential(
   credentials: CredentialStore,
   providerId: string,
@@ -66,6 +75,7 @@ export async function createKilaModelRuntime(
   options: CreateKilaModelRuntimeOptions,
 ): Promise<KilaModelRuntime> {
   const providerId = createKilaPiProviderId(options.channel)
+  const baseUrl = resolveKilaRuntimeBaseUrl(options.channel, options.model)
   const credentials = new options.piAi.InMemoryCredentialStore()
   await setRuntimeCredential(credentials, providerId, options.apiKey)
 
@@ -81,12 +91,12 @@ export async function createKilaModelRuntime(
     // registerProvider 需要显式认证策略；请求时 CredentialStore 中的动态 key 优先。
     apiKey: options.apiKey.trim() || 'kila-local-no-auth',
     api: options.model.api,
-    baseUrl: options.channel.baseUrl,
+    baseUrl,
     models: [{
       id: options.model.id,
       name: options.model.name,
       api: options.model.api,
-      baseUrl: options.model.baseUrl,
+      baseUrl,
       reasoning: options.model.reasoning,
       thinkingLevelMap: options.model.thinkingLevelMap,
       input: [...options.model.input],

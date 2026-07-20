@@ -25,6 +25,7 @@ import {
 import { runAgentStream } from './agent-orchestrator-stream'
 import { permissionService } from './agent-permission-service'
 import { askUserService } from './agent-ask-user-service'
+import { hasRuntimeSelectionChanged } from './agent-runtime-selection'
 
 
 // ===== 类型定义 =====
@@ -51,6 +52,8 @@ type SessionTitleRuntimeModule = typeof import('./session-title-service')
 
 interface SessionRunState {
   abortRequested: boolean
+  channelId: string
+  modelId?: string
   settled: Promise<void>
   resolveSettled: () => void
 }
@@ -62,7 +65,7 @@ function loadSessionTitleRuntime(): Promise<SessionTitleRuntimeModule> {
   return sessionTitleRuntimeModulePromise
 }
 
-function createSessionRunState(): SessionRunState {
+function createSessionRunState(selection: Pick<AgentSendInput, 'channelId' | 'modelId'>): SessionRunState {
   let resolveSettled!: () => void
   const settled = new Promise<void>((resolve) => {
     resolveSettled = resolve
@@ -70,8 +73,19 @@ function createSessionRunState(): SessionRunState {
 
   return {
     abortRequested: false,
+    channelId: selection.channelId,
+    modelId: selection.modelId,
     settled,
     resolveSettled,
+  }
+}
+
+function assertRuntimeSelectionUnchanged(
+  active: SessionRunState,
+  input: Pick<AgentSendInput, 'channelId' | 'modelId'>,
+): void {
+  if (hasRuntimeSelectionChanged(active, input)) {
+    throw new Error('当前任务仍在使用原渠道和模型，请等待任务结束或停止后再切换')
   }
 }
 
@@ -150,7 +164,7 @@ export class AgentOrchestrator {
       return
     }
 
-    const runState = createSessionRunState()
+    const runState = createSessionRunState(input)
     this.sessionRuns.set(sessionId, runState)
 
     try {
@@ -163,6 +177,7 @@ export class AgentOrchestrator {
       }))
 
       const runContext = await buildAgentRunContext(input, channelContext.value, this.eventBus)
+      runState.modelId = runContext.resolvedModel
 
       await runAgentStream({
         input,
@@ -204,6 +219,7 @@ export class AgentOrchestrator {
     if (!runState || runState.abortRequested) {
       throw new Error('当前会话没有可干预的运行中任务')
     }
+    assertRuntimeSelectionUnchanged(runState, input)
     if (input.attachments?.length) {
       throw new Error('运行中干预暂不支持附件，请先停止当前任务后再发送附件')
     }
@@ -223,6 +239,7 @@ export class AgentOrchestrator {
     if (!runState || runState.abortRequested) {
       throw new Error('当前会话没有可继续排队的运行中任务')
     }
+    assertRuntimeSelectionUnchanged(runState, input)
     if (!this.adapter.followUp) {
       throw new Error('当前 provider 不支持 follow-up')
     }

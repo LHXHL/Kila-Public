@@ -15,6 +15,8 @@ import type {
   ChannelUpdateInput,
   ChannelsConfig,
   ChannelTestResult,
+  ChannelTestInput,
+  ProviderDoctorInput,
   ChannelModel,
   FetchModelsInput,
   FetchModelsResult,
@@ -28,6 +30,9 @@ import {
 import { getFetchFn } from './proxy-fetch'
 import { getEffectiveProxyUrl } from './proxy-settings-service'
 import { normalizeAnthropicBaseUrl, normalizeBaseUrl } from '@kila/core'
+import { resolveChannelModel } from './channel-model-resolution'
+import { lookupProviderDbModel } from './provider-db-loader'
+import { runProviderProbe } from './provider-doctor'
 
 /** 当前配置版本 */
 
@@ -335,162 +340,75 @@ export function decryptApiKey(channelId: string): string {
 }
 
 /**
- * 测试渠道连接
+ * 测试已保存渠道。
  *
- * 向供应商的 API 发送简单请求，验证 API Key 和连接是否有效。
+ * Provider Doctor 必须完成一次真实最小推理；/models 只用于模型发现，不能证明
+ * 当前协议、模型和账号权限可用于 Agent 请求。
  */
-export async function testChannel(channelId: string): Promise<ChannelTestResult> {
+export async function testChannel(input: ProviderDoctorInput): Promise<ChannelTestResult> {
   const config = readConfig()
-  const channel = config.channels.find((c) => c.id === channelId)
+  const channel = config.channels.find((candidate) => candidate.id === input.channelId)
 
   if (!channel) {
-    return { success: false, message: '渠道不存在' }
-  }
-
-  try {
-    const apiKey = decryptKey(channel.apiKey)
-    const proxyUrl = await getEffectiveProxyUrl()
-
-    switch (channel.provider) {
-      case 'anthropic':
-        return await testAnthropic(channel.baseUrl, apiKey, proxyUrl)
-      case 'openai':
-      case 'deepseek':
-      case 'moonshot':
-      case 'zhipu':
-      case 'minimax':
-      case 'doubao':
-      case 'qwen':
-      case 'custom':
-        return await testOpenAICompatible(channel.baseUrl, apiKey, proxyUrl)
-      case 'google':
-        return await testGoogle(channel.baseUrl, apiKey, proxyUrl)
-      default:
-        return { success: false, message: `不支持的供应商: ${channel.provider}` }
+    return {
+      success: false,
+      message: '渠道不存在',
+      failureKind: 'invalid_configuration',
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '未知错误'
-    return { success: false, message: `连接测试失败: ${message}` }
   }
-}
 
-/**
- * 测试 Anthropic API 连接
- */
-async function testAnthropic(baseUrl: string, apiKey: string, proxyUrl?: string): Promise<ChannelTestResult> {
-  const url = normalizeAnthropicBaseUrl(baseUrl)
-  const fetchFn = getFetchFn(proxyUrl)
-
-  const response = await fetchFn(`${url}/messages`, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      Authorization: `Bearer ${apiKey}`,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 1,
-      messages: [{ role: 'user', content: 'hi' }],
-    }),
+  const resolution = resolveChannelModel(channel, {
+    requestedModelId: input.modelId,
   })
-
-  if (response.ok) {
-    return { success: true, message: '连接成功' }
+  if (!resolution.ok) {
+    return {
+      success: false,
+      message: resolution.error,
+      failureKind: 'invalid_configuration',
+    }
   }
 
-  if (response.status === 401) {
-    const text = await response.text().catch(() => '')
-    return { success: false, message: `API Key 无效${text ? `: ${text.slice(0, 150)}` : ''}` }
-  }
+  const channelModel = channel.models.find((model) => model.id === resolution.modelId)
+  const providerDbEntry = lookupProviderDbModel(
+    channel.capabilityProviderId ?? channel.provider,
+    resolution.modelId,
+  )
 
-  // 如果能收到 API 的响应（即使是错误），说明连接是通的
-  return { success: true, message: '连接成功' }
-}
-
-/**
- * 测试 OpenAI 兼容 API 连接（OpenAI / DeepSeek / Custom）
- */
-async function testOpenAICompatible(baseUrl: string, apiKey: string, proxyUrl?: string): Promise<ChannelTestResult> {
-  const url = normalizeBaseUrl(baseUrl)
-  const fetchFn = getFetchFn(proxyUrl)
-
-  const response = await fetchFn(`${url}/models`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+  return runProviderProbe({
+    channel,
+    apiKey: decryptKey(channel.apiKey),
+    modelId: resolution.modelId,
+    modelMetadata: channelModel?.metadataOverride,
+    modelCapabilities: channelModel?.capabilities,
+    providerDbEntry,
   })
-
-  if (response.ok) {
-    return { success: true, message: '连接成功' }
-  }
-
-  if (response.status === 401) {
-    return { success: false, message: 'API Key 无效' }
-  }
-
-  const text = await response.text().catch(() => '')
-  return { success: false, message: `请求失败 (${response.status}): ${text.slice(0, 200)}` }
-}
-
-/**
- * 测试 Google Generative AI API 连接
- */
-async function testGoogle(baseUrl: string, apiKey: string, proxyUrl?: string): Promise<ChannelTestResult> {
-  const url = normalizeBaseUrl(baseUrl)
-  const fetchFn = getFetchFn(proxyUrl)
-
-  const response = await fetchFn(`${url}/v1beta/models?key=${apiKey}`, {
-    method: 'GET',
-  })
-
-  if (response.ok) {
-    return { success: true, message: '连接成功' }
-  }
-
-  if (response.status === 400 || response.status === 403) {
-    return { success: false, message: 'API Key 无效' }
-  }
-
-  const text = await response.text().catch(() => '')
-  return { success: false, message: `请求失败 (${response.status}): ${text.slice(0, 200)}` }
 }
 
 // ===== 直接测试连接 =====
 
 /**
- * 直接测试连接（无需已保存渠道）
- *
- * 使用传入的明文凭证直接向提供商发送测试请求。
- * 适用于创建/编辑渠道时用户在保存前先验证连接。
+ * 直接测试连接（无需已保存渠道）。
+ * 使用表单当前的协议、模型、Base URL 和明文凭证走与 Agent 相同的 Pi runtime。
  */
-export async function testChannelDirect(input: FetchModelsInput): Promise<ChannelTestResult> {
-  try {
-    const proxyUrl = await getEffectiveProxyUrl()
+export async function testChannelDirect(input: ChannelTestInput): Promise<ChannelTestResult> {
+  const providerDbEntry = lookupProviderDbModel(
+    input.capabilityProviderId ?? input.provider,
+    input.modelId,
+  )
 
-    switch (input.provider) {
-      case 'anthropic':
-        return await testAnthropic(input.baseUrl, input.apiKey, proxyUrl)
-      case 'openai':
-      case 'deepseek':
-      case 'moonshot':
-      case 'zhipu':
-      case 'minimax':
-      case 'doubao':
-      case 'qwen':
-      case 'custom':
-        return await testOpenAICompatible(input.baseUrl, input.apiKey, proxyUrl)
-      case 'google':
-        return await testGoogle(input.baseUrl, input.apiKey, proxyUrl)
-      default:
-        return { success: false, message: '不支持的提供商' }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '未知错误'
-    return { success: false, message: `连接测试失败: ${message}` }
-  }
+  return runProviderProbe({
+    channel: {
+      provider: input.provider,
+      apiType: input.apiType,
+      baseUrl: input.baseUrl,
+      capabilityProviderId: input.capabilityProviderId,
+    },
+    apiKey: input.apiKey,
+    modelId: input.modelId,
+    modelMetadata: input.modelMetadata,
+    modelCapabilities: input.modelCapabilities,
+    providerDbEntry,
+  })
 }
 
 // ===== 模型拉取相关 =====

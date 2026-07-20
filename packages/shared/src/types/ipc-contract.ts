@@ -30,6 +30,8 @@ import type {
   ChannelCreateInput,
   ChannelUpdateInput,
   ChannelTestResult,
+  ChannelTestInput,
+  ProviderDoctorInput,
   FetchModelsInput,
   FetchModelsResult,
 } from './channel'
@@ -191,8 +193,8 @@ export interface IpcContract {
   'channel:update': { args: [id: string, input: ChannelUpdateInput]; result: Channel }
   'channel:delete': { args: [id: string]; result: void }
   'channel:decrypt-key': { args: [channelId: string]; result: string }
-  'channel:test': { args: [channelId: string]; result: ChannelTestResult }
-  'channel:test-direct': { args: [input: FetchModelsInput]; result: ChannelTestResult }
+  'channel:test': { args: [input: ProviderDoctorInput]; result: ChannelTestResult }
+  'channel:test-direct': { args: [input: ChannelTestInput]; result: ChannelTestResult }
   'channel:fetch-models': { args: [input: FetchModelsInput]; result: FetchModelsResult }
 
   // ===== Provider DB =====

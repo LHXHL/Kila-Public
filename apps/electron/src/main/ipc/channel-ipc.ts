@@ -10,6 +10,8 @@ import type {
   ChannelCreateInput,
   ChannelUpdateInput,
   ChannelTestResult,
+  ChannelTestInput,
+  ProviderDoctorInput,
   FetchModelsInput,
   FetchModelsResult,
 } from '@kila/shared'
@@ -69,15 +71,15 @@ export function registerChannelHandlers(): void {
   // 测试渠道连接
   handle(
     CHANNEL_IPC_CHANNELS.TEST,
-    async (_, channelId: string): Promise<ChannelTestResult> => {
-      return testChannel(channelId)
+    async (_, input: ProviderDoctorInput): Promise<ChannelTestResult> => {
+      return testChannel(input)
     }
   )
 
   // 直接测试连接（无需已保存渠道）
   handle(
     CHANNEL_IPC_CHANNELS.TEST_DIRECT,
-    async (_, input: FetchModelsInput): Promise<ChannelTestResult> => {
+    async (_, input: ChannelTestInput): Promise<ChannelTestResult> => {
       return testChannelDirect(input)
     }
   )

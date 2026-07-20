@@ -145,6 +145,10 @@ export interface JsonSchemaOutputFormat {
 /** 错误代码 */
 export type ErrorCode =
   | 'invalid_api_key'
+  | 'permission_denied'
+  | 'region_restricted'
+  | 'request_blocked'
+  | 'protocol_mismatch'
   | 'invalid_credentials'
   | 'response_too_large'
   | 'expired_oauth_token'

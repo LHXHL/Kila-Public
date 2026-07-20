@@ -53,6 +53,16 @@ export const agentPendingPromptAtom = atom<AgentPendingPrompt | null>(null)
 /** Agent 待发送文件列表（按 Session 隔离，避免切换标签时附件串会话） */
 export const agentPendingFilesMapAtom = atom<Map<string, AgentPendingFile[]>>(new Map())
 
+const EMPTY_AGENT_PENDING_FILES: AgentPendingFile[] = []
+
+/** 读取 Session 待发送附件；无附件时复用稳定空数组，避免触发引用比较更新循环。 */
+export function getSessionPendingFiles(
+  map: ReadonlyMap<string, AgentPendingFile[]>,
+  sessionId: string,
+): AgentPendingFile[] {
+  return map.get(sessionId) ?? EMPTY_AGENT_PENDING_FILES
+}
+
 export function disposePendingFiles(
   files: readonly AgentPendingFile[],
   dataStore?: Map<string, string>,

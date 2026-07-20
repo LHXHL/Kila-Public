@@ -25,6 +25,8 @@ import type {
   ChannelCreateInput,
   ChannelUpdateInput,
   ChannelTestResult,
+  ChannelTestInput,
+  ProviderDoctorInput,
   FetchModelsInput,
   FetchModelsResult,
   FileDialogResult,
@@ -186,10 +188,10 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
   decryptApiKey: (channelId: string) => Promise<string>
 
   /** 测试渠道连接 */
-  testChannel: (channelId: string) => Promise<ChannelTestResult>
+  testChannel: (input: ProviderDoctorInput) => Promise<ChannelTestResult>
 
   /** 直接测试连接（无需已保存渠道，传入明文凭证） */
-  testChannelDirect: (input: FetchModelsInput) => Promise<ChannelTestResult>
+  testChannelDirect: (input: ChannelTestInput) => Promise<ChannelTestResult>
 
   /** 从供应商拉取可用模型列表（直接传入凭证，无需已保存渠道） */
   fetchModels: (input: FetchModelsInput) => Promise<FetchModelsResult>
@@ -869,6 +871,8 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
 
   // ===== Native-feel: 多格式剪贴板 =====
 
+  /** 将纯文本写入系统剪贴板 */
+  copyText: (text: string) => Promise<void>
   /** 同时写入纯文本 + HTML 到系统剪贴板 */
   copyRichText: (text: string, html: string) => Promise<void>
 
@@ -922,11 +926,11 @@ const electronAPI: ElectronAPI = {
     return invoke(CHANNEL_IPC_CHANNELS.DECRYPT_KEY, channelId)
   },
 
-  testChannel: (channelId: string) => {
-    return invoke(CHANNEL_IPC_CHANNELS.TEST, channelId)
+  testChannel: (input: ProviderDoctorInput) => {
+    return invoke(CHANNEL_IPC_CHANNELS.TEST, input)
   },
 
-  testChannelDirect: (input: FetchModelsInput) => {
+  testChannelDirect: (input: ChannelTestInput) => {
     return invoke(CHANNEL_IPC_CHANNELS.TEST_DIRECT, input)
   },
 
@@ -1776,7 +1780,10 @@ const electronAPI: ElectronAPI = {
     return () => { ipcRenderer.removeListener(WECHAT_BRIDGE_IPC_CHANNELS.ACCOUNT_STATUS_CHANGED, listener) }
   },
 
-  // Native-feel: 多格式剪贴板
+  // Native-feel: 系统剪贴板
+  copyText: (text: string) => {
+    return ipcRenderer.invoke('native-feel:copy-text', text)
+  },
   copyRichText: (text: string, html: string) => {
     return ipcRenderer.invoke('native-feel:copy-rich-text', text, html)
   },

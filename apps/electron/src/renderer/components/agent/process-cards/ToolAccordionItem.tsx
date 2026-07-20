@@ -9,7 +9,9 @@
 
 import * as React from 'react'
 import { Download, ChevronDown, Loader2, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { copyPlainText } from '@/lib/clipboard'
 import { useAttachmentImage } from '@/hooks/use-attachment-image'
 import {
   StatusIcon,
@@ -61,11 +63,13 @@ function FoldablePayloadBlock({
   }, [content])
 
   const handleCopy = (): void => {
-    void navigator.clipboard.writeText(normalizePayloadText(content)).then(() => {
+    void copyPlainText(normalizePayloadText(content)).then(() => {
       setCopied(true)
+      toast.success('完整输出已复制')
       window.setTimeout(() => setCopied(false), 1500)
     }).catch((error) => {
       console.error('[ToolAccordionItem] 复制完整输出失败:', error)
+      toast.error('复制完整输出失败，请重试')
     })
   }
 

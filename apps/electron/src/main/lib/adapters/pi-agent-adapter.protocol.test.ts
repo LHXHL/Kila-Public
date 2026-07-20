@@ -77,7 +77,23 @@ test('Given capabilityProviderId 命中的 Provider DB 模型画像, When 生成
   })
 })
 
-import { createPiEventMapper, mapPiEventToKilaEvents } from './pi-agent-adapter'
+import { createPiEventMapper, mapPiErrorMessageToKilaEvent, mapPiEventToKilaEvents } from './pi-agent-adapter'
+
+describe('Pi Provider 错误映射', () => {
+  test('Given 403 用户组无路由权限 When 映射错误 Then 不误报 API Key', () => {
+    expect(mapPiErrorMessageToKilaEvent('403 This group does not allow /v1/messages dispatch')).toEqual({
+      type: 'typed_error',
+      error: expect.objectContaining({ code: 'permission_denied', title: '权限不足' }),
+    })
+  })
+
+  test('Given 403 区域限制 When 映射错误 Then 返回区域限制', () => {
+    expect(mapPiErrorMessageToKilaEvent('403 This model is not available in your region.')).toEqual({
+      type: 'typed_error',
+      error: expect.objectContaining({ code: 'region_restricted', title: '区域限制' }),
+    })
+  })
+})
 
 describe('Pi 事件边界', () => {
   test('Given agent_end 后进入 Pi compaction/retry When 收到 agent_settled Then 只产生一个最终错误事件', () => {

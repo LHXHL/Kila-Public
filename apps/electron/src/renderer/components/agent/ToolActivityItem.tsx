@@ -10,6 +10,7 @@
  */
 
 import * as React from 'react'
+import { toast } from 'sonner'
 import {
   Pencil,
   FilePenLine,
@@ -35,6 +36,7 @@ import {
   Download,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { copyPlainText } from '@/lib/clipboard'
 import { formatPayloadPreview } from './agent-messages-utils'
 import { getStatusToneClasses } from '@/lib/theme/status-tone'
 import { useAttachmentImage } from '@/hooks/use-attachment-image'
@@ -609,11 +611,13 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
     if (renderedResult) {
       parts.push('结果:\n' + renderedResult)
     }
-    void navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+    void copyPlainText(parts.join('\n\n')).then(() => {
       setCopied(true)
+      toast.success('工具完整内容已复制')
       window.setTimeout(() => setCopied(false), 1500)
     }).catch((error) => {
       console.error('[ToolActivityDetails] 复制失败:', error)
+      toast.error('复制工具完整内容失败，请重试')
     })
   }
 

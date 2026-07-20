@@ -257,7 +257,8 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
   const successTone = getStatusToneClasses('success')
   const dangerTone = getStatusToneClasses('danger')
   const missingBaseUrl = !baseUrl.trim()
-  const canTestConnection = Boolean(apiKey.trim() && !missingBaseUrl)
+  const testModel = models.find((model) => model.enabled) ?? models[0]
+  const canTestConnection = Boolean(apiKey.trim() && !missingBaseUrl && testModel)
   const canFetchModels = Boolean(apiKey.trim() && !missingBaseUrl)
   const canSave = Boolean(name.trim() && !missingBaseUrl && (isEdit || apiKey.trim()))
 
@@ -479,10 +480,16 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
     setTestResult(null)
 
     try {
+      if (!testModel) return
       const result = await window.electronAPI.testChannelDirect({
         provider,
+        apiType: apiType || undefined,
+        capabilityProviderId: capabilityProviderId.trim() || undefined,
         baseUrl,
         apiKey,
+        modelId: testModel.id,
+        modelMetadata: testModel.metadataOverride,
+        modelCapabilities: testModel.capabilities,
       })
       setTestResult(result)
     } catch (error) {
@@ -619,7 +626,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                 ) : (
                   <Zap size={12} />
                 )}
-                <span>测试连接</span>
+                <span>{testModel ? '测试真实推理' : '请先添加模型'}</span>
               </Button>
             </div>
             <div className="relative">

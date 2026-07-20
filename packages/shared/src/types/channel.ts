@@ -296,11 +296,38 @@ export interface ChannelsConfig {
 /**
  * 连接测试结果
  */
+export type ChannelTestFailureKind =
+  | 'invalid_api_key'
+  | 'permission_denied'
+  | 'region_restricted'
+  | 'request_blocked'
+  | 'billing_or_quota'
+  | 'rate_limited'
+  | 'protocol_mismatch'
+  | 'network_error'
+  | 'provider_error'
+  | 'invalid_configuration'
+
 export interface ChannelTestResult {
-  /** 是否成功 */
+  /** 是否完成真实最小推理 */
   success: boolean
   /** 结果消息 */
   message: string
+  /** 实际使用的 Pi 协议 */
+  resolvedApi?: string
+  /** 实际测试的模型 */
+  modelId?: string
+  /** 失败分类，成功时为空 */
+  failureKind?: ChannelTestFailureKind
+  /** 从供应商错误中提取的 HTTP 状态码 */
+  statusCode?: number
+}
+
+/** 已保存渠道的 Provider Doctor 输入。 */
+export interface ProviderDoctorInput {
+  channelId: string
+  /** 缺省时使用渠道内第一个启用模型 */
+  modelId?: string
 }
 
 /**
@@ -311,6 +338,16 @@ export interface FetchModelsInput {
   baseUrl: string
   /** 明文 API Key */
   apiKey: string
+}
+
+/** 未保存渠道的真实推理测试输入。 */
+export interface ChannelTestInput extends FetchModelsInput {
+  apiType?: ApiType
+  capabilityProviderId?: string
+  modelId: string
+  modelMetadata?: ModelMetadataOverride
+  /** @deprecated 旧能力覆盖格式。 */
+  modelCapabilities?: ModelCapabilitiesOverride
 }
 
 /**
