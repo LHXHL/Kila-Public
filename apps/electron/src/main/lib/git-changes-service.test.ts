@@ -10,6 +10,7 @@ import {
   discardGitFiles,
   getGitChanges,
   getGitFileDiff,
+  initGitRepository,
   listGitWorktrees,
   removeGitWorktree,
   stageGitFiles,
@@ -40,6 +41,35 @@ function createRepo(): string {
 }
 
 describe('git changes service', () => {
+  test('Given 普通目录，When 获取 Git 快照，Then 返回非仓库状态而不是抛出异常', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kila-non-git-test-'))
+    tempDirs.push(dir)
+
+    const snapshot = getGitChanges(dir)
+
+    expect(snapshot).toEqual({
+      isRepo: false,
+      rootPath: null,
+      branch: null,
+      hasChanges: false,
+      remoteUrl: null,
+      files: [],
+      ahead: 0,
+      behind: 0,
+    })
+  })
+
+  test('Given 普通目录，When 用户初始化 Git，Then 创建仓库并返回可用快照', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kila-git-init-test-'))
+    tempDirs.push(dir)
+
+    const snapshot = initGitRepository(dir)
+
+    expect(snapshot.isRepo).toBe(true)
+    expect(snapshot.rootPath).toBe(realpathSync(dir))
+    expect(git(dir, ['rev-parse', '--is-inside-work-tree'])).toBe('true')
+  })
+
   test('Given tracked 与 untracked 变更，When 获取快照，Then 解析状态并返回仓库根目录', () => {
     const repo = createRepo()
     writeFileSync(join(repo, 'tracked.txt'), 'first\nsecond\n', 'utf-8')

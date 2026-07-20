@@ -157,7 +157,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
         'relative flex-shrink-0 titlebar-drag-region',
         !isResizing && 'transition-[width] duration-200 ease-out',
         shouldRenderPanel
-          ? 'overflow-hidden border-l border-border/45 bg-[hsl(var(--workspace))]'
+          ? 'overflow-hidden bg-[hsl(var(--workspace))] shadow-[-10px_0_28px_hsl(var(--kila-shadow-low)/0.055)]'
           : 'overflow-hidden bg-transparent',
       )}
       style={{ width: visiblePanelWidth }}
@@ -184,7 +184,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
         >
           <div
             data-slot="side-panel-top-toolbar"
-            className="flex h-11 shrink-0 items-center gap-2 border-b border-border/25 bg-transparent px-3 titlebar-no-drag"
+            className="mx-2 mt-2 flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[hsl(var(--kila-panel-surface-raised)/0.7)] px-3 shadow-sm titlebar-no-drag"
           >
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium leading-none text-foreground/74">
@@ -194,7 +194,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
             <button
               type="button"
               aria-label="关闭右侧栏"
-              className="flex size-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground/52 transition-colors duration-150 hover:border-border/55 hover:bg-muted/45 hover:text-foreground/72"
+              className="flex size-8 items-center justify-center rounded-lg text-muted-foreground/52 transition-colors duration-150 hover:bg-muted/45 hover:text-foreground/72"
               onClick={handleClose}
             >
               <X className="size-3.5" />

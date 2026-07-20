@@ -35,6 +35,7 @@ import type { BackgroundTask, ProcessTimelineEntry, ToolProcessEntry, ThinkingPr
 
 export type WorkflowExpandLevel = 'collapsed' | 'semi' | 'full'
 
+
 // ===== 工具状态聚合 =====
 
 function getToolEntries(entries: ProcessTimelineEntry[]): ToolProcessEntry[] {
@@ -224,7 +225,6 @@ export function WorkflowCollapse({
   )
 
   const isStreaming = streaming && !allComplete
-
   // 内容区 ref，用于流式新增条目时自动滚动到底部
   const contentRef = React.useRef<HTMLDivElement>(null)
 
@@ -238,7 +238,6 @@ export function WorkflowCollapse({
   React.useEffect(() => {
     if (!streaming && entries.length > 0) setExpandLevel('collapsed')
   }, [streaming])
-
 
 
   return (
@@ -315,18 +314,13 @@ export function WorkflowCollapse({
         </button>
       </div>
 
-      {/* 内容区 — thinking 和 tool 按事件顺序交织渲染 */}
-      <div
-        className={cn(
-          'grid transition-all duration-300 ease-in-out',
-          isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-        )}
-      >
-        <div className="overflow-hidden">
+      {/* 折叠时卸载过程详情；展开后由各条目自行延迟挂载重内容。 */}
+      {isExpanded && (
+        <div className="animate-in fade-in slide-in-from-top-1 duration-150">
           <div
             ref={contentRef}
             className={cn(
-              'border-t border-border/20 px-2 py-2 transition-all duration-300',
+              'border-t border-border/20 px-2 py-2',
               constrained && 'max-h-[min(40vh,320px)] overflow-y-auto',
             )}
           >
@@ -354,7 +348,7 @@ export function WorkflowCollapse({
             })}
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

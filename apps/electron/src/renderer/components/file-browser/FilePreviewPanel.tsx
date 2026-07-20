@@ -5,6 +5,7 @@ import { AlertCircle, Code, ExternalLink, Eye, FileImage, FileText, Loader2 } fr
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { CodeBlock } from '@kila/ui'
+import { CodeViewer, getLanguageDisplayName, resolveCodeLanguage } from '@/components/code-workbench'
 import type { InlineFilePreview } from '@kila/shared'
 import type { SessionWorkbenchViewMode } from '@/components/session/session-file-workbench-state'
 import { resolveWorkbenchViewModes } from '@/components/session/session-file-workbench-state'
@@ -13,37 +14,6 @@ interface FilePreviewPanelProps {
   filePath: string | null
   viewMode?: SessionWorkbenchViewMode
   onViewModeChange?: (mode: SessionWorkbenchViewMode) => void
-}
-
-const CODE_LANGUAGE_BY_EXTENSION: Record<string, string> = {
-  '.js': 'javascript',
-  '.jsx': 'tsx',
-  '.ts': 'typescript',
-  '.tsx': 'tsx',
-  '.json': 'json',
-  '.jsonc': 'json',
-  '.css': 'css',
-  '.scss': 'scss',
-  '.html': 'html',
-  '.htm': 'html',
-  '.xml': 'xml',
-  '.yml': 'yaml',
-  '.yaml': 'yaml',
-  '.toml': 'toml',
-  '.ini': 'ini',
-  '.sh': 'shell',
-  '.py': 'python',
-  '.go': 'go',
-  '.rs': 'rust',
-  '.java': 'java',
-  '.c': 'c',
-  '.cc': 'cpp',
-  '.cpp': 'cpp',
-  '.h': 'cpp',
-  '.hpp': 'cpp',
-  '.sql': 'sql',
-  '.md': 'markdown',
-  '.markdown': 'markdown',
 }
 
 export const FilePreviewPanel = React.memo(function FilePreviewPanel({
@@ -145,12 +115,22 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
     )
   }
 
+  const language = resolveCodeLanguage(preview.filePath, preview.extension)
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 px-3 pb-2.5 pt-3">
+    <div className="flex h-full min-h-0 flex-col bg-background/45">
+      <div className="relative z-10 mx-2 mt-2 flex items-center gap-2 rounded-xl bg-[hsl(var(--kila-panel-surface-raised)/0.88)] px-3 py-2 shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.08),0_8px_24px_hsl(var(--kila-shadow-low)/0.06)] backdrop-blur-xl">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium text-foreground">{preview.filename}</div>
-          <div className="truncate text-[11px] text-muted-foreground">{preview.filePath}</div>
+          <div className="flex items-center gap-2">
+            <div className="truncate text-xs font-medium text-foreground">{preview.filename}</div>
+            {(preview.kind === 'code' || preview.kind === 'text' || preview.kind === 'markdown') && (
+              <span className="shrink-0 rounded-md bg-muted/55 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/75">
+                {getLanguageDisplayName(language)}
+              </span>
+            )}
+            <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/55">{formatFileSize(preview.size)}</span>
+          </div>
+          <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/65">{preview.filePath}</div>
         </div>
         <PreviewModeSwitch
           preview={preview}
@@ -190,14 +170,14 @@ function PreviewModeSwitch({
   }
 
   return (
-    <div className="inline-flex items-center rounded-lg border bg-muted/35 p-0.5">
+    <div className="inline-flex items-center rounded-lg bg-muted/45 p-0.5 shadow-[inset_0_0_0_1px_hsl(var(--foreground)/0.035)]">
       {supportedModes.map((mode) => (
         <button
           key={mode}
           type="button"
           className={
             mode === viewMode
-              ? 'rounded-lg bg-background px-3 py-1 text-xs font-medium text-foreground'
+              ? 'rounded-md bg-background/90 px-3 py-1 text-xs font-medium text-foreground shadow-sm'
               : 'rounded-lg px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground'
           }
           onClick={() => onViewModeChange(mode)}
@@ -225,7 +205,7 @@ const PreviewBody = React.memo(function PreviewBody({
 
   if (preview.kind === 'image' && preview.dataUrl) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-muted/20 p-4">
+      <div className="mx-2 mb-2 mt-2 flex flex-1 items-center justify-center rounded-xl bg-muted/20 p-4 shadow-[0_8px_24px_hsl(var(--kila-shadow-low)/0.05)]">
         <img src={preview.dataUrl} alt={preview.filename} className="max-h-full max-w-full rounded-lg object-contain" />
       </div>
     )
@@ -243,18 +223,20 @@ const PreviewBody = React.memo(function PreviewBody({
 
   if (preview.kind === 'markdown') {
     return (
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="prose prose-sm max-w-none select-text px-4 py-3 dark:prose-invert">
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              pre: ({ children: preChildren }) => <CodeBlock>{preChildren}</CodeBlock>,
-            }}
-          >
-            {preview.textContent ?? ''}
-          </Markdown>
-        </div>
-      </ScrollArea>
+      <div className="mx-2 mb-2 mt-2 min-h-0 flex-1 overflow-hidden rounded-xl bg-[hsl(var(--kila-panel-surface))] shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.08),0_12px_32px_hsl(var(--kila-shadow-low)/0.05)]">
+        <ScrollArea className="h-full">
+          <div className="prose prose-sm max-w-none select-text px-5 py-4 dark:prose-invert">
+            <Markdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                pre: ({ children: preChildren }) => <CodeBlock>{preChildren}</CodeBlock>,
+              }}
+            >
+              {preview.textContent ?? ''}
+            </Markdown>
+          </div>
+        </ScrollArea>
+      </div>
     )
   }
 
@@ -291,22 +273,24 @@ const PreviewBody = React.memo(function PreviewBody({
   )
 })
 
-function resolveCodeLanguage(extension: string): string {
-  return CODE_LANGUAGE_BY_EXTENSION[extension] ?? 'text'
+function renderCodePreview(filePath: string, extension: string, textContent: string | undefined): React.ReactElement {
+  return (
+    <div className="mx-2 mb-2 mt-2 min-h-0 flex-1 overflow-hidden rounded-xl shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.08),0_12px_32px_hsl(var(--kila-shadow-low)/0.05)]">
+      <CodeViewer
+        code={textContent ?? ''}
+        language={resolveCodeLanguage(filePath, extension)}
+        ariaLabel={`${filePath} 代码内容`}
+      />
+    </div>
+  )
 }
 
-function renderCodePreview(filePath: string, extension: string, textContent: string | undefined): React.ReactElement {
-  const resolvedExtension = extension || `.${filePath.split('.').pop() ?? ''}`
-  const language = resolveCodeLanguage(resolvedExtension)
-  return (
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="select-text px-3 py-3">
-        <CodeBlock>
-          <code className={`language-${language}`}>{textContent ?? ''}</code>
-        </CodeBlock>
-      </div>
-    </ScrollArea>
-  )
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const value = bytes / (1024 ** unitIndex)
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
 }
 
 function EmptyState({

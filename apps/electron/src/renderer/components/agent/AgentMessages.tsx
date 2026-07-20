@@ -290,7 +290,11 @@ export function AgentMessages({
                 key={msg.id}
                 data-message-id={msg.id}
                 ref={getMessageElementRef(msg.id)}
-                style={{ containIntrinsicSize: `auto ${Math.round(getHeightPx(msg.id))}px` }}
+                style={{
+                  contentVisibility: streaming && index === messages.length - 1 ? 'visible' : 'auto',
+                  containIntrinsicSize: `auto ${Math.round(getHeightPx(msg.id))}px`,
+                  contain: streaming && index === messages.length - 1 ? undefined : 'layout paint style',
+                }}
               >
                 <AgentMessageItem
                   sessionId={sessionId}

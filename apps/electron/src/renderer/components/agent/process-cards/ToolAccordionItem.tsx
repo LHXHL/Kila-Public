@@ -24,10 +24,9 @@ import {
   PROCESS_TONE_SOFT_STYLE,
   PROCESS_TONE_FADE_STYLE,
   getRenderablePayloadText,
-  TOOL_PAYLOAD_EXPANDED_MAX_CHARS,
+  TOOL_PAYLOAD_MAX_CHARS,
   getFoldedPayloadText,
   normalizePayloadText,
-  formatToolPayload,
 } from '../agent-messages-utils'
 import { getActivityStatus, type BackgroundTask, type ToolProcessEntry } from '@/atoms/agent-atoms'
 
@@ -43,25 +42,21 @@ function FoldablePayloadBlock({
   className: string
 }): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
-  const [showExpandedPreview, setShowExpandedPreview] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
-  const preview = React.useMemo(() => getRenderablePayloadText(content), [content])
-  const expandedPreview = React.useMemo(
-    () => getRenderablePayloadText(content, TOOL_PAYLOAD_EXPANDED_MAX_CHARS),
+  const preview = React.useMemo(
+    () => getRenderablePayloadText(content, TOOL_PAYLOAD_MAX_CHARS),
     [content],
   )
-  const selectedPreview = showExpandedPreview ? expandedPreview : preview
-  const contentText = selectedPreview.text
   const { visibleText, hiddenLineCount } = React.useMemo(
-    () => getFoldedPayloadText(contentText),
-    [contentText],
+    () => getFoldedPayloadText(preview.text),
+    [preview.text],
   )
   const canFold = hiddenLineCount > 0
-  const displayText = canFold && !expanded ? visibleText : contentText
+  const displayText = canFold && !expanded ? visibleText : preview.text
+  const hasMore = preview.truncatedCharCount > 0
 
   React.useEffect(() => {
     setExpanded(false)
-    setShowExpandedPreview(false)
     setCopied(false)
   }, [content])
 
@@ -78,33 +73,26 @@ function FoldablePayloadBlock({
     <div className="space-y-1">
       <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
       <pre className={className}>{displayText}</pre>
-      {preview.truncatedCharCount > 0 && (
-        <div className="flex flex-wrap items-center gap-3 text-[10px]">
-          <button type="button" className="text-primary hover:underline" onClick={() => setShowExpandedPreview((value) => !value)}>
-            {showExpandedPreview
-              ? '恢复性能预览'
-              : `查看更多输出（另有 ${preview.truncatedCharCount.toLocaleString('zh-CN')} 字符）`}
+      <div className="flex flex-wrap items-center gap-3 text-[10px]">
+        {canFold && (
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="font-medium text-muted-foreground transition-colors hover:text-foreground"
+            style={PROCESS_TONE_STYLE}
+          >
+            {expanded ? '收起行预览' : `展开 ${hiddenLineCount} 行`}
           </button>
-          <button type="button" className="text-muted-foreground hover:text-foreground hover:underline" onClick={handleCopy}>
-            {copied ? '已复制完整输出' : '复制完整输出'}
-          </button>
-          {showExpandedPreview && expandedPreview.truncatedCharCount > 0 && (
-            <span className="text-muted-foreground/70">
-              界面仍省略 {expandedPreview.truncatedCharCount.toLocaleString('zh-CN')} 字符
-            </span>
-          )}
-        </div>
-      )}
-      {canFold && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-          style={PROCESS_TONE_STYLE}
-        >
-          {expanded ? '收起' : `展开 ${hiddenLineCount} 行`}
+        )}
+        <button type="button" className="text-muted-foreground hover:text-foreground hover:underline" onClick={handleCopy}>
+          {copied ? '已复制完整输出' : '复制完整输出'}
         </button>
-      )}
+        {hasMore && (
+          <span className="text-muted-foreground/70">
+            界面预览已省略 {preview.truncatedCharCount.toLocaleString('zh-CN')} 字符，可复制完整输出
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -149,7 +137,6 @@ function InlineImage({ attachment }: { attachment: { localPath: string; filename
       </div>
     )
   }
-
   return (
     <div className="relative group inline-block">
       <img
@@ -189,7 +176,6 @@ function ToolInspector({
   const ToolIcon = getToolIcon(activity.toolName)
   const label = getToolDisplayName(activity.toolName)
   const target = getToolActivityTarget(activity)
-
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <div
@@ -247,9 +233,9 @@ export function ToolAccordionItem({
   backgroundTask,
   sessionPath,
 }: ToolAccordionItemProps): React.ReactElement {
-  const activity = backgroundTask
+  const activity = React.useMemo(() => backgroundTask
     ? { ...entry.activity, intent: backgroundTask.intent ?? entry.activity.intent, isBackground: true }
-    : entry.activity
+    : entry.activity, [backgroundTask, entry.activity])
   const status = getActivityStatus(activity)
   const hasBody = activity.imageAttachments?.length
     || Object.keys(activity.input).length > 0
@@ -262,6 +248,7 @@ export function ToolAccordionItem({
     running: status === 'running',
     elapsedSeconds: activity.elapsedSeconds ?? backgroundTask?.elapsedSeconds,
   })
+
 
   if (!hasBody) {
     return (
@@ -276,7 +263,6 @@ export function ToolAccordionItem({
       </div>
     )
   }
-
   return (
     <div className="rounded-lg">
       {/* 标题行 */}
@@ -287,7 +273,7 @@ export function ToolAccordionItem({
           'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left cursor-pointer transition-colors duration-200',
           'hover:bg-muted/25',
         )}
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen((value) => !value)}
       >
         <ToolInspector
           activity={activity}
@@ -298,14 +284,9 @@ export function ToolAccordionItem({
         />
       </button>
 
-      {/* 展开内容 — grid 动画丝滑过渡 */}
-      <div
-        className={cn(
-          'grid transition-all duration-300 ease-in-out',
-          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-        )}
-      >
-        <div className="overflow-hidden">
+      {/* 折叠时不挂载详情 DOM，避免隐藏的大文本继续参与布局和重渲染。 */}
+      {open && (
+        <div className="animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="px-8 pb-2 pt-0.5 space-y-2.5">
             {activity.imageAttachments && activity.imageAttachments.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -317,7 +298,7 @@ export function ToolAccordionItem({
             {Object.keys(activity.input).length > 0 && (
               <FoldablePayloadBlock
                 label="输入"
-                content={formatToolPayload(activity.input)}
+                content={activity.input}
                 className="overflow-x-auto rounded-md border border-border/20 bg-muted/10 p-2 text-[11px] text-foreground/68"
               />
             )}
@@ -335,7 +316,7 @@ export function ToolAccordionItem({
             )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -19,6 +19,7 @@ import {
   createGitWorktree,
   discardGitFiles,
   getGitChanges,
+  initGitRepository,
   getGitFileDiff,
   listGitWorktrees,
   removeGitWorktree,
@@ -33,6 +34,9 @@ export function registerGitHandlers(): void {
   ))
   handle(GIT_IPC_CHANNELS.GET_CHANGES, async (_, projectPath: string): Promise<GitChangesSnapshot> => (
     getGitChanges(projectPath)
+  ))
+  handle(GIT_IPC_CHANNELS.INIT, async (_, projectPath: string): Promise<GitChangesSnapshot> => (
+    initGitRepository(projectPath)
   ))
   handle(GIT_IPC_CHANNELS.GET_DIFF, async (_, input: GitDiffInput): Promise<GitDiffResult> => (
     getGitFileDiff(input.projectPath, input.filePath, input.staged)

@@ -22,6 +22,7 @@ declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
 
 const GITHUB_RELEASES_URL = 'https://github.com/LHXHL/Kila-Public/releases'
+const GITHUB_PROFILE_URL = 'https://github.com/LHXHL'
 
 /** 语义化版本比较：>0 表示 a 更新，<0 表示 b 更新，0 表示相同 */
 function compareSemver(a: string, b: string): number {
@@ -91,7 +92,15 @@ export function AboutSettings(): React.ReactElement {
           <div>
             <h3 className="text-[14px] font-bold text-foreground">关于</h3>
             <p className="text-[13px] text-muted-foreground mt-2 tracking-wide font-medium">
-              Kila 是 <span className="underline underline-offset-4 decoration-border">Qiu</span> 打造的优雅 AI 提供商编排桌面端。
+              Kila 是{' '}
+              <button
+                type="button"
+                className="font-semibold text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary hover:decoration-primary/50"
+                onClick={() => void window.electronAPI.openExternal(GITHUB_PROFILE_URL)}
+              >
+                Qiu
+              </button>{' '}
+              打造的优雅 AI 提供商编排桌面端。
             </p>
           </div>
 

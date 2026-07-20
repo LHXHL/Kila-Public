@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
 import {
+  normalizeAgentToolName,
   sessionMessageToLegacyAgentMessage,
   type AgentEvent,
   type AgentMessage,
@@ -9,11 +10,9 @@ import { AlertTriangle, ChevronRight, Clock3, ImageIcon, Loader2, RefreshCw, Wre
 import {
   agentMessageRefreshAtom,
   agentStreamingStatesAtom,
-  buildProcessTimelineEntries,
   getActivityStatus,
   type ActivityStatus,
   type ToolActivity,
-  type ToolProcessEntry,
 } from '@/atoms/agent-atoms'
 import {
   StatusIcon,
@@ -31,21 +30,13 @@ import { OverlayScrollbarArea } from '@/components/ui/overlay-scrollbar'
 import { EntityMetadataChip } from '@/components/ui/entity-metadata-chip'
 import { WorkspaceEntityRow } from '@/components/ui/workspace-entity-row'
 import { cn } from '@/lib/utils'
+import { formatPayloadPreview } from '@/components/agent/agent-messages-utils'
 
 interface ToolCallsPanelProps {
   sessionId: string
 }
 
-function formatPayload(value: unknown): string {
-  if (value == null) return ''
-  if (typeof value === 'string') return value
-
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
+const TOOL_CALL_PARTIAL_RESULT_MAX_CHARS = 48_000
 
 export function getVisibleStatusLabel(status: ActivityStatus): string | null {
   switch (status) {
@@ -106,16 +97,89 @@ export function buildSessionToolCallActivities(
   messages: AgentMessage[],
   streamingEvents?: AgentEvent[],
 ): ToolActivity[] {
-  const events = [
-    ...messages.flatMap((message) => message.events ?? []),
-    ...(streamingEvents ?? []),
-  ]
+  const activities: ToolActivity[] = []
+  const activityMap = new Map<string, ToolActivity>()
+  const startedAtMap = new Map<string, number>()
 
-  if (events.length === 0) return []
+  const ensureActivity = (
+    toolUseId: string,
+    toolName?: string,
+    input?: Record<string, unknown>,
+  ): ToolActivity => {
+    const existing = activityMap.get(toolUseId)
+    if (existing) return existing
 
-  return buildProcessTimelineEntries(events)
-    .filter((entry): entry is ToolProcessEntry => entry.kind === 'tool')
-    .map((entry) => entry.activity)
+    const activity: ToolActivity = {
+      toolUseId,
+      toolName: toolName ? normalizeAgentToolName(toolName) : 'Tool',
+      input: input ?? {},
+      done: false,
+    }
+    activityMap.set(toolUseId, activity)
+    activities.push(activity)
+    return activity
+  }
+
+  const consumeEvents = (events: AgentEvent[] | undefined): void => {
+    for (const event of events ?? []) {
+      if (event.type === 'tool_start') {
+        const activity = ensureActivity(event.toolUseId, event.toolName, event.input)
+        activity.toolName = normalizeAgentToolName(event.toolName)
+        activity.input = event.input
+        activity.intent = event.intent ?? activity.intent
+        activity.displayName = event.displayName ?? activity.displayName
+        activity.parentToolUseId = event.parentToolUseId ?? activity.parentToolUseId
+        activity.done = false
+        if (event.timestamp !== undefined) startedAtMap.set(event.toolUseId, event.timestamp)
+        continue
+      }
+
+      if (event.type === 'tool_update') {
+        const activity = ensureActivity(event.toolUseId, event.toolName)
+        if (event.toolName) activity.toolName = normalizeAgentToolName(event.toolName)
+        const nextPartial = `${activity.partialResult ?? ''}${event.partialText}`
+        activity.partialResult = nextPartial.length > TOOL_CALL_PARTIAL_RESULT_MAX_CHARS
+          ? nextPartial.slice(0, TOOL_CALL_PARTIAL_RESULT_MAX_CHARS)
+          : nextPartial
+        activity.done = false
+        continue
+      }
+
+      if (event.type === 'tool_result') {
+        const activity = ensureActivity(event.toolUseId, event.toolName, event.input)
+        if (event.toolName) activity.toolName = normalizeAgentToolName(event.toolName)
+        activity.input = event.input ?? activity.input
+        activity.result = event.result
+        activity.partialResult = undefined
+        activity.isError = event.isError
+        activity.done = true
+        activity.imageAttachments = event.imageAttachments
+        const startedAt = startedAtMap.get(event.toolUseId)
+        if (startedAt !== undefined && event.timestamp !== undefined) {
+          activity.elapsedSeconds = Math.max(0, Number(((event.timestamp - startedAt) / 1000).toFixed(1)))
+        }
+        continue
+      }
+
+      if (event.type === 'task_backgrounded' || event.type === 'shell_backgrounded') {
+        const activity = activityMap.get(event.toolUseId)
+        if (!activity) continue
+        activity.isBackground = true
+        activity.done = true
+        if (event.type === 'task_backgrounded') {
+          activity.taskId = event.taskId
+          activity.intent = event.intent ?? activity.intent
+        } else {
+          activity.shellId = event.shellId
+          activity.intent = event.command ?? event.intent ?? activity.intent
+        }
+      }
+    }
+  }
+
+  for (const message of messages) consumeEvents(message.events)
+  consumeEvents(streamingEvents)
+  return activities
 }
 
 export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactElement {
@@ -235,9 +299,7 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
             const ToolIcon = getToolIcon(activity.toolName)
             const status = getActivityStatus(activity)
             const inputSummary = getInputSummary(activity.toolName, activity.input)
-            const resultText = formatPayload(activity.result)
-            const partialResultText = formatPayload(activity.partialResult)
-            const isOpen = expandedMap[activity.toolUseId] ?? (status === 'running' || status === 'error')
+            const isOpen = expandedMap[activity.toolUseId] ?? status === 'running'
 
             return (
               <Collapsible
@@ -251,6 +313,7 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
                 }}
               >
                 <section
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 52px' }}
                   className={cn(
                     'rounded-[var(--kila-panel-radius-inner)] border border-transparent transition-colors',
                     isOpen && 'border-border/45 bg-muted/[0.12]',
@@ -303,17 +366,19 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
                     </button>
                   </CollapsibleTrigger>
 
-                  <CollapsibleContent className="kila-collapsible-content px-2.5 pb-2 pt-0">
-                    <div className="ml-9 space-y-2 pl-2">
-                      <PayloadBlock label="Input">
-                        {formatPayload(activity.input) || '{}'}
-                      </PayloadBlock>
+                  {isOpen && (
+                    <CollapsibleContent className="kila-collapsible-content px-2.5 pb-2 pt-0">
+                      <div className="ml-9 space-y-2 pl-2">
+                        <PayloadBlock label="Input">
+                          {formatPayloadPreview(activity.input) || '{}'}
+                        </PayloadBlock>
 
-                      <PayloadBlock label={activity.isError ? 'Error' : 'Result'} tone={activity.isError ? 'danger' : 'neutral'}>
-                        {resultText || partialResultText || (activity.done ? '无文本结果' : '运行中...')}
-                      </PayloadBlock>
-                    </div>
-                  </CollapsibleContent>
+                        <PayloadBlock label={activity.isError ? 'Error' : 'Result'} tone={activity.isError ? 'danger' : 'neutral'}>
+                          {formatPayloadPreview(activity.result ?? activity.partialResult) || (activity.done ? '无文本结果' : '运行中...')}
+                        </PayloadBlock>
+                      </div>
+                    </CollapsibleContent>
+                  )}
                 </section>
               </Collapsible>
             )

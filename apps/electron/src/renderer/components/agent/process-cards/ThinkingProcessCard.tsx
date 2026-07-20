@@ -13,7 +13,11 @@ import { MessageResponse, StreamingMessageResponse } from '@/components/ai-eleme
 import { useSmoothStreamContent } from '@kila/ui'
 import { cn } from '@/lib/utils'
 import { useProcessDisclosure } from '../use-process-disclosure'
-import { getThinkingTitle } from '../agent-messages-utils'
+import {
+  getRenderablePayloadText,
+  getThinkingTitle,
+  TOOL_PAYLOAD_EXPANDED_MAX_CHARS,
+} from '../agent-messages-utils'
 import type { ThinkingProcessEntry } from '@/atoms/agent-atoms'
 
 // ===== StatusIcon — 状态小方块图标 =====
@@ -45,6 +49,55 @@ function StatusIcon({
   )
 }
 
+
+function ThinkingBody({
+  text,
+  running,
+  sessionPath,
+}: {
+  text: string
+  running: boolean
+  sessionPath?: string | null
+}): React.ReactElement {
+  const renderedThinking = React.useMemo(
+    () => getRenderablePayloadText(text, TOOL_PAYLOAD_EXPANDED_MAX_CHARS),
+    [text],
+  )
+  const smoothedThinking = useSmoothStreamContent(renderedThinking.text, {
+    enabled: running,
+    preset: 'balanced',
+  })
+
+  return (
+    <div className="animate-in fade-in slide-in-from-top-1 duration-150">
+      <div className="mx-1.5 max-h-[min(40vh,320px)] overflow-y-auto rounded-lg px-2 pb-2 pt-1 text-muted-foreground scrollbar-thin">
+        {running ? (
+          <StreamingMessageResponse
+            compact
+            basePath={sessionPath || undefined}
+            className="text-muted-foreground [&_*]:text-inherit"
+          >
+            {smoothedThinking}
+          </StreamingMessageResponse>
+        ) : (
+          <MessageResponse
+            compact
+            basePath={sessionPath || undefined}
+            className="text-muted-foreground [&_*]:text-inherit"
+          >
+            {renderedThinking.text}
+          </MessageResponse>
+        )}
+        {renderedThinking.truncatedCharCount > 0 && (
+          <div className="mt-2 text-[10px] text-muted-foreground/70">
+            思考详情过长，界面省略 {renderedThinking.truncatedCharCount.toLocaleString('zh-CN')} 字符
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ===== ThinkingProcessCard =====
 
 export function ThinkingProcessCard({
@@ -71,11 +124,6 @@ export function ThinkingProcessCard({
   })
   const title = getThinkingTitle(durationLabel, running, entry?.summaryText ?? fullText)
   const fullTextValue = fullText ?? ''
-
-  const smoothedThinking = useSmoothStreamContent(fullTextValue, {
-    enabled: running,
-    preset: 'balanced',
-  })
 
   return (
     <div className="w-full">
@@ -109,38 +157,9 @@ export function ThinkingProcessCard({
         )}
       </button>
 
-      {/* 展开内容 — grid 动画 */}
-      {hasBody && (
-        <div
-          className={cn(
-            'grid transition-all duration-300 ease-in-out',
-            open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-          )}
-        >
-          <div className="overflow-hidden">
-            <div
-              className="mx-1.5 max-h-[min(40vh,320px)] overflow-y-auto rounded-lg px-2 pb-2 pt-1 text-muted-foreground scrollbar-thin"
-            >
-              {running ? (
-                <StreamingMessageResponse
-                  compact
-                  basePath={sessionPath || undefined}
-                  className="text-muted-foreground [&_*]:text-inherit"
-                >
-                  {smoothedThinking}
-                </StreamingMessageResponse>
-              ) : (
-                <MessageResponse
-                  compact
-                  basePath={sessionPath || undefined}
-                  className="text-muted-foreground [&_*]:text-inherit"
-                >
-                  {fullTextValue}
-                </MessageResponse>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* 关闭时完全卸载重内容，展开点击只执行同步状态更新。 */}
+      {hasBody && open && (
+        <ThinkingBody text={fullTextValue} running={running} sessionPath={sessionPath} />
       )}
     </div>
   )

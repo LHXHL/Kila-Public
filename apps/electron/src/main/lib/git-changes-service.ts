@@ -43,10 +43,18 @@ function resolveProjectPath(projectPath: string): string {
   return realpathSync(resolved)
 }
 
+function findRepoRoot(projectPath: string): string | null {
+  const result = runGit(projectPath, ['rev-parse', '--show-toplevel'], { allowFailure: true })
+  const root = result.stdout.trim()
+  if (root) return realpathSync(root)
+  if (/not a git repository/i.test(result.stderr)) return null
+  throw new Error((result.stderr || '无法检测 Git 仓库状态').trim())
+}
+
 function getRepoRoot(projectPath: string): string {
-  const root = runGit(projectPath, ['rev-parse', '--show-toplevel']).stdout.trim()
+  const root = findRepoRoot(projectPath)
   if (!root) throw new Error('当前项目不是 Git 仓库')
-  return realpathSync(root)
+  return root
 }
 
 function assertRepoRelativePath(repoRoot: string, filePath: string): string {
@@ -130,9 +138,28 @@ function parseAheadBehind(raw: string): { ahead: number; behind: number } {
   return match ? { ahead: Number(match[1]), behind: Number(match[2]) } : { ahead: 0, behind: 0 }
 }
 
+export function initGitRepository(projectPath: string): GitChangesSnapshot {
+  const cwd = resolveProjectPath(projectPath)
+  if (findRepoRoot(cwd)) return getGitChanges(cwd)
+  runGit(cwd, ['init'])
+  return getGitChanges(cwd)
+}
+
 export function getGitChanges(projectPath: string): GitChangesSnapshot {
   const cwd = resolveProjectPath(projectPath)
-  const rootPath = getRepoRoot(cwd)
+  const rootPath = findRepoRoot(cwd)
+  if (!rootPath) {
+    return {
+      isRepo: false,
+      rootPath: null,
+      branch: null,
+      hasChanges: false,
+      remoteUrl: null,
+      files: [],
+      ahead: 0,
+      behind: 0,
+    }
+  }
   const statusV1 = runGit(rootPath, ['status', '--porcelain=v1', '-z', '--untracked-files=all']).stdout
   const statusV2 = runGit(rootPath, ['status', '--porcelain=v2', '--branch', '-z']).stdout
   const branchRaw = runGit(rootPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { allowFailure: true }).stdout.trim()

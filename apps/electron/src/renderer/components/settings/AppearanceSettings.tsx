@@ -104,7 +104,8 @@ function ThemeCard({
           <div className="mt-0.5 line-clamp-2 min-h-8 text-xs text-muted-foreground">{record.theme.description}</div>
         </div>
       </button>
-      <DropdownMenu>
+      {/* 非模态菜单避免 Radix 与 OverlayScrollbars 组合时锁住整页指针事件。 */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -115,7 +116,7 @@ function ThemeCard({
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="z-[100] titlebar-no-drag">
           {record.source === 'custom' && (
             <DropdownMenuItem onSelect={onEdit}><Pencil />编辑</DropdownMenuItem>
           )}

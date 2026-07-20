@@ -138,7 +138,7 @@ export function getToolActivityTitle(activity: ToolActivity): string {
 
 // 工具输出可能达到数 MB；限制单个 DOM 文本节点，完整内容仍可通过复制获取。
 export const TOOL_RESULT_PREVIEW_CHARS = 2_000
-export const TOOL_RESULT_EXPANDED_CHARS = 100_000
+export const TOOL_RESULT_EXPANDED_CHARS = 48_000
 
 export function getRenderedToolResult(result: string, expanded: boolean): { text: string; truncated: boolean } {
   const limit = expanded ? TOOL_RESULT_EXPANDED_CHARS : TOOL_RESULT_PREVIEW_CHARS

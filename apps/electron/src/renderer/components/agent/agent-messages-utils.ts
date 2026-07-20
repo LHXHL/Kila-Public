@@ -97,8 +97,14 @@ export function getAssistantPlainText(content: string): string {
   return stripWidgetFencesToPlainText(content)
 }
 
+const MESSAGE_PREVIEW_SOURCE_CHARS = 2_048
+
 export function getMessagePreviewText(message: AgentMessage): string {
-  const text = extractAttachedFiles(message).text
+  // 迷你地图只需要极短摘要，先限制源文本，避免历史长消息触发完整正则与 Widget 解析。
+  const previewMessage = message.content.length > MESSAGE_PREVIEW_SOURCE_CHARS
+    ? { ...message, content: message.content.slice(0, MESSAGE_PREVIEW_SOURCE_CHARS) }
+    : message
+  const text = extractAttachedFiles(previewMessage).text
   return message.role === 'assistant'
     ? getAssistantPlainText(text)
     : text
@@ -108,7 +114,12 @@ export function getMessagePreviewText(message: AgentMessage): string {
 
 export const TOOL_PAYLOAD_VISIBLE_LINES = 10
 export const TOOL_PAYLOAD_MAX_CHARS = 8_000
-export const TOOL_PAYLOAD_EXPANDED_MAX_CHARS = 100_000
+export const TOOL_PAYLOAD_EXPANDED_MAX_CHARS = 48_000
+
+const PAYLOAD_PREVIEW_MAX_DEPTH = 6
+const PAYLOAD_PREVIEW_MAX_ENTRIES = 40
+const PAYLOAD_PREVIEW_MAX_NODES = 160
+const PAYLOAD_PREVIEW_STRING_CHARS = 1_000
 
 export function coercePayloadText(text: unknown): string {
   if (typeof text === 'string') return text
@@ -124,6 +135,99 @@ export function coercePayloadText(text: unknown): string {
 
 export function normalizePayloadText(text: unknown): string {
   return coercePayloadText(text).replace(/\r\n?/g, '\n')
+}
+
+interface PayloadPreviewState {
+  seen: WeakSet<object>
+  nodeCount: number
+  truncated: boolean
+}
+
+function buildPayloadPreviewValue(
+  value: unknown,
+  state: PayloadPreviewState,
+  depth: number,
+): unknown {
+  if (typeof value === 'string') {
+    if (value.length <= PAYLOAD_PREVIEW_STRING_CHARS) return value
+    state.truncated = true
+    return `${value.slice(0, PAYLOAD_PREVIEW_STRING_CHARS)}… [字符串已截断 ${value.length - PAYLOAD_PREVIEW_STRING_CHARS} 字符]`
+  }
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value === 'bigint') return `${value.toString()}n`
+  if (typeof value === 'undefined') return '[undefined]'
+  if (typeof value === 'function') return `[Function ${value.name || 'anonymous'}]`
+  if (typeof value === 'symbol') return value.toString()
+  if (typeof value !== 'object') return String(value)
+
+  if (state.seen.has(value)) {
+    state.truncated = true
+    return '[Circular]'
+  }
+  if (depth >= PAYLOAD_PREVIEW_MAX_DEPTH || state.nodeCount >= PAYLOAD_PREVIEW_MAX_NODES) {
+    state.truncated = true
+    return '[内容过深，已省略]'
+  }
+
+  state.seen.add(value)
+  state.nodeCount += 1
+
+  if (Array.isArray(value)) {
+    const visible = value.slice(0, PAYLOAD_PREVIEW_MAX_ENTRIES)
+      .map((item) => buildPayloadPreviewValue(item, state, depth + 1))
+    if (value.length > visible.length) {
+      state.truncated = true
+      visible.push(`… [另有 ${value.length - visible.length} 项]`)
+    }
+    return visible
+  }
+
+  const record = value as Record<string, unknown>
+  const preview: Record<string, unknown> = {}
+  let visibleEntryCount = 0
+  let hasMoreEntries = false
+  for (const key in record) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) continue
+    if (visibleEntryCount >= PAYLOAD_PREVIEW_MAX_ENTRIES) {
+      hasMoreEntries = true
+      break
+    }
+    preview[key] = buildPayloadPreviewValue(record[key], state, depth + 1)
+    visibleEntryCount += 1
+  }
+  if (hasMoreEntries) {
+    state.truncated = true
+    preview['…'] = `[还有更多字段，预览仅显示前 ${PAYLOAD_PREVIEW_MAX_ENTRIES} 个]`
+  }
+  return preview
+}
+
+/**
+ * 为 UI 生成有深度、字段数和字符数上限的结构化预览。
+ * 完整序列化只在用户主动复制时执行，避免列表渲染同步遍历数 MB 数据。
+ */
+export function formatPayloadPreview(value: unknown, maxChars = TOOL_PAYLOAD_MAX_CHARS): string {
+  if (typeof value === 'string') {
+    return getRenderablePayloadText(value, maxChars).text
+  }
+  if (value === null || value === undefined) return ''
+
+  const state: PayloadPreviewState = {
+    seen: new WeakSet<object>(),
+    nodeCount: 0,
+    truncated: false,
+  }
+
+  try {
+    const previewValue = buildPayloadPreviewValue(value, state, 0)
+    const serialized = JSON.stringify(previewValue, null, 2) ?? String(previewValue)
+    const rendered = getRenderablePayloadText(serialized, maxChars)
+    if (!state.truncated) return rendered.text
+    if (rendered.truncatedCharCount > 0) return rendered.text
+    return `${rendered.text}\n… [结构化预览已限制，复制可获取完整内容]`
+  } catch {
+    return String(value)
+  }
 }
 
 export function countFoldableLines(text: unknown): number {
@@ -148,8 +252,8 @@ export function getFoldedPayloadText(
   totalLineCount: number
 } {
   const normalizedText = normalizePayloadText(text).replace(/\n+$/g, '')
-  const totalLineCount = countFoldableLines(text)
-  const lines = totalLineCount > 0 ? normalizedText.split('\n') : []
+  const lines = normalizedText ? normalizedText.split('\n') : []
+  const totalLineCount = lines.length
   const hiddenLineCount = Math.max(0, totalLineCount - visibleLineCount)
 
   if (hiddenLineCount === 0) {
@@ -174,8 +278,16 @@ export function getRenderablePayloadText(
   text: string
   truncatedCharCount: number
 } {
-  const normalizedText = normalizePayloadText(text)
-  const truncatedCharCount = Math.max(0, normalizedText.length - maxChars)
+  if (typeof text !== 'string') {
+    const preview = formatPayloadPreview(text, maxChars)
+    return { text: preview, truncatedCharCount: 0 }
+  }
+
+  // 先切片再规范换行，避免仅为 8KB 预览扫描整个数 MB 字符串。
+  const sourceLength = text.length
+  const visibleSource = sourceLength > maxChars ? text.slice(0, maxChars) : text
+  const normalizedText = visibleSource.replace(/\r\n?/g, '\n')
+  const truncatedCharCount = Math.max(0, sourceLength - maxChars)
 
   if (truncatedCharCount === 0) {
     return {
@@ -185,7 +297,7 @@ export function getRenderablePayloadText(
   }
 
   return {
-    text: `${normalizedText.slice(0, maxChars)}\n… [截断 ${truncatedCharCount} 个字符]`,
+    text: `${normalizedText}\n… [截断 ${truncatedCharCount} 个字符]`,
     truncatedCharCount,
   }
 }
@@ -200,15 +312,14 @@ export function formatProcessDuration(seconds?: number): string | null {
   return `${minutes}m${remainingSeconds}s`
 }
 
-export function formatToolPayload(input: Record<string, unknown>): string {
+export function formatToolPayload(
+  input: Record<string, unknown>,
+  maxChars = TOOL_PAYLOAD_MAX_CHARS,
+): string {
   const filtered = Object.fromEntries(
     Object.entries(input).filter(([key]) => !key.startsWith('_')),
   )
-  try {
-    return JSON.stringify(filtered, null, 2)
-  } catch {
-    return '[不可序列化]'
-  }
+  return formatPayloadPreview(filtered, maxChars)
 }
 
 export function formatThinkingDuration(durationLabel: string): string {

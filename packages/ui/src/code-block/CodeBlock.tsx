@@ -82,6 +82,9 @@ const FALLBACK_LANGUAGE = 'plaintext'
 const AUTO_COLLAPSE_LINE_THRESHOLD = 30
 const COLLAPSED_VISIBLE_LINE_COUNT = 10
 const LAZY_HIGHLIGHT_LINE_THRESHOLD = 200
+const EXPANDED_INITIAL_LINE_COUNT = 400
+const EXPANDED_LINE_BATCH_SIZE = 400
+const AUTO_DETECT_MAX_CHARS = 20_000
 const AUTO_DETECT_LANGUAGES = [
   'bash',
   'c',
@@ -133,7 +136,7 @@ export function detectCodeBlockLanguage(code: string): string {
   const trimmed = code.trim()
   if (trimmed.length < 24) return FALLBACK_LANGUAGE
 
-  const result = hljs.highlightAuto(trimmed, AUTO_DETECT_LANGUAGES)
+  const result = hljs.highlightAuto(trimmed.slice(0, AUTO_DETECT_MAX_CHARS), AUTO_DETECT_LANGUAGES)
   const language = result.language
   if (!language || result.relevance < 5) return FALLBACK_LANGUAGE
 
@@ -148,6 +151,15 @@ function getCodeTheme(): CodeThemeName {
 }
 
 const tokenCache = new Map<string, HighlightTokensResult>()
+const MAX_TOKEN_CACHE_ENTRIES = 80
+
+function cacheTokenResult(key: string, result: HighlightTokensResult): void {
+  if (tokenCache.has(key)) tokenCache.delete(key)
+  tokenCache.set(key, result)
+  if (tokenCache.size <= MAX_TOKEN_CACHE_ENTRIES) return
+  const oldestKey = tokenCache.keys().next().value
+  if (oldestKey) tokenCache.delete(oldestKey)
+}
 
 function getTokenCacheKey(code: string, language: string, theme: string): string {
   return `${theme}:${language}:${code.length}:${code.slice(0, 96)}:${code.slice(-96)}`
@@ -179,6 +191,11 @@ export function shouldAutoCollapseCodeBlock(lineCount: number): boolean {
 export function getCollapsedCodeBlockVisibleLineCount(lineCount: number): number {
   if (!shouldAutoCollapseCodeBlock(lineCount)) return lineCount
   return Math.min(COLLAPSED_VISIBLE_LINE_COUNT, lineCount)
+}
+
+
+export function getExpandedCodeBlockVisibleLineCount(lineCount: number, requestedLineCount: number): number {
+  return Math.min(lineCount, Math.max(EXPANDED_INITIAL_LINE_COUNT, requestedLineCount))
 }
 
 export function shouldShowCodeBlockLineNumbers(lineCount: number): boolean {
@@ -245,27 +262,54 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
   const shouldLazyHighlight = shouldLazyHighlightCodeBlock(rawLines.length)
   const [highlightRequested, setHighlightRequested] = React.useState(() => !shouldLazyHighlight)
   const [expanded, setExpanded] = React.useState(() => !shouldAutoCollapse)
+  const [lineWindow, setLineWindow] = React.useState(() => ({
+    source: trimmedCode,
+    requestedLineCount: EXPANDED_INITIAL_LINE_COUNT,
+  }))
+  const loadMoreRef = React.useRef<HTMLDivElement | null>(null)
   const [themeName, setThemeName] = React.useState<CodeThemeName>(() => getCodeTheme())
+  const requestedLineCount = lineWindow.source === trimmedCode
+    ? lineWindow.requestedLineCount
+    : EXPANDED_INITIAL_LINE_COUNT
   const visibleLineCount = expanded
-    ? rawLines.length
+    ? getExpandedCodeBlockVisibleLineCount(rawLines.length, requestedLineCount)
     : getCollapsedCodeBlockVisibleLineCount(rawLines.length)
   const hiddenLineCount = Math.max(rawLines.length - visibleLineCount, 0)
   const visibleLines = React.useMemo(
     () => rawLines.slice(0, visibleLineCount),
     [rawLines, visibleLineCount],
   )
+  const visibleCode = React.useMemo(() => visibleLines.join('\n'), [visibleLines])
+
+  React.useEffect(() => {
+    const target = loadMoreRef.current
+    if (!expanded || !target || hiddenLineCount === 0) return
+
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      setLineWindow((current) => ({
+        source: trimmedCode,
+        requestedLineCount: (current.source === trimmedCode
+          ? current.requestedLineCount
+          : EXPANDED_INITIAL_LINE_COUNT) + EXPANDED_LINE_BATCH_SIZE,
+      }))
+    }, { rootMargin: '640px 0px' })
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [expanded, hiddenLineCount, trimmedCode])
 
   // 行级淡入：跟踪「已稳定的行数」，超过此数的行标记为 isNew
   const stableLineCountRef = React.useRef(0)
   // 当行数增长后，延迟将新行标记为已稳定（动画播放完毕）
   React.useEffect(() => {
-    if (rawLines.length > stableLineCountRef.current) {
+    if (visibleLines.length > stableLineCountRef.current) {
       const timer = setTimeout(() => {
-        stableLineCountRef.current = rawLines.length
+        stableLineCountRef.current = visibleLines.length
       }, 200) // 与 CSS 动画时长一致
       return () => clearTimeout(timer)
     }
-  }, [rawLines.length])
+  }, [visibleLines.length])
 
   React.useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -294,25 +338,25 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
 
     observer.observe(target)
     return () => observer.disconnect()
-  }, [shouldLazyHighlight, trimmedCode, langOrText, themeName])
+  }, [shouldLazyHighlight])
 
   // ---- 节流 token 高亮 ----
   const [tokenResult, setTokenResult] = React.useState<HighlightTokensResult | null>(
     () => {
       if (shouldLazyHighlightCodeBlock(trimmedCode.split('\n').length)) return null
-      const cacheKey = getTokenCacheKey(trimmedCode, langOrText, themeName)
+      const cacheKey = getTokenCacheKey(visibleCode, langOrText, themeName)
       const cached = tokenCache.get(cacheKey)
       if (cached) return cached
-      const result = highlightToTokens({ code: trimmedCode, language: langOrText, theme: themeName })
-      if (result) tokenCache.set(cacheKey, result)
+      const result = highlightToTokens({ code: visibleCode, language: langOrText, theme: themeName })
+      if (result) cacheTokenResult(cacheKey, result)
       return result
     }
   )
-  const pendingCodeRef = React.useRef(trimmedCode)
+  const pendingCodeRef = React.useRef(visibleCode)
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastUpdateRef = React.useRef(Date.now())
 
-  pendingCodeRef.current = trimmedCode
+  pendingCodeRef.current = visibleCode
 
   React.useEffect(() => {
     if (!highlightRequested) {
@@ -322,7 +366,7 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
 
     const now = Date.now()
     const elapsed = now - lastUpdateRef.current
-    const cacheKey = getTokenCacheKey(trimmedCode, langOrText, themeName)
+    const cacheKey = getTokenCacheKey(visibleCode, langOrText, themeName)
 
     const doHighlight = () => {
       const currentCode = pendingCodeRef.current
@@ -335,7 +379,7 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
       }
       const result = highlightToTokens({ code: currentCode, language: langOrText, theme: themeName })
       if (result) {
-        tokenCache.set(nextCacheKey, result)
+        cacheTokenResult(nextCacheKey, result)
         lastUpdateRef.current = Date.now()
         setTokenResult(result)
       }
@@ -347,9 +391,9 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
       setTokenResult(cached)
       return
     }
-    const syncResult = highlightToTokens({ code: trimmedCode, language: langOrText, theme: themeName })
+    const syncResult = highlightToTokens({ code: visibleCode, language: langOrText, theme: themeName })
     if (syncResult) {
-      tokenCache.set(cacheKey, syncResult)
+      cacheTokenResult(cacheKey, syncResult)
       if (elapsed >= THROTTLE_MS) {
         // 距上次更新已超过节流间隔，立即执行
         lastUpdateRef.current = now
@@ -366,7 +410,7 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
 
     // 异步兜底：高亮器尚未初始化，或当前语言尚未按需加载
     let cancelled = false
-    highlightCode({ code: trimmedCode, language: langOrText, theme: themeName })
+    highlightCode({ code: visibleCode, language: langOrText, theme: themeName })
       .then(() => {
         // 初始化完成，用同步路径获取最新结果
         if (!cancelled) doHighlight()
@@ -374,7 +418,7 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
       .catch((error) => console.error('[CodeBlock] 高亮失败:', error))
 
     return () => { cancelled = true }
-  }, [highlightRequested, trimmedCode, langOrText, themeName])
+  }, [highlightRequested, visibleCode, langOrText, themeName])
 
   // 清理节流定时器
   React.useEffect(() => {
@@ -490,17 +534,21 @@ export function CodeBlock({ children }: CodeBlockProps): React.ReactElement {
         </pre>
       )}
 
-      {!expanded && hiddenLineCount > 0 && (
-        <div className="border-t border-border/50 bg-muted/35 px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
-          >
-            <svg {...ICON_ATTRS}>{chevronDownPath}</svg>
-            <span>展开剩余 {hiddenLineCount} 行</span>
-          </button>
-        </div>
+      {hiddenLineCount > 0 && (
+        expanded ? (
+          <div ref={loadMoreRef} className="h-px w-full" aria-hidden="true" />
+        ) : (
+          <div className="border-t border-border/50 bg-muted/35 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+            >
+              <svg {...ICON_ATTRS}>{chevronDownPath}</svg>
+              <span>{`展开代码（共 ${rawLines.length} 行）`}</span>
+            </button>
+          </div>
+        )
       )}
     </div>
   )

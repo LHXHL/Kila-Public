@@ -18,6 +18,7 @@ import { invoke } from '../invoke'
 export interface GitPreloadApi {
   getGitRepoStatus: (dirPath: string) => Promise<GitRepoStatus | null>
   getGitChanges: (projectPath: string) => Promise<GitChangesSnapshot>
+  initGitRepository: (projectPath: string) => Promise<GitChangesSnapshot>
   getProjectRunChanges: (sessionId: string) => Promise<ProjectRunChanges | null>
   getGitDiff: (input: GitDiffInput) => Promise<GitDiffResult>
   stageGitFiles: (input: GitFileActionInput) => Promise<GitChangesSnapshot>
@@ -34,6 +35,7 @@ export function createGitApi(): GitPreloadApi {
   return {
     getGitRepoStatus: (dirPath) => invoke(IPC_CHANNELS.GET_GIT_REPO_STATUS, dirPath),
     getGitChanges: (projectPath) => invoke(GIT_IPC_CHANNELS.GET_CHANGES, projectPath),
+    initGitRepository: (projectPath) => invoke(GIT_IPC_CHANNELS.INIT, projectPath),
     getProjectRunChanges: (sessionId) => invoke(GIT_IPC_CHANNELS.GET_RUN_CHANGES, sessionId),
     getGitDiff: (input) => invoke(GIT_IPC_CHANNELS.GET_DIFF, input),
     stageGitFiles: (input) => invoke(GIT_IPC_CHANNELS.STAGE, input),

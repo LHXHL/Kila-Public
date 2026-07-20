@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   detectCodeBlockLanguage,
   getCollapsedCodeBlockVisibleLineCount,
+  getExpandedCodeBlockVisibleLineCount,
   getCodeBlockDisplayName,
   normalizeCodeBlockLanguage,
   shouldAutoCollapseCodeBlock,
@@ -54,5 +55,7 @@ func fibonacci(n int) []int {
     expect(getCollapsedCodeBlockVisibleLineCount(8)).toBe(8)
     expect(getCollapsedCodeBlockVisibleLineCount(31)).toBe(10)
     expect(shouldShowCodeBlockLineNumbers(31)).toBe(true)
+    expect(getExpandedCodeBlockVisibleLineCount(10_000, 400)).toBe(400)
+    expect(getExpandedCodeBlockVisibleLineCount(10_000, 800)).toBe(800)
   })
 })

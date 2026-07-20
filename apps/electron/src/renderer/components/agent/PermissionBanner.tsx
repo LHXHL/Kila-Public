@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { allPendingPermissionRequestsAtom } from '@/atoms/agent-permission-atoms'
 import type { DangerLevel } from '@kila/shared'
 import { getStatusToneClasses } from '@/lib/theme/status-tone'
+import { formatPayloadPreview } from './agent-messages-utils'
 
 /** 危险等级对应的图标颜色 */
 const DANGER_ICON_STYLES: Record<DangerLevel, string> = {
@@ -146,7 +147,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           </pre>
         ) : Object.keys(request.toolInput).length > 0 ? (
           <pre className="max-h-[120px] overflow-x-auto overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-border/35 bg-background/55 px-2 py-1.5 font-mono text-xs">
-            {JSON.stringify(request.toolInput, null, 2)}
+            {formatPayloadPreview(request.toolInput)}
           </pre>
         ) : (
           <p className="text-xs text-muted-foreground">

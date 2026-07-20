@@ -202,13 +202,13 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
   }, [isSelectingProjectFolder, projectLocked, sessionId, setSessions, setStateMap])
 
   return (
-    <div className="flex h-full min-h-0 bg-card/40">
+    <div className="flex h-full min-h-0 gap-1 bg-[hsl(var(--workspace))] p-1">
       <div
-        className="flex flex-shrink-0 flex-col border-r border-border/35 bg-[hsl(var(--workspace))]"
+        className="flex flex-shrink-0 flex-col overflow-hidden rounded-xl bg-[hsl(var(--kila-panel-surface)/0.72)] shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.07),0_10px_28px_hsl(var(--kila-shadow-low)/0.045)]"
         style={{ width: explorerWidth }}
       >
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b border-border/35 px-3 py-2.5">
+          <div className="mx-2 mt-2 rounded-lg bg-[hsl(var(--kila-panel-surface-raised)/0.7)] px-3 py-2.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
@@ -243,7 +243,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
           {projectPath ? (
             <>
               {recentFiles.length > 0 && (
-                <div className="border-b border-border/35 px-2 py-2">
+                <div className="mx-2 mt-2 rounded-lg bg-muted/24 px-2 py-2">
                   <div className="mb-1 flex items-center gap-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     <Clock3 className="size-3" />最近打开
                   </div>
@@ -289,7 +289,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center px-6 text-center text-xs leading-5 text-muted-foreground">
-              <div className="rounded-xl border border-dashed border-border/65 px-4 py-6">
+              <div className="rounded-xl bg-muted/35 px-4 py-6 shadow-[inset_0_0_0_1px_hsl(var(--foreground)/0.035)]">
                 请选择一个项目目录。
               </div>
             </div>
@@ -305,16 +305,16 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
         aria-valuemax={420}
         aria-valuenow={Math.round(explorerWidth)}
         tabIndex={0}
-        className="group relative z-[var(--kila-z-popover)] w-[6px] flex-shrink-0 cursor-col-resize bg-transparent titlebar-no-drag"
+        className="group relative z-[var(--kila-z-popover)] w-[5px] flex-shrink-0 cursor-col-resize bg-transparent titlebar-no-drag"
         onPointerDown={handleResizeStart}
         onKeyDown={handleResizeKeyDown}
         onDoubleClick={handleResizeReset}
         title="拖动调整 Explorer 宽度，双击恢复默认"
       >
-        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/55 transition-colors group-hover:bg-primary/30" />
+        <div className="absolute inset-y-3 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-foreground/[0.045] transition-colors group-hover:bg-primary/25" />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-background/45 shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.07),0_10px_28px_hsl(var(--kila-shadow-low)/0.04)]">
         <div className="min-h-0 flex-1">
           {activeItem?.kind === 'widget' ? (
             <PinnedWidgetPreviewPanel

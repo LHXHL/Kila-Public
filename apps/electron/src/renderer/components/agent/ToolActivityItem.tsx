@@ -35,6 +35,7 @@ import {
   Download,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatPayloadPreview } from './agent-messages-utils'
 import { getStatusToneClasses } from '@/lib/theme/status-tone'
 import { useAttachmentImage } from '@/hooks/use-attachment-image'
 import {
@@ -48,8 +49,6 @@ import {
   getToolDisplayName,
   isCompactActivityGroup,
   normalizeToolName,
-  TOOL_RESULT_EXPANDED_CHARS,
-  TOOL_RESULT_PREVIEW_CHARS,
   type CompactActivityGroup,
 } from './tool-activity-utils'
 import {
@@ -209,7 +208,7 @@ function formatInput(input: Record<string, unknown>): string {
   for (const [key, value] of Object.entries(input)) {
     if (!key.startsWith('_')) filtered[key] = value
   }
-  try { return JSON.stringify(filtered, null, 2) } catch { return '[不可序列化]' }
+  return formatPayloadPreview(filtered)
 }
 
 // ===== TodoWrite 可视化 =====
@@ -264,7 +263,7 @@ export interface ActivityRowProps {
   onOpenDetails?: (activity: ToolActivity) => void
 }
 
-export function ActivityRow({ activity, index = 0, animate = false, onOpenDetails }: ActivityRowProps): React.ReactElement {
+export const ActivityRow = React.memo(function ActivityRow({ activity, index = 0, animate = false, onOpenDetails }: ActivityRowProps): React.ReactElement {
   const status = getActivityStatus(activity)
   const filePath = extractFilePath(activity.input)
   const diffStats = computeDiffStats(activity.toolName, activity.input)
@@ -324,7 +323,7 @@ export function ActivityRow({ activity, index = 0, animate = false, onOpenDetail
       )}
     </div>
   )
-}
+})
 
 // ===== Task 分组行 =====
 
@@ -594,15 +593,18 @@ function ToolResultImage({ attachment }: { attachment: { localPath: string; file
 
 function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClose: () => void }): React.ReactElement {
   const [copied, setCopied] = React.useState(false)
-  const [showFullResult, setShowFullResult] = React.useState(false)
   const renderedResult = activity.result ?? activity.partialResult
-  const visibleResult = renderedResult ? getRenderedToolResult(renderedResult, showFullResult) : null
+  const visibleResult = React.useMemo(
+    () => renderedResult ? getRenderedToolResult(renderedResult, false) : null,
+    [renderedResult],
+  )
+  const formattedInput = React.useMemo(() => formatInput(activity.input), [activity.input])
   const hasInput = Object.keys(activity.input).length > 0
 
   const handleCopy = (): void => {
     const parts: string[] = [`[${activity.toolName}]`]
     if (hasInput) {
-      parts.push('输入:\n' + formatInput(activity.input))
+      parts.push('输入:\n' + formattedInput)
     }
     if (renderedResult) {
       parts.push('结果:\n' + renderedResult)
@@ -649,7 +651,7 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
           <div className="space-y-1">
             <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-foreground/34">输入</div>
             <pre className="rounded-md bg-background/30 p-2 text-[11px] leading-5 text-foreground/66 overflow-x-auto max-h-[150px] overflow-y-auto whitespace-pre-wrap break-all">
-              {formatInput(activity.input)}
+              {formattedInput}
             </pre>
           </div>
         )}
@@ -667,16 +669,10 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
             >
               {visibleResult?.text}
             </pre>
-            {renderedResult.length > TOOL_RESULT_PREVIEW_CHARS && (
-              <button
-                type="button"
-                className="text-[11px] text-primary hover:underline"
-                onClick={() => setShowFullResult((value) => !value)}
-              >
-                {showFullResult
-                  ? '收起结果'
-                  : `展开结果（${renderedResult.length.toLocaleString('zh-CN')} 字符${renderedResult.length > TOOL_RESULT_EXPANDED_CHARS ? '，界面最多显示 100,000 字符' : ''}）`}
-              </button>
+            {visibleResult?.truncated && (
+              <div className="text-[10px] text-muted-foreground/65">
+                界面仅显示性能受限预览，可复制完整内容
+              </div>
             )}
           </div>
         )}

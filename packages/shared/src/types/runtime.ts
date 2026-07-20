@@ -196,6 +196,7 @@ export interface GitWorktreeEntry {
 
 export const GIT_IPC_CHANNELS = {
   GET_CHANGES: 'git:get-changes',
+  INIT: 'git:init',
   GET_RUN_CHANGES: 'git:get-run-changes',
   GET_DIFF: 'git:get-diff',
   STAGE: 'git:stage',

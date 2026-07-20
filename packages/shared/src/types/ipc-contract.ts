@@ -172,6 +172,7 @@ export interface IpcContract {
   'runtime:get-status': { args: []; result: RuntimeStatus | null }
   'git:get-repo-status': { args: [dirPath: string]; result: GitRepoStatus | null }
   'git:get-changes': { args: [projectPath: string]; result: GitChangesSnapshot }
+  'git:init': { args: [projectPath: string]; result: GitChangesSnapshot }
   'git:get-run-changes': { args: [sessionId: string]; result: ProjectRunChanges | null }
   'git:get-diff': { args: [input: GitDiffInput]; result: GitDiffResult }
   'git:stage': { args: [input: GitFileActionInput]; result: GitChangesSnapshot }
