@@ -72,10 +72,10 @@ function PayloadBlock({
   children: React.ReactNode
 }): React.ReactElement {
   return (
-    <div className="rounded-lg bg-background/28 px-3 py-2.5">
+    <div className="space-y-1 px-1 py-0.5">
       <div
         className={cn(
-          'mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/78',
+          'text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/78',
           tone === 'danger' && 'text-destructive/78',
         )}
       >
@@ -276,20 +276,6 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="px-3 pb-2 pt-3">
-        <div className="flex items-start gap-2">
-          <div className="mt-0.5 flex size-8 items-center justify-center rounded-lg border border-border/50 bg-muted/35 text-foreground/75">
-            <Wrench className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground">工具调用</div>
-            <div className="text-[11px] leading-5 text-muted-foreground">
-              展示当前会话全部工具运行，包含搜索、读写文件、执行命令与 MCP。
-            </div>
-          </div>
-        </div>
-      </div>
-
       <OverlayScrollbarArea
         className="min-h-0 flex-1 overflow-y-auto"
         options={{ overflow: { x: 'hidden', y: 'scroll' } }}
@@ -316,7 +302,7 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
                   style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 52px' }}
                   className={cn(
                     'rounded-[var(--kila-panel-radius-inner)] border border-transparent transition-colors',
-                    isOpen && 'border-border/45 bg-muted/[0.12]',
+                    isOpen && 'border-border/55 bg-muted/[0.12]',
                   )}
                 >
                   <CollapsibleTrigger asChild>

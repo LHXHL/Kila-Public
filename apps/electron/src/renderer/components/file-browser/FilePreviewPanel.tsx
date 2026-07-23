@@ -118,8 +118,8 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
   const language = resolveCodeLanguage(preview.filePath, preview.extension)
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background/45">
-      <div className="relative z-10 mx-2 mt-2 flex items-center gap-2 rounded-xl bg-[hsl(var(--kila-panel-surface-raised)/0.88)] px-3 py-2 shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.08),0_8px_24px_hsl(var(--kila-shadow-low)/0.06)] backdrop-blur-xl">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center gap-2 border-b border-border/55 px-3 py-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <div className="truncate text-xs font-medium text-foreground">{preview.filename}</div>
@@ -170,7 +170,7 @@ function PreviewModeSwitch({
   }
 
   return (
-    <div className="inline-flex items-center rounded-lg bg-muted/45 p-0.5 shadow-[inset_0_0_0_1px_hsl(var(--foreground)/0.035)]">
+    <div className="inline-flex items-center rounded-md bg-muted/45 p-0.5">
       {supportedModes.map((mode) => (
         <button
           key={mode}
@@ -205,8 +205,8 @@ const PreviewBody = React.memo(function PreviewBody({
 
   if (preview.kind === 'image' && preview.dataUrl) {
     return (
-      <div className="mx-2 mb-2 mt-2 flex flex-1 items-center justify-center rounded-xl bg-muted/20 p-4 shadow-[0_8px_24px_hsl(var(--kila-shadow-low)/0.05)]">
-        <img src={preview.dataUrl} alt={preview.filename} className="max-h-full max-w-full rounded-lg object-contain" />
+      <div className="flex flex-1 items-center justify-center p-4">
+        <img src={preview.dataUrl} alt={preview.filename} className="max-h-full max-w-full rounded-md object-contain" />
       </div>
     )
   }
@@ -223,7 +223,7 @@ const PreviewBody = React.memo(function PreviewBody({
 
   if (preview.kind === 'markdown') {
     return (
-      <div className="mx-2 mb-2 mt-2 min-h-0 flex-1 overflow-hidden rounded-xl bg-[hsl(var(--kila-panel-surface))] shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.08),0_12px_32px_hsl(var(--kila-shadow-low)/0.05)]">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="prose prose-sm max-w-none select-text px-5 py-4 dark:prose-invert">
             <Markdown
@@ -275,7 +275,7 @@ const PreviewBody = React.memo(function PreviewBody({
 
 function renderCodePreview(filePath: string, extension: string, textContent: string | undefined): React.ReactElement {
   return (
-    <div className="mx-2 mb-2 mt-2 min-h-0 flex-1 overflow-hidden rounded-xl shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.08),0_12px_32px_hsl(var(--kila-shadow-low)/0.05)]">
+    <div className="min-h-0 flex-1 overflow-hidden">
       <CodeViewer
         code={textContent ?? ''}
         language={resolveCodeLanguage(filePath, extension)}

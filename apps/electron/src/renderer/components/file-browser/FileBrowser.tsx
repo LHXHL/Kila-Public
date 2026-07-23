@@ -307,7 +307,7 @@ export function FileBrowser({
     <div className={cn('flex min-h-0 flex-col', !embedded ? 'h-full bg-background' : 'bg-transparent')}>
       {/* 顶部工具栏（可由外部接管） */}
       {!hideToolbar && (
-        <div className="mx-2 mt-2 flex h-[44px] flex-shrink-0 items-center gap-1 rounded-xl bg-[hsl(var(--kila-panel-surface-raised)/0.72)] px-3 pr-10 shadow-sm">
+        <div className="flex h-10 flex-shrink-0 items-center gap-1 border-b border-border/55 px-3">
           <span className="text-xs text-muted-foreground truncate flex-1" title={rootPath}>
             {breadcrumb}
           </span>

@@ -60,7 +60,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { GlobalPendingRequestsButton } from '@/components/agent/GlobalPendingRequestsButton'
-import { InAppNotificationCenter } from './InAppNotificationCenter'
 import { allPendingAskUserRequestsAtom, allPendingPermissionRequestsAtom } from '@/atoms/agent-permission-atoms'
 import { EntityMetadataChip } from '@/components/ui/entity-metadata-chip'
 import { WorkspaceEntityGroupHeader, WorkspaceEntityList } from '@/components/ui/workspace-entity-list'
@@ -563,9 +562,6 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
               <div className="mb-2">
                 <GlobalPendingRequestsButton collapsed />
               </div>
-              <div className="mb-2">
-                <InAppNotificationCenter collapsed />
-              </div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -745,9 +741,6 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
           <div className="relative z-10 shrink-0 bg-transparent px-3 pb-[var(--kila-panel-edge-inset)] pt-1.5">
             <div className="mb-1">
               <GlobalPendingRequestsButton />
-            </div>
-            <div className="mb-1">
-              <InAppNotificationCenter />
             </div>
             <button
               type="button"

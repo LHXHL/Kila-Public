@@ -157,7 +157,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
         'relative flex-shrink-0 titlebar-drag-region',
         !isResizing && 'transition-[width] duration-200 ease-out',
         shouldRenderPanel
-          ? 'overflow-hidden bg-[hsl(var(--workspace))] shadow-[-10px_0_28px_hsl(var(--kila-shadow-low)/0.055)]'
+          ? 'overflow-hidden bg-[hsl(var(--workspace))]'
           : 'overflow-hidden bg-transparent',
       )}
       style={{ width: visiblePanelWidth }}
@@ -184,7 +184,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
         >
           <div
             data-slot="side-panel-top-toolbar"
-            className="mx-2 mt-2 flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[hsl(var(--kila-panel-surface-raised)/0.7)] px-3 shadow-sm titlebar-no-drag"
+            className="flex h-10 shrink-0 items-center gap-2 border-b border-border/55 px-3 titlebar-no-drag"
           >
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium leading-none text-foreground/74">

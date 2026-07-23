@@ -202,49 +202,47 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
   }, [isSelectingProjectFolder, projectLocked, sessionId, setSessions, setStateMap])
 
   return (
-    <div className="flex h-full min-h-0 gap-1 bg-[hsl(var(--workspace))] p-1">
+    <div className="flex h-full min-h-0 gap-0 bg-[hsl(var(--workspace))]">
       <div
-        className="flex flex-shrink-0 flex-col overflow-hidden rounded-xl bg-[hsl(var(--kila-panel-surface)/0.72)] shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.07),0_10px_28px_hsl(var(--kila-shadow-low)/0.045)]"
+        className="flex flex-shrink-0 flex-col overflow-hidden border-r border-border/55"
         style={{ width: explorerWidth }}
       >
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="mx-2 mt-2 rounded-lg bg-[hsl(var(--kila-panel-surface-raised)/0.7)] px-3 py-2.5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <FolderOpen className="size-3.5 text-foreground/70" />
-                  <span className="text-[12px] font-medium text-foreground/78">Explorer</span>
-                </div>
-                <div
-                  className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70"
-                  title={projectPath ?? undefined}
-                >
-                  {projectPath ?? '还没有可浏览的项目目录'}
-                </div>
+          <div className="flex items-start justify-between gap-3 border-b border-border/55 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <FolderOpen className="size-3.5 text-foreground/70" />
+                <span className="text-[12px] font-medium text-foreground/78">Explorer</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1.5 rounded-md px-2 text-[11px] text-foreground/65 hover:text-foreground"
-                  onClick={() => { void handleSelectProjectFolder() }}
-                  disabled={projectLocked || isSelectingProjectFolder}
-                  aria-busy={isSelectingProjectFolder}
-                  title={projectLocked ? '首条消息发送后项目文件夹已锁定' : isSelectingProjectFolder ? '正在切换项目目录' : '选择当前会话的项目文件夹'}
-                >
-                  {projectLocked ? <Lock className="size-3.5" /> : isSelectingProjectFolder ? <Loader2 className="size-3.5 animate-spin" /> : <FolderSearch className="size-3.5" />}
-                  <span>选择目录</span>
-                </Button>
+              <div
+                className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70"
+                title={projectPath ?? undefined}
+              >
+                {projectPath ?? '还没有可浏览的项目目录'}
               </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 rounded-md px-2 text-[11px] text-foreground/65 hover:text-foreground"
+                onClick={() => { void handleSelectProjectFolder() }}
+                disabled={projectLocked || isSelectingProjectFolder}
+                aria-busy={isSelectingProjectFolder}
+                title={projectLocked ? '首条消息发送后项目文件夹已锁定' : isSelectingProjectFolder ? '正在切换项目目录' : '选择当前会话的项目文件夹'}
+              >
+                {projectLocked ? <Lock className="size-3.5" /> : isSelectingProjectFolder ? <Loader2 className="size-3.5 animate-spin" /> : <FolderSearch className="size-3.5" />}
+                <span>选择目录</span>
+              </Button>
             </div>
           </div>
 
           {projectPath ? (
             <>
               {recentFiles.length > 0 && (
-                <div className="mx-2 mt-2 rounded-lg bg-muted/24 px-2 py-2">
-                  <div className="mb-1 flex items-center gap-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="border-b border-border/55 px-3 py-2">
+                  <div className="mb-1 flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     <Clock3 className="size-3" />最近打开
                   </div>
                   <div className="space-y-0.5">
@@ -289,7 +287,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center px-6 text-center text-xs leading-5 text-muted-foreground">
-              <div className="rounded-xl bg-muted/35 px-4 py-6 shadow-[inset_0_0_0_1px_hsl(var(--foreground)/0.035)]">
+              <div className="rounded-lg bg-muted/30 px-4 py-6">
                 请选择一个项目目录。
               </div>
             </div>
@@ -311,10 +309,10 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
         onDoubleClick={handleResizeReset}
         title="拖动调整 Explorer 宽度，双击恢复默认"
       >
-        <div className="absolute inset-y-3 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-foreground/[0.045] transition-colors group-hover:bg-primary/25" />
+        <div className="absolute inset-y-3 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/45" />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-background/45 shadow-[0_1px_2px_hsl(var(--kila-shadow-low)/0.07),0_10px_28px_hsl(var(--kila-shadow-low)/0.04)]">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="min-h-0 flex-1">
           {activeItem?.kind === 'widget' ? (
             <PinnedWidgetPreviewPanel
