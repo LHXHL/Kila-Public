@@ -19,7 +19,7 @@ import {
   UserMessageContent,
 } from '@/components/ai-elements/message'
 import { UserAvatar } from '@/components/message/UserAvatar'
-import { CopyButton } from '@/components/message/CopyButton'
+import { CopyButton, CopyMenuButton } from '@/components/message/CopyButton'
 import { Button } from '@/components/ui/button'
 import { useAttachmentImage } from '@/hooks/use-attachment-image'
 import { Badge } from '@/components/ui/badge'
@@ -628,6 +628,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
                 <RotateCw className="size-4" />
               </MessageAction>
             )}
+            {messageText && <CopyMenuButton content={messageText} />}
           </MessageActions>
         )}
       </Message>
@@ -715,6 +716,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
                 <RotateCw className="size-4" />
               </MessageAction>
             )}
+            {copyText && <CopyMenuButton content={copyText} />}
           </MessageActions>
         )}
         {message.role === 'assistant' && onUseFollowUp && (
@@ -734,6 +736,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
         </MessageContent>
         <MessageActions className="mt-0.5">
           <CopyButton content={message.content} />
+          <CopyMenuButton content={message.content} />
         </MessageActions>
       </Message>
     )
@@ -769,6 +772,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
         </MessageContent>
         <MessageActions className="mt-0.5">
           <CopyButton content={message.content} />
+          <CopyMenuButton content={message.content} />
         </MessageActions>
       </Message>
     )

@@ -99,6 +99,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6",
     "sonner": "^2.0.7",
+    "strip-markdown": "^6.0.0",
     "tailwind-merge": "^2.5.5",
     "undici": "^7.21.0",
     "use-stick-to-bottom": "^1.1.2",
