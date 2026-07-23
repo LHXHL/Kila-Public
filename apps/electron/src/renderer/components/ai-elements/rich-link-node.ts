@@ -108,6 +108,23 @@ export const RichLinkNode = Node.create({
       handler: ({ state, range, match }) => {
         const attributes = match.data as unknown as RichLinkNodeAttributes | undefined
         if (!attributes) return null
+
+        // 安全闸门：当 range 内已经存在 richLink atom 节点时跳过本次转换。
+        // ProseMirror 的 getTextContentFromNodes 会把 atom 节点的 renderText
+        // （即完整的 URL/Markdown source）拼进 textBefore 参与 InputRule 匹配，
+        // 导致 range.from 基于字符长度而非 atom nodeSize(=1) 回退，
+        // replaceWith 会跨越并删除已有 chip 及周围文本，造成字符顺序错乱。
+        let hasExistingRichLink = false
+        state.doc.nodesBetween(range.from, range.to, (node) => {
+          if (hasExistingRichLink) return false
+          if (node.type.name === 'richLink') {
+            hasExistingRichLink = true
+            return false
+          }
+          return true
+        })
+        if (hasExistingRichLink) return null
+
         const richLinkNode = this.type.create(attributes)
         const transaction = state.tr.replaceWith(range.from, range.to, richLinkNode)
         if (appendSpace) {

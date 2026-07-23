@@ -1081,7 +1081,10 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
 
   /** 发送消息 */
   const handleSend = React.useCallback(async (): Promise<void> => {
-    const text = inputContent.trim()
+    // 同步从 store 读取最新草稿，避免闭包捕获的 inputContent 在 InputRule 触发
+    // chip 转换的瞬间还是旧值（onChange → atom 更新是异步的，Enter 紧随其后时会漏掉）。
+    const latestDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
+    const text = latestDraft.trim()
     // 如果输入为空但有建议，使用建议内容
     const effectiveText = editingTurn ? text : (text || suggestion || '')
     if ((!effectiveText && pendingFiles.length === 0) || !currentSelection.channelId) return
@@ -1196,7 +1199,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       }
       clearWidgetDraftProposal(sessionId)
     }
-  }, [clearWidgetDraftProposal, currentSelection.channelId, dispatchEditedTurn, dispatchPreparedMessage, editingTurn, inputContent, pendingFiles, sessionId, setInputContent, setPendingFiles, streaming, suggestion])
+  }, [clearWidgetDraftProposal, currentSelection.channelId, dispatchEditedTurn, dispatchPreparedMessage, editingTurn, pendingFiles, sessionId, setInputContent, setPendingFiles, store, streaming, suggestion])
 
   /** 停止生成 */
   const handleStop = React.useCallback((): void => {

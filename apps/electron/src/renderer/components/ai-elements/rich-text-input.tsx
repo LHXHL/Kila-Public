@@ -481,22 +481,30 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
 
   // 同步外部 value 变化（清空时）
   useEffect(() => {
-    if (editor) {
-      const controllerValue = value
-      // 如果值是编辑器自己设置的，跳过同步
-      if (controllerValue === lastEditorValueRef.current) {
-        return
-      }
+    if (!editor) return
+    const controllerValue = value
+    // 如果值是编辑器自己设置的，跳过同步
+    if (controllerValue === lastEditorValueRef.current) {
+      return
+    }
 
-      if (controllerValue === '') {
-        editor.commands.clearContent()
-        lastEditorValueRef.current = ''
-        setIsExpanded(false)
-        setIsManuallyCollapsed(false)
-      } else {
-        editor.commands.setContent(plainTextToDocument(controllerValue))
-        lastEditorValueRef.current = controllerValue
-      }
+    // 编辑器聚焦（用户正在输入）时，只有显式清空才允许回灌。
+    // 否则 setContent 会重置光标到末尾，导致正在输入的字符被插入到错误位置，
+    // 表现为"发出去后字符顺序都乱了"——尤其是 RichLink InputRule 触发 chip
+    // 转换的瞬间，atom 更新与 onUpdate 之间会出现中间态不一致。
+    if (editor.isFocused && controllerValue !== '') {
+      lastEditorValueRef.current = controllerValue
+      return
+    }
+
+    if (controllerValue === '') {
+      editor.commands.clearContent()
+      lastEditorValueRef.current = ''
+      setIsExpanded(false)
+      setIsManuallyCollapsed(false)
+    } else {
+      editor.commands.setContent(plainTextToDocument(controllerValue))
+      lastEditorValueRef.current = controllerValue
     }
   }, [editor, value])
 
