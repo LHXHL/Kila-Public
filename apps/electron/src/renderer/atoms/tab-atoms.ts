@@ -128,7 +128,7 @@ const DEFAULT_SPLIT_LAYOUT: SplitLayoutState = {
 
 // ===== 核心 Atoms =====
 
-/** 所有打开的标签页列表（有序，控制 TabBar 显示顺序） */
+/** 所有打开的标签页列表（有序；标签栏已移除，仅作为分屏面板的会话载体） */
 export const tabsAtom = atom<TabItem[]>([])
 
 /** 分屏布局状态 */

@@ -10,13 +10,11 @@ describe('圆角层级', () => {
     const buttonSource = readRendererSource('./button.tsx')
     const inputSource = readRendererSource('./input.tsx')
     const selectSource = readRendererSource('./select.tsx')
-    const tabSource = readRendererSource('../tabs/TabBarItem.tsx')
 
     expect(buttonSource).toContain('rounded-lg text-sm')
     expect(buttonSource).not.toContain('rounded-xl text-sm')
     expect(inputSource).toContain('w-full rounded-lg border')
     expect(selectSource).toContain('whitespace-nowrap rounded-lg border')
-    expect(tabSource).toContain('select-none rounded-lg border')
   })
 
   test('Given 状态元数据 When 展示标签 Then 使用小圆角而不是通用胶囊', () => {

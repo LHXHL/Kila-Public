@@ -1,9 +1,9 @@
 /**
  * AppShell - 应用主布局容器
  *
- * 布局结构：[LeftSidebar 可折叠] | [MainArea: TabBar + SplitContainer]
+ * 布局结构：[LeftSidebar 可折叠] | [MainArea: WorkspaceToolbar + SplitContainer]
  *
- * MainArea 只承载session / 标签 / 分屏；设置改为独立原生窗口。
+ * MainArea 只承载session / 分屏；设置改为独立原生窗口。
  */
 
 import * as React from 'react'
@@ -110,7 +110,7 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
 
         {/* 右侧容器：在标题栏拖拽层之上承载主工作台 */}
         <div className="relative z-[var(--kila-z-panel)] min-w-0 flex-1 py-[var(--kila-panel-edge-inset)] pl-1 pr-[var(--kila-panel-edge-inset)]">
-          {/* 主内容区域（TabBar + SplitContainer） */}
+          {/* 主内容区域（WorkspaceToolbar + SplitContainer） */}
           <MainArea />
         </div>
       </div>

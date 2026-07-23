@@ -1,6 +1,5 @@
 export { MainArea } from './MainArea'
-export { TabBar } from './TabBar'
-export { TabBarItem } from './TabBarItem'
+export { WorkspaceToolbar } from './WorkspaceToolbar'
 export { TabContent } from './TabContent'
 export { SplitContainer } from './SplitContainer'
 export { SplitPanel } from './SplitPanel'

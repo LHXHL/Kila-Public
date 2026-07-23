@@ -1,7 +1,7 @@
 /**
  * MainArea — 主内容区域
  *
- * 组合 TabBar + SplitContainer，承载统一 Session 主内容区。
+ * 组合 WorkspaceToolbar + SplitContainer，承载统一 Session 主内容区。
  */
 
 import * as React from 'react'
@@ -10,7 +10,7 @@ import { activeTabAtom, splitLayoutAtom, tabsAtom } from '@/atoms/tab-atoms'
 import { currentSessionIdAtom } from '@/atoms/session-atoms'
 import { userProfileAtom } from '@/atoms/user-profile'
 import { Panel } from '@/components/app-shell/Panel'
-import { TabBar } from './TabBar'
+import { WorkspaceToolbar } from './WorkspaceToolbar'
 import { SplitContainer } from './SplitContainer'
 import { CalendarDays, MapPin, Moon } from 'lucide-react'
 
@@ -99,7 +99,7 @@ export function MainArea(): React.ReactElement {
       variant="grow"
       className="bg-[hsl(var(--workspace))]"
     >
-      <TabBar />
+      <WorkspaceToolbar />
       {tabs.length === 0 ? (
         <div className="titlebar-no-drag flex flex-1 items-center justify-center px-6 py-10 text-muted-foreground">
           <div className="w-full max-w-[680px] text-center">
