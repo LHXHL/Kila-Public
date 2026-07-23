@@ -52,10 +52,6 @@ export function getTokenUsageMonthPath(monthKey: string): string {
   return join(getConfigDir(), `token-usage-${monthKey}.jsonl`)
 }
 
-export function getNotificationsPath(): string {
-  return join(getConfigDir(), 'notifications.jsonl')
-}
-
 export function getSearchIndexPath(): string {
   return join(getConfigDir(), 'search-index.json')
 }

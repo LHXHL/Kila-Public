@@ -34,11 +34,8 @@ import {
   agentMaxBudgetUsdAtom,
   agentMaxTurnsAtom,
 } from './atoms/agent-atoms'
-import { updateStatusAtom, initializeUpdater, type UpdateStatus } from './atoms/updater'
+import { updateStatusAtom, initializeUpdater } from './atoms/updater'
 import {
-  addInAppNotificationAtom,
-  inAppNotificationsAtom,
-  initializeInAppNotifications,
   notificationsEnabledAtom,
   notificationPreferencesAtom,
   initializeNotifications,
@@ -50,7 +47,7 @@ import { useGlobalSessionListeners } from './hooks/useGlobalSessionListeners'
 import { agentToolsAtom } from './atoms/agent-tool-atoms'
 import { sessionQuickSuggestionsAtom } from './atoms/agent-ui-atoms'
 import { currentSessionAtom, currentSessionIdAtom, sessionsAtom } from './atoms/session-atoms'
-import { tabsAtom, splitLayoutAtom, openTab, restorePersistedTabState } from './atoms/tab-atoms'
+import { tabsAtom, splitLayoutAtom, openTab } from './atoms/tab-atoms'
 import { Toaster } from './components/ui/sonner'
 import { toast } from 'sonner'
 import { diffCapabilities, resolveThinkingLevel } from '@kila/shared'
@@ -213,25 +210,13 @@ function AgentSettingsInitializer(): null {
  */
 function UpdaterInitializer(): null {
   const setUpdateStatus = useSetAtom(updateStatusAtom)
-  const addNotification = useSetAtom(addInAppNotificationAtom)
-  const prevStatusRef = useRef<UpdateStatus['status']>('idle')
 
   useEffect(() => {
     const cleanup = initializeUpdater((status) => {
       setUpdateStatus(status)
-
-      if (status.status === 'available' && prevStatusRef.current !== 'available') {
-        addNotification({
-          title: `发现新版本 v${status.version}`,
-          body: status.releaseNotes?.slice(0, 200),
-          level: 'info',
-          category: 'update',
-        })
-      }
-      prevStatusRef.current = status.status
     })
     return cleanup
-  }, [setUpdateStatus, addNotification])
+  }, [setUpdateStatus])
 
   return null
 }
@@ -239,18 +224,15 @@ function UpdaterInitializer(): null {
 /**
  * 通知初始化组件
  *
- * 从主进程加载通知开关设置。
+ * 从主进程加载桌面通知开关与分类偏好设置。
  */
 function NotificationsInitializer(): null {
   const setEnabled = useSetAtom(notificationsEnabledAtom)
   const setPrefs = useSetAtom(notificationPreferencesAtom)
-  const setInAppNotifications = useSetAtom(inAppNotificationsAtom)
-  const addNotification = useSetAtom(addInAppNotificationAtom)
 
   useEffect(() => {
     let isMounted = true
     let cleanup: (() => void) | undefined
-    let inAppCleanup: (() => void) | undefined
 
     initializeNotifications(setEnabled, setPrefs).then((fn) => {
       if (isMounted) {
@@ -259,37 +241,12 @@ function NotificationsInitializer(): null {
         fn()
       }
     })
-    initializeInAppNotifications(setInAppNotifications).then((fn) => {
-      if (isMounted) {
-        inAppCleanup = fn
-      } else {
-        fn()
-      }
-    })
-
-    // Bridge 状态监听 — 连接/断开时发站内通知
-    const bridgeCleanup = window.electronAPI.onBridgeStatusChanged((status) => {
-      if (!isMounted) return
-      for (const [channel, info] of Object.entries(status.channels)) {
-        if (!info.enabled) continue
-        if (info.status === 'error' && info.errorMessage) {
-          addNotification({
-            title: `${channel} 连接异常`,
-            body: info.errorMessage.slice(0, 200),
-            level: 'warning',
-            category: 'bridge',
-          })
-        }
-      }
-    })
 
     return () => {
       isMounted = false
       cleanup?.()
-      inAppCleanup?.()
-      bridgeCleanup()
     }
-  }, [setEnabled, setPrefs, setInAppNotifications, addNotification])
+  }, [setEnabled, setPrefs])
 
   return null
 }
@@ -329,48 +286,6 @@ function LocaleInitializer(): null {
 
 function SessionListenersInitializer(): null {
   useGlobalSessionListeners()
-  return null
-}
-
-function TabStateInitializer(): null {
-  const [tabs, setTabs] = useAtom(tabsAtom)
-  const [layout, setLayout] = useAtom(splitLayoutAtom)
-  const hydratedRef = useRef(false)
-
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      window.electronAPI.getSettings(),
-      window.electronAPI.listSessions(),
-    ]).then(([settings, sessions]) => {
-      if (cancelled) return
-      const persisted = settings.tabState
-      const sessionIds = new Set(sessions.map((session) => session.id))
-      const restored = restorePersistedTabState(persisted, sessionIds)
-
-      if (restored) {
-        setTabs(restored.tabs)
-        setLayout(restored.splitLayout)
-      }
-      hydratedRef.current = true
-    }).catch((error) => {
-      console.error('[TabStateInitializer] 恢复工作台失败:', error)
-      hydratedRef.current = true
-    })
-
-    return () => { cancelled = true }
-  }, [setLayout, setTabs])
-
-  useEffect(() => {
-    if (!hydratedRef.current) return
-    const timer = window.setTimeout(() => {
-      window.electronAPI.updateSettings({
-        tabState: { tabs, splitLayout: layout },
-      }).catch((error) => console.error('[TabStateInitializer] 保存工作台失败:', error))
-    }, 350)
-    return () => window.clearTimeout(timer)
-  }, [layout, tabs])
-
   return null
 }
 
@@ -485,7 +400,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     {windowMode === 'main' && (
       <>
         <SessionListenersInitializer />
-        <TabStateInitializer />
         <MainWindowBridgeInitializer />
       </>
     )}

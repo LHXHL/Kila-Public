@@ -15,15 +15,6 @@ import {
   agentContextCalibrationSnapshotsAtom,
   agentContextSnapshotsAtom,
 } from '@/atoms/agent-context-atoms'
-import { addInAppNotificationAtom } from '@/atoms/notifications'
-
-function formatUsd(value: number): string {
-  return `$${value.toFixed(value >= 10 ? 2 : 4)}`
-}
-
-function formatInteger(value: number): string {
-  return new Intl.NumberFormat('zh-CN').format(Math.round(value))
-}
 
 const DEFAULT_AGENT_STREAM_STATE = (): AgentStreamState => ({
   running: true,
@@ -70,22 +61,8 @@ export function useAgentStreamListener(): void {
       }
 
       if (streamEvent.type === 'budget_warning') {
-        const parts = [
-          streamEvent.exceededUsd && streamEvent.budgetUsd
-            ? `成本 ${formatUsd(streamEvent.costUsd)} / ${formatUsd(streamEvent.budgetUsd)}`
-            : undefined,
-          streamEvent.exceededTokens && streamEvent.budgetTokens
-            ? `Token ${formatInteger(streamEvent.totalTokens)} / ${formatInteger(streamEvent.budgetTokens)}`
-            : undefined,
-        ].filter(Boolean)
-
-        store.set(addInAppNotificationAtom, {
-          title: 'Token 预算已超过阈值',
-          body: parts.join('，'),
-          level: 'warning',
-          category: 'usage',
-          sessionId,
-        })
+        // 预算超限告警由 TokenUsageSettings 页面在打开时检测并提示，
+        // 这里不再产生站内通知。
         return
       }
 

@@ -56,7 +56,6 @@ import {
 import { sessionPinnedWidgetsMapAtom } from '@/atoms/session-board-atoms'
 import { sessionUsageSnapshotsAtom } from '@/atoms/usage-atoms'
 import {
-  addInAppNotificationAtom,
   notificationsEnabledAtom,
   sendDesktopNotification,
 } from '@/atoms/notifications'
@@ -112,13 +111,6 @@ export function useSessionMetaListener(): void {
       if (outcome === 'success') {
         const enabled = store.get(notificationsEnabledAtom)
         const session = store.get(sessionsAtom).find((item) => item.id === data.sessionId)
-        store.set(addInAppNotificationAtom, {
-          title: 'Kila 任务完成',
-          body: session?.title ? `「${session.title}」已完成` : '当前任务已完成',
-          level: 'success',
-          category: 'agent',
-          sessionId: data.sessionId,
-        })
         sendDesktopNotification(
           'Kila 任务完成',
           session?.title ? `「${session.title}」已完成` : '当前任务已完成',
@@ -159,15 +151,6 @@ export function useSessionMetaListener(): void {
     })
 
     const cleanupError = window.electronAPI.onSessionStreamError((data: SessionStreamErrorPayload) => {
-      const session = store.get(sessionsAtom).find((item) => item.id === data.sessionId)
-      store.set(addInAppNotificationAtom, {
-        title: 'Kila 任务失败',
-        body: session?.title ? `「${session.title}」执行失败：${data.error}` : data.error,
-        level: 'error',
-        category: 'agent',
-        sessionId: data.sessionId,
-      })
-
       store.set(agentStreamingStatesAtom, (prev) => {
         const current = prev.get(data.sessionId)
         if (!current) return prev

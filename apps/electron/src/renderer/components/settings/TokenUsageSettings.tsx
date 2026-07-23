@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { useSetAtom } from 'jotai'
 import { BarChart3, Coins, DatabaseZap, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
@@ -22,7 +21,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SettingsCard, SettingsSection } from './primitives'
-import { addInAppNotificationAtom } from '@/atoms/notifications'
 
 const RANGE_OPTIONS = [
   { value: 7, label: '7 天' },
@@ -123,7 +121,6 @@ function MetricCard(input: {
 }
 
 export function TokenUsageSettings(): React.ReactElement {
-  const addInAppNotification = useSetAtom(addInAppNotificationAtom)
   const [days, setDays] = React.useState<number>(30)
   const [stats, setStats] = React.useState<TokenUsageStats | null>(null)
   const [calendarMonthStats, setCalendarMonthStats] = React.useState<TokenUsageStats | null>(null)
@@ -223,13 +220,10 @@ export function TokenUsageSettings(): React.ReactElement {
         : undefined,
     ].filter(Boolean)
 
-    addInAppNotification({
-      title: 'Token 预算已超过阈值',
-      body: parts.join('，'),
-      level: 'warning',
-      category: 'usage',
+    toast.warning('Token 预算已超过阈值', {
+      description: parts.join('，'),
     })
-  }, [addInAppNotification, budgetStatus, calendarMonthStats])
+  }, [budgetStatus, calendarMonthStats])
 
   const saveBudget = React.useCallback(async (): Promise<void> => {
     const parseOptionalNumber = (value: string): number | undefined => {

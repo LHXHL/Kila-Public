@@ -28,7 +28,6 @@ import { registerBridgeHandlers } from './bridge-ipc'
 import { registerPersonalityHandlers } from './personality-ipc'
 import { registerSystemPromptHandlers } from './system-prompt-ipc'
 import { registerTokenUsageHandlers } from './token-usage-ipc'
-import { registerNotificationHandlers } from './notification-ipc'
 import { registerGitHubReleaseHandlers } from './github-release-ipc'
 import { registerMemoryHandlers } from './memory-ipc'
 import { registerNativeFeelHandlers } from './native-feel-ipc'
@@ -93,7 +92,6 @@ export function registerIpcHandlers(): void {
   registerPersonalityHandlers()
   registerSystemPromptHandlers()
   registerTokenUsageHandlers()
-  registerNotificationHandlers()
   registerGitHubReleaseHandlers()
   registerMemoryHandlers()
   registerNativeFeelHandlers()

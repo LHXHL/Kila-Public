@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, AGENT_IPC_CHANNELS, SESSION_IPC_CHANNELS, SESSION_BOARD_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, PERSONALITY_IPC_CHANNELS, AGENT_TOOL_IPC_CHANNELS, FEISHU_BRIDGE_IPC_CHANNELS, IM_BRIDGE_IPC_CHANNELS, WECHAT_BRIDGE_IPC_CHANNELS, TOKEN_USAGE_IPC_CHANNELS, NOTIFICATION_IPC_CHANNELS, SCHEDULED_TASK_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CUA_DRIVER_IPC_CHANNELS, THEME_IPC_CHANNELS } from '@kila/shared/ipc'
+import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, AGENT_IPC_CHANNELS, SESSION_IPC_CHANNELS, SESSION_BOARD_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, PERSONALITY_IPC_CHANNELS, AGENT_TOOL_IPC_CHANNELS, FEISHU_BRIDGE_IPC_CHANNELS, IM_BRIDGE_IPC_CHANNELS, WECHAT_BRIDGE_IPC_CHANNELS, TOKEN_USAGE_IPC_CHANNELS, SCHEDULED_TASK_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CUA_DRIVER_IPC_CHANNELS, THEME_IPC_CHANNELS } from '@kila/shared/ipc'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SETTINGS_TABS } from '../types'
 import type {
   RuntimeStatus,
@@ -116,9 +116,6 @@ import type {
   PinSessionWidgetInput,
   SessionPinnedWidget,
   TokenUsageStats,
-  CreateKilaNotificationInput,
-  KilaNotificationRecord,
-  ListKilaNotificationsInput,
   CuaDriverStatus,
   CuaDriverDetectResult,
   CuaDriverInstallResult,
@@ -773,27 +770,6 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
 
   /** 获取 token usage 聚合统计 */
   getTokenUsageStats: (days: number) => Promise<TokenUsageStats>
-
-  /** 获取站内通知 */
-  listNotifications: (input?: ListKilaNotificationsInput) => Promise<KilaNotificationRecord[]>
-
-  /** 创建站内通知 */
-  createNotification: (input: CreateKilaNotificationInput) => Promise<KilaNotificationRecord | null>
-
-  /** 标记单条通知已读 */
-  markNotificationRead: (notificationId: string) => Promise<KilaNotificationRecord[]>
-
-  /** 标记全部通知已读 */
-  markAllNotificationsRead: () => Promise<KilaNotificationRecord[]>
-
-  /** 清空站内通知 */
-  clearNotifications: () => Promise<void>
-
-  /** 监听新站内通知 */
-  onNotificationCreated: (callback: (notification: KilaNotificationRecord) => void) => () => void
-
-  /** 监听站内通知列表变化 */
-  onNotificationsChanged: (callback: (notifications: KilaNotificationRecord[]) => void) => () => void
 
   // ===== 版本检测相关（仅检测，不自动下载/安装） =====
 
@@ -1561,38 +1537,6 @@ const electronAPI: ElectronAPI = {
 
   getTokenUsageStats: (days: number) => {
     return invoke(TOKEN_USAGE_IPC_CHANNELS.GET_STATS, days)
-  },
-
-  listNotifications: (input?: ListKilaNotificationsInput) => {
-    return invoke(NOTIFICATION_IPC_CHANNELS.LIST, input)
-  },
-
-  createNotification: (input: CreateKilaNotificationInput) => {
-    return invoke(NOTIFICATION_IPC_CHANNELS.CREATE, input)
-  },
-
-  markNotificationRead: (notificationId: string) => {
-    return invoke(NOTIFICATION_IPC_CHANNELS.MARK_READ, notificationId)
-  },
-
-  markAllNotificationsRead: () => {
-    return invoke(NOTIFICATION_IPC_CHANNELS.MARK_ALL_READ)
-  },
-
-  clearNotifications: () => {
-    return invoke(NOTIFICATION_IPC_CHANNELS.CLEAR)
-  },
-
-  onNotificationCreated: (callback: (notification: KilaNotificationRecord) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, notification: KilaNotificationRecord): void => callback(notification)
-    ipcRenderer.on(NOTIFICATION_IPC_CHANNELS.ON_CREATED, listener)
-    return () => { ipcRenderer.removeListener(NOTIFICATION_IPC_CHANNELS.ON_CREATED, listener) }
-  },
-
-  onNotificationsChanged: (callback: (notifications: KilaNotificationRecord[]) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, notifications: KilaNotificationRecord[]): void => callback(notifications)
-    ipcRenderer.on(NOTIFICATION_IPC_CHANNELS.ON_CHANGED, listener)
-    return () => { ipcRenderer.removeListener(NOTIFICATION_IPC_CHANNELS.ON_CHANGED, listener) }
   },
 
   // 自动更新（updater 通道不在 IpcContract 中，由 registerUpdaterIpc 独立注册）

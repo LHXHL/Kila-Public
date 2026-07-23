@@ -133,11 +133,6 @@ import type {
 import type { PinSessionWidgetInput, SessionPinnedWidget } from './session-board'
 import type { SessionHtmlPreviewResolution, SessionWebPreviewServerInfo } from './file-preview'
 import type { TokenUsageStats } from './token-usage'
-import type {
-  CreateKilaNotificationInput,
-  KilaNotificationRecord,
-  ListKilaNotificationsInput,
-} from './notification'
 import type { InlineFilePreview } from './file-preview'
 import type { CuaDriverStatus, CuaDriverDetectResult, CuaDriverInstallResult } from './agent'
 import type { ThemeCatalog, ThemeDefinition, ThemeImportResult, ThemeMutationResult } from '../theme'
@@ -255,13 +250,6 @@ export interface IpcContract {
 
   // ===== Token Usage =====
   'token-usage:get-stats': { args: [days: number]; result: TokenUsageStats }
-
-  // ===== Notifications =====
-  'notification:list': { args: [input?: ListKilaNotificationsInput]; result: KilaNotificationRecord[] }
-  'notification:create': { args: [input: CreateKilaNotificationInput]; result: KilaNotificationRecord | null }
-  'notification:mark-read': { args: [notificationId: string]; result: KilaNotificationRecord[] }
-  'notification:mark-all-read': { args: []; result: KilaNotificationRecord[] }
-  'notification:clear': { args: []; result: void }
 
   // ===== Tutorial =====
   'app:get-tutorial-content': { args: []; result: string | null }
