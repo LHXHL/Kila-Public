@@ -1,6 +1,6 @@
 {
   "name": "@kila/electron",
-  "version": "1.1.40",
+  "version": "1.1.41",
   "description": "Kila next gen ai software with general agents - Electron App",
   "main": "dist/main.cjs",
   "author": {
@@ -42,9 +42,9 @@
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.3",
-    "@earendil-works/pi-agent-core": "0.80.10",
-    "@earendil-works/pi-ai": "0.80.10",
-    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@earendil-works/pi-agent-core": "0.82.1",
+    "@earendil-works/pi-ai": "0.82.1",
+    "@earendil-works/pi-coding-agent": "0.82.1",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@larksuiteoapi/node-sdk": "1.65.0",

@@ -76,7 +76,7 @@ export function AgentWelcomeState({
           <UserAvatar
             avatar={userProfile.avatar}
             size={48}
-            className="mt-1 bg-[hsl(var(--brand-soft))]"
+            className="mt-1 bg-brand-soft"
           />
           <div className="min-w-0 flex-1">
             <h1 className="text-balance text-[28px] font-semibold leading-tight tracking-tight text-foreground md:text-[32px]">

@@ -187,7 +187,7 @@ function DiffBadges({ stats }: { stats: DiffStats }): React.ReactElement {
         </span>
       )}
       {stats.additions > 0 && (
-        <span className="rounded px-1.5 py-0.5 text-[10px] leading-none bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]">
+        <span className="rounded px-1.5 py-0.5 text-[10px] leading-none bg-status-success-soft text-status-success-foreground">
           +{stats.additions}
         </span>
       )}
@@ -391,7 +391,7 @@ function ActivityGroupRow({ group, index = 0, animate = false, onOpenDetails, de
         <StatusIcon status={derivedStatus} toolName="Task" />
 
         {subagentType && (
-          <span className="shrink-0 px-1.5 py-0.5 rounded bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))] text-[9px] font-medium leading-none">
+          <span className="shrink-0 px-1.5 py-0.5 rounded bg-brand-soft text-brand-soft-foreground text-[9px] font-medium leading-none">
             {subagentType}
           </span>
         )}
@@ -622,7 +622,7 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
   }
 
   return (
-    <div className="mt-1 overflow-hidden rounded-lg bg-[hsl(var(--workspace))]/68 px-3 py-2.5 animate-in fade-in slide-in-from-top-2 duration-300 ease-out">
+    <div className="mt-1 overflow-hidden rounded-lg bg-workspace/68 px-3 py-2.5 animate-in fade-in slide-in-from-top-2 duration-300 ease-out">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-foreground/40">

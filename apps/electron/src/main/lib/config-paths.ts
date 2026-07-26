@@ -101,25 +101,6 @@ export function getMemoryStateStorePath(): string {
   return join(getConfigDir(), 'memory-state.json')
 }
 
-/** 本地 Markdown 记忆根目录。 */
-export function getMemoryDir(): string {
-  const dir = join(getConfigDir(), 'memory')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  return dir
-}
-
-/** 本地记忆写入日志，使用 append-only JSONL 保证崩溃后可恢复。 */
-export function getMemoryWriteJournalPath(): string {
-  return join(getMemoryDir(), 'write-events.jsonl')
-}
-
-/** 项目级 Markdown 记忆目录，不向用户项目写入隐藏文件。 */
-export function getProjectProfileMemoryDir(profileId: string): string {
-  const dir = join(getProjectProfilePath(profileId), 'memory')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  return dir
-}
-
 export function getSessionsIndexPath(): string {
   return join(getConfigDir(), 'sessions.json')
 }

@@ -82,7 +82,7 @@ export const CodeViewer = React.memo(function CodeViewer({
     <div
       ref={viewportRef}
       className={cn(
-        'h-full min-h-0 overflow-auto bg-[hsl(var(--code-surface))] shadow-[inset_0_1px_0_hsl(var(--foreground)/0.035)]',
+        'h-full min-h-0 overflow-auto bg-code-surface shadow-[inset_0_1px_0_hsl(var(--foreground)/0.035)]',
         className,
       )}
       aria-label={ariaLabel}

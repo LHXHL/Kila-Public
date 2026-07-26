@@ -165,6 +165,19 @@ interface AttemptBuffer {
   modelEvent: AgentEvent
 }
 
+/**
+ * Pi 内部自动重试时需要保留、不随失败 attempt 一起丢弃的事件类型。
+ * 保留重试历史标记与记忆事件，丢弃上一 attempt 的思考/文本/工具等内容事件——
+ * 与实时 UI 的 retrying reset（agent-stream-utils.ts）语义一致：失败重试历史保留，内容只展示一次。
+ */
+const RETRY_HISTORY_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
+  'retrying',
+  'retry_attempt',
+  'retry_failed',
+  'retry_cleared',
+  'memory_trace',
+])
+
 function createAttemptBuffer(model: string): AttemptBuffer {
   return {
     text: '',
@@ -232,6 +245,8 @@ export async function runAgentStream({
 
   let activeModel = resolvedModel
   let attemptBuffer = createAttemptBuffer(activeModel)
+  // Pi 内部自动重试的当前 attempt 编号，用于识别“新 attempt”并只在切换时重置一次持久化缓冲。
+  let lastPersistedRetryAttempt: number | undefined
   let lastCompactionEvent: CompactCompleteEvent | null = null
   let lastCompactionNoopEvent: CompactNoopEvent | null = null
   let terminalError: string | null = null
@@ -376,6 +391,18 @@ export async function runAgentStream({
 
         if (timelineEvent.type === 'error') {
           terminalError = timelineEvent.message
+        }
+
+        // Pi 独占重试：收到新 attempt 的 retrying 时，丢弃上一 attempt 已缓冲的内容，
+        // 只保留重试历史/记忆标记。否则外层循环（maxOuterRetries=0）永不重置缓冲，
+        // 失败 attempt 的思考/文本会与成功 attempt 一起持久化，重载会话时出现重复思考块。
+        if (timelineEvent.type === 'retrying' && timelineEvent.attempt !== lastPersistedRetryAttempt) {
+          lastPersistedRetryAttempt = timelineEvent.attempt
+          terminalError = null
+          attemptBuffer.text = ''
+          attemptBuffer.events = attemptBuffer.events.filter((bufferedEvent) =>
+            RETRY_HISTORY_EVENT_TYPES.has(bufferedEvent.type),
+          )
         }
 
         if (timelineEvent.type === 'text_delta') {

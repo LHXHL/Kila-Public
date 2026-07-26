@@ -1,12 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
-
-interface ShellConfig {
-  shell: string
-  args: string[]
-}
+import { resolveShell } from './shell-resolver'
 
 type ProcessStatus = 'running' | 'completed' | 'failed' | 'stopped'
 
@@ -55,64 +49,6 @@ interface BashExecOptions {
 const MAX_OUTPUT_CHARS = 256 * 1024
 const COMPLETED_RECORD_TTL_MS = 15 * 60 * 1000
 const MAX_COMPLETED_RECORDS = 100
-
-function findShellOnPath(binary: string): string | null {
-  const pathValue = process.env.PATH ?? ''
-  const pathSeparator = process.platform === 'win32' ? ';' : ':'
-  const executableNames = process.platform === 'win32' && !binary.toLowerCase().endsWith('.exe')
-    ? [binary, `${binary}.exe`]
-    : [binary]
-
-  for (const directory of pathValue.split(pathSeparator)) {
-    if (!directory) continue
-    for (const executableName of executableNames) {
-      const candidate = `${directory.replace(/[\\/]$/, '')}/${executableName}`
-      if (existsSync(candidate)) return candidate
-    }
-  }
-
-  return null
-}
-
-function getTrackedShellConfig(): ShellConfig {
-  if (process.platform === 'win32') {
-    // 打包模式：只使用内置 busybox bash，不再 fallback 到系统 Git Bash
-    // 这样：1) 用户无需安装 Git Bash；2) 内置 bash 缺失会暴露为打包异常
-    if (app.isPackaged) {
-      const bundledBash = join(process.resourcesPath, 'vendor', 'bash', 'bash.exe')
-      if (existsSync(bundledBash)) return { shell: bundledBash, args: ['-c'] }
-
-      console.error(
-        `[Process] 内置 bash 缺失: ${bundledBash}，降级使用 cmd.exe（请重新安装 Kila）`,
-      )
-      return { shell: 'cmd.exe', args: ['/c'] }
-    }
-
-    // 开发模式：依赖 PATH 中的 bash（Git for Windows / WSL 等会注入 PATH）
-    const bashOnPath = findShellOnPath('bash.exe')
-    if (bashOnPath) return { shell: bashOnPath, args: ['-c'] }
-
-    const powershell = findShellOnPath('powershell.exe')
-    if (powershell) {
-      console.warn('[Process] 未找到 bash，降级使用 PowerShell')
-      return { shell: powershell, args: ['-NoProfile', '-Command'] }
-    }
-
-    console.warn('[Process] bash 和 PowerShell 均未找到，降级使用 cmd.exe')
-    return { shell: 'cmd.exe', args: ['/c'] }
-  }
-
-  if (existsSync('/bin/bash')) {
-    return { shell: '/bin/bash', args: ['-c'] }
-  }
-
-  const bashOnPath = findShellOnPath('bash')
-  if (bashOnPath) {
-    return { shell: bashOnPath, args: ['-c'] }
-  }
-
-  return { shell: 'sh', args: ['-c'] }
-}
 
 function createCompletion(): { completion: Promise<void>; resolveCompletion: () => void } {
   let resolveCompletion!: () => void
@@ -295,13 +231,23 @@ export function createTrackedBashOperations(options: TrackedBashOptions): {
 } {
   return {
     exec: (command, cwd, { onData, signal, timeout, env }) => new Promise((resolve, reject) => {
-      const { shell, args } = getTrackedShellConfig()
+      // 统一 shell 解析：无可用 shell 时显式失败，不再静默降级到 cmd/PowerShell
+      // （降级解释器对模型生成的 POSIX 命令无效，只会让 Agent 反复重试）
+      const shellResolution = resolveShell()
+      if (shellResolution.kind === 'none' || !shellResolution.path) {
+        reject(new Error(
+          `Shell 环境不可用：${shellResolution.error ?? '未知原因'}\n`
+          + '无法执行命令。请把上述修复方式转告用户，等待修复后重试，不要重复调用 bash 工具。',
+        ))
+        return
+      }
+
       if (!existsSync(cwd)) {
         reject(new Error(`Working directory does not exist: ${cwd}\nCannot execute bash commands.`))
         return
       }
 
-      const child = spawn(shell, [...args, command], {
+      const child = spawn(shellResolution.path, [...shellResolution.args, command], {
         cwd,
         // Windows: detached 会设置 DETACHED_PROCESS 标志，导致 CREATE_NO_WINDOW（windowsHide）被忽略，
         // 从而弹出黑色控制台窗口。Kila 通过 processRegistry + killProcessTree 管理进程生命周期，

@@ -110,8 +110,8 @@ export const RichLinkChip = React.memo(function RichLinkChip({
   )
   const mergedClassName = cn(
     CHIP_CLASS_NAME,
-    'bg-[hsl(var(--kila-link-chip-background))] text-[hsl(var(--kila-link-chip-foreground))]',
-    'hover:bg-[hsl(var(--kila-link-chip-hover))]',
+    'bg-kila-link-chip-background text-kila-link-chip-foreground',
+    'hover:bg-kila-link-chip-hover',
     className,
   )
 

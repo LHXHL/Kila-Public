@@ -29,10 +29,10 @@ export function GitDiffView({
     }
 
     return (
-      <div className="min-h-full min-w-max bg-[hsl(var(--code-surface))] py-1">
+      <div className="min-h-full min-w-max bg-code-surface py-1">
         <DiffViewer patch={diff.diff} language={language} />
         {diff.truncated && (
-          <div className="mx-3 my-3 rounded-lg bg-[hsl(var(--status-warning-soft))] px-3 py-2 text-xs text-[hsl(var(--status-warning-foreground))]">
+          <div className="mx-3 my-3 rounded-lg bg-status-warning-soft px-3 py-2 text-xs text-status-warning-foreground">
             Diff 内容过大，当前仅展示前一部分。
           </div>
         )}
@@ -41,7 +41,7 @@ export function GitDiffView({
   }
 
   return (
-    <div className="min-h-full bg-[hsl(var(--code-surface))]">
+    <div className="min-h-full bg-code-surface">
       {diff.hunks.map((hunk) => (
         <section key={`${diff.staged}:${hunk.index}`} className="pb-2 last:pb-0">
           <div className="sticky top-0 z-10 flex min-h-9 items-center justify-between gap-3 bg-[hsl(var(--kila-panel-surface-raised)/0.94)] px-3 py-1.5 shadow-[0_1px_0_hsl(var(--foreground)/0.04),0_8px_20px_hsl(var(--kila-shadow-low)/0.05)] backdrop-blur-xl">
@@ -49,8 +49,8 @@ export function GitDiffView({
               <div className="truncate font-mono text-[10px] text-muted-foreground/80">{hunk.header}</div>
               <div className="mt-0.5 flex items-center gap-2 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/55">
                 <span>{getLanguageDisplayName(language)}</span>
-                <span className="text-[hsl(var(--status-success-foreground))]">+{hunk.additions}</span>
-                <span className="text-[hsl(var(--status-danger-foreground))]">−{hunk.deletions}</span>
+                <span className="text-status-success-foreground">+{hunk.additions}</span>
+                <span className="text-status-danger-foreground">−{hunk.deletions}</span>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">

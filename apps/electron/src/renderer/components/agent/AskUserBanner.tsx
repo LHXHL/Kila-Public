@@ -158,7 +158,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
           else goNextTab()
         }
       }}
-      className="mx-3 mb-2 overflow-hidden rounded-[var(--kila-panel-radius)] border border-border/35 bg-[hsl(var(--workspace))] shadow-none outline-none animate-in slide-in-from-bottom-2 duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 md:mx-[24px]"
+      className="mx-3 mb-2 overflow-hidden rounded-[var(--kila-panel-radius)] border border-border/35 bg-workspace shadow-none outline-none animate-in slide-in-from-bottom-2 duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 md:mx-[24px]"
     >
       {/* 头部 + Tab 栏 */}
       <div className="px-4 pt-3 pb-2">
@@ -189,9 +189,9 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
                   className={`
                     px-2.5 py-1 rounded-lg text-xs font-medium transition-all outline-none
                     ${isActive
-                      ? 'border border-primary/20 bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]'
+                      ? 'border border-primary/20 bg-brand-soft text-brand-soft-foreground'
                       : hasAnswer
-                        ? 'border border-primary/15 bg-[hsl(var(--brand-soft-hover))] text-[hsl(var(--primary))]'
+                        ? 'border border-primary/15 bg-brand-soft-hover text-primary'
                         : 'border border-border/35 bg-muted/35 text-muted-foreground hover:bg-muted/55 hover:text-foreground'
                     }
                   `}
@@ -303,7 +303,7 @@ function QuestionCard({
               className={`
                 flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all outline-none text-left
                 ${isSelected
-                  ? 'border border-primary/20 bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]'
+                  ? 'border border-primary/20 bg-brand-soft text-brand-soft-foreground'
                   : 'border border-border/35 bg-muted/35 text-foreground/80 hover:bg-muted/55'
                 }
                 ${isFocused ? 'ring-2 ring-primary/50 ring-offset-1 ring-offset-card' : ''}
@@ -331,7 +331,7 @@ function QuestionCard({
           className={`
             flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all outline-none text-left
             ${answer.showCustom
-              ? 'border border-primary/20 bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]'
+              ? 'border border-primary/20 bg-brand-soft text-brand-soft-foreground'
               : 'border border-border/35 bg-muted/35 text-foreground/80 hover:bg-muted/55'
             }
             ${focusedIndex === optionCount ? 'ring-2 ring-primary/50 ring-offset-1 ring-offset-card' : ''}

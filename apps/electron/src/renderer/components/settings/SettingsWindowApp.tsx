@@ -42,7 +42,7 @@ export function SettingsWindowApp(): React.ReactElement {
       <div className="h-screen w-screen overflow-hidden bg-muted p-2.5">
         <Panel
           variant="grow"
-          className="surface-panel relative z-[var(--kila-z-panel)] bg-[hsl(var(--workspace))]"
+          className="surface-panel relative z-[var(--kila-z-panel)] bg-workspace"
         >
           <SettingsPanel />
         </Panel>

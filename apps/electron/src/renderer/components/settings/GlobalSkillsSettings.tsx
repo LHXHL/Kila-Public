@@ -55,7 +55,7 @@ function LibraryListItem({ entry, selected, onSelect }: LibraryListItemProps): R
         <div className={cn(
           'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border text-muted-foreground transition-colors',
           selected
-            ? 'border-primary/18 bg-[hsl(var(--kila-accent-muted))] text-primary'
+            ? 'border-primary/18 bg-kila-accent-muted text-primary'
             : 'border-border/45 bg-background/72 group-hover:border-border/60',
         )}
         >
@@ -273,7 +273,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
               <button
                 type="button"
                 onClick={() => { void window.electronAPI.openGlobalAgentPath(skillsDir) }}
-                className="rounded-xl border border-border/60 bg-background/80 p-2 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-[hsl(var(--kila-accent-muted))] hover:text-foreground"
+                className="rounded-xl border border-border/60 bg-background/80 p-2 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-kila-accent-muted hover:text-foreground"
               >
                 <FolderOpen className="size-4" />
               </button>
@@ -306,7 +306,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
               type="button"
               onClick={() => { void handleInstallSkill() }}
               disabled={installing || !installRepoUrl.trim()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border/60 bg-background px-4 text-sm font-medium text-foreground/78 transition-colors hover:border-primary/25 hover:bg-[hsl(var(--kila-accent-muted))] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border/60 bg-background px-4 text-sm font-medium text-foreground/78 transition-colors hover:border-primary/25 hover:bg-kila-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download className="size-4" />
               {installing ? '处理中' : '安装'}

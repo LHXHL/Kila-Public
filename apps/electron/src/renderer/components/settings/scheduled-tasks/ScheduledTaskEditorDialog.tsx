@@ -579,7 +579,7 @@ export function ScheduledTaskEditorDialog({
                             className={cn(
                               'rounded-md border px-2.5 py-1.5 text-xs transition-colors',
                               active
-                                ? 'border-[hsl(var(--brand-soft-foreground)/0.18)] bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]'
+                                ? 'border-[hsl(var(--brand-soft-foreground)/0.18)] bg-brand-soft text-brand-soft-foreground'
                                 : 'border-border/60 bg-background/80 text-muted-foreground',
                             )}
                             onClick={() => {

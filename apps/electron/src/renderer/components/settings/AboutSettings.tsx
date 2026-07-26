@@ -302,7 +302,7 @@ function InstallerAction({
           </button>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div className="h-full bg-[hsl(var(--brand-soft))] transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-brand-soft transition-all" style={{ width: `${pct}%` }} />
         </div>
       </div>
     )

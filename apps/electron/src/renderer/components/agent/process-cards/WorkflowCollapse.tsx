@@ -139,21 +139,21 @@ function StatusBlock({
     case 'error':
       return (
         <div className={base}>
-          <X className="size-3.5 text-[hsl(var(--status-danger))]" strokeWidth={2.5} />
+          <X className="size-3.5 text-status-danger" strokeWidth={2.5} />
         </div>
       )
     case 'partial': {
       return (
         <div className={base}>
-          <Check className="size-3.5 text-[hsl(var(--status-success))]" strokeWidth={2.5} />
-          <AlertTriangle className="ml-0.5 size-2.5 text-[hsl(var(--status-warning))]" />
+          <Check className="size-3.5 text-status-success" strokeWidth={2.5} />
+          <AlertTriangle className="ml-0.5 size-2.5 text-status-warning" />
         </div>
       )
     }
     default:
       return (
         <div className={base}>
-          <Check className="size-3.5 text-[hsl(var(--status-success))]" strokeWidth={2.5} />
+          <Check className="size-3.5 text-status-success" strokeWidth={2.5} />
         </div>
       )
   }
@@ -275,7 +275,7 @@ export function WorkflowCollapse({
             <span className={cn(
               'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums',
               isStreaming
-                ? 'bg-[hsl(var(--process-tone)/0.12)] text-[hsl(var(--process-tone))]'
+                ? 'bg-[hsl(var(--process-tone)/0.12)] text-process-tone'
                 : 'bg-muted/60 text-muted-foreground/70',
             )}>
               {entries.length}

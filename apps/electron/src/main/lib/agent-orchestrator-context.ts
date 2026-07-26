@@ -13,7 +13,8 @@ import { buildPromptImages, splitAttachmentsForPiPrompt } from './adapters/pi-hi
 import { AgentEventBus } from './agent-event-bus'
 import { decryptApiKey, getChannelById } from './channel-manager'
 import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
-import { getRuntimeStatus } from './runtime-init'
+import { resolveShell } from './shell-resolver'
+import { buildShellPromptSection } from './shell-resolution'
 import { getSettings } from './settings-service'
 import { buildDynamicContext, buildSystemPromptAppend } from './agent-prompt-builder'
 import { permissionService, type PermissionResolution } from './agent-permission-service'
@@ -59,15 +60,15 @@ export function loadPiCodingAgent(): Promise<PiCodingAgentModule> {
 /**
  * 检查 Agent 运行时是否具备完整的 shell 环境。
  *
- * 缺少 shell 时不阻塞对话，仅影响代码执行类工具（bash/file ops）。
- * Agent 会自主发现工具不可用并告知用户。
+ * 判定与执行层（process-registry）共享 shell-resolver 同一真相源；
+ * WSL 仅作为设置页的参考信息，执行层不会使用它，因此不计入可用性。
+ * 缺少 shell 时不阻塞对话，仅跳过代码执行类工具（bash/file ops），
+ * 同时 system prompt 会声明工具不可用并引导用户修复。
  */
 export function isShellRuntimeAvailable(): boolean {
   if (process.platform !== 'win32') return true
 
-  const runtimeStatus = getRuntimeStatus()
-  const shellStatus = runtimeStatus?.shell
-  if (!shellStatus || shellStatus.gitBash?.available || shellStatus.wsl?.available) {
+  if (resolveShell().kind !== 'none') {
     return true
   }
 
@@ -359,6 +360,8 @@ export async function buildAgentRunContext(
       sessionId,
       permissionMode,
       customPromptId: systemPromptId,
+      // Windows busybox / shell 缺失时注入约束段落；真 bash 环境返回 null 不注入
+      shellPromptSection: buildShellPromptSection(resolveShell()),
     }),
   ].filter(Boolean).join('\n\n')
 

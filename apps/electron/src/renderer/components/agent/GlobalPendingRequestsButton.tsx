@@ -127,7 +127,7 @@ export function GlobalPendingRequestsButton({
           <div className="relative">
             <CircleAlert size={collapsed ? 18 : 16} />
             <span className={cn(
-              'absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-[hsl(var(--status-warning))] px-1 text-[10px] font-medium text-white',
+              'absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-status-warning px-1 text-[10px] font-medium text-white',
               collapsed ? 'h-4' : 'h-4',
             )}>
               {total}
@@ -173,7 +173,7 @@ export function GlobalPendingRequestsButton({
                   {group.items.map((item) => (
                     <div key={item.requestId} className="flex items-center gap-2 text-xs text-muted-foreground">
                       {item.kind === 'permission'
-                        ? <ShieldAlert className="size-3.5 shrink-0 text-[hsl(var(--status-warning))]" />
+                        ? <ShieldAlert className="size-3.5 shrink-0 text-status-warning" />
                         : <MessageSquareText className="size-3.5 shrink-0 text-primary/70" />}
                       <span className="truncate">{item.label}</span>
                     </div>

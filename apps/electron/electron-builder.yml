@@ -123,7 +123,8 @@ win:
       to: "vendor/bun"
       filter:
         - "**/*"
-    # bash 二进制（busybox-w32），提供 Windows 开箱即用的 shell 环境
+    # bash 二进制（busybox-w32 的 w64u Unicode 构建，UTF-8 处理中文路径），
+    # 提供 Windows 开箱即用的 shell 环境；版本与 SHA256 锁定在 scripts/download-bash.ts
     - from: "vendor/bash/win32-${arch}"
       to: "vendor/bash"
       filter:

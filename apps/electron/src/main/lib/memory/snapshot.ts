@@ -175,15 +175,14 @@ export class MemorySnapshotManager {
       }
     }
 
-    const indexContext = memoryProviderManager.getIndexContext(input.projectPath)
+    const indexContext = ''
     const [globalWorkingMemory, projectWorkingMemory, recalledMemoryResults, relatedThreads, notebookEntries] = await Promise.all([
       memoryProviderManager.getWorkingMemory({ scope: 'global' }),
-      input.projectPath
-        ? memoryProviderManager.getWorkingMemory({ scope: 'project', projectPath: input.projectPath })
-        : Promise.resolve(null),
+      // 项目级 working memory / 笔记（notebook）/ 本地索引均随本地存储移除，恒为空。
+      Promise.resolve<WorkingMemory | null>(null),
       memoryProviderManager.search({ query, limit: 4, projectPath: input.projectPath, sessionId: input.sessionId }),
       memoryProviderManager.searchThreads({ query, limit: 3 }),
-      memoryProviderManager.listNotebookEntries(input.projectPath ? { limit: 2, projectPath: input.projectPath } : { limit: 2 }),
+      Promise.resolve<NotebookEntry[]>([]),
     ])
     const recalledMemories = recalledMemoryResults.map((item) => item.entry)
     const recallItems = buildMemoryRecallTraceItems({
@@ -247,14 +246,12 @@ export class MemorySnapshotManager {
     projectPath?: string
     messages?: MemorySourceMessage[]
   } = {}): Promise<string> {
-    const indexContext = memoryProviderManager.getIndexContext(input.projectPath)
+    const indexContext = ''
     const [globalWorkingMemory, projectWorkingMemory, memories, notebookEntries] = await Promise.all([
       memoryProviderManager.getWorkingMemory({ scope: 'global' }),
-      input.projectPath
-        ? memoryProviderManager.getWorkingMemory({ scope: 'project', projectPath: input.projectPath })
-        : Promise.resolve(null),
+      Promise.resolve<WorkingMemory | null>(null),
       memoryProviderManager.list(input.projectPath ? { limit: 6, projectPath: input.projectPath } : { limit: 6 }),
-      memoryProviderManager.listNotebookEntries(input.projectPath ? { limit: 3, projectPath: input.projectPath } : { limit: 3 }),
+      Promise.resolve<NotebookEntry[]>([]),
     ])
     const recallItems = buildMemoryRecallTraceItems({
       memoryResults: memories.map((entry) => ({ entry, score: 0 })),

@@ -112,7 +112,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           void respond('allow')
         }
       }}
-      className="mx-3 mb-2 overflow-hidden rounded-[var(--kila-panel-radius)] border border-border/35 bg-[hsl(var(--workspace))] shadow-none outline-none animate-in slide-in-from-bottom-2 duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 md:mx-[24px]"
+      className="mx-3 mb-2 overflow-hidden rounded-[var(--kila-panel-radius)] border border-border/35 bg-workspace shadow-none outline-none animate-in slide-in-from-bottom-2 duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 md:mx-[24px]"
     >
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 py-2">

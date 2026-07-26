@@ -229,7 +229,7 @@ export function renderSkillMentionItem(item: SlashMentionItem): React.ReactNode 
   if (item.kind === 'command') {
     return (
       <>
-        <Terminal className="mt-0.5 size-3.5 flex-shrink-0 text-[hsl(var(--status-success))]" />
+        <Terminal className="mt-0.5 size-3.5 flex-shrink-0 text-status-success" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium">{item.name}</div>
           <div className="mt-0.5 truncate text-[10px] text-muted-foreground/55">
@@ -242,7 +242,7 @@ export function renderSkillMentionItem(item: SlashMentionItem): React.ReactNode 
 
   return (
     <>
-      <Wand2 className="mt-0.5 size-3.5 flex-shrink-0 text-[hsl(var(--brand-soft-foreground))]" />
+      <Wand2 className="mt-0.5 size-3.5 flex-shrink-0 text-brand-soft-foreground" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
@@ -304,7 +304,7 @@ export function createMcpMentionSuggestion(
       keyExtractor: (item) => item.id,
       renderItem: (item) => (
         <>
-          <Server className="size-3.5 flex-shrink-0 text-[hsl(var(--status-info))]" />
+          <Server className="size-3.5 flex-shrink-0 text-status-info" />
           <span className="truncate font-medium flex-1 min-w-0">{item.name}</span>
           <span className="truncate text-[10px] text-muted-foreground/50 max-w-[120px]">{item.type}</span>
         </>

@@ -34,7 +34,7 @@ Kila Session
 └─ Project profile：MCP、Skills 与权限配置
 ```
 
-Kila 使用 Pi `0.80.10` canonical runtime。产品层 Session 与 Pi AgentSession 一一对应，同时分别维护用户数据和运行时状态，因此应用重启或长对话压缩后仍可继续当前任务。
+Kila 使用 Pi `0.82.1` canonical runtime。产品层 Session 与 Pi AgentSession 一一对应，同时分别维护用户数据和运行时状态，因此应用重启或长对话压缩后仍可继续当前任务。
 
 ## 快速开始
 

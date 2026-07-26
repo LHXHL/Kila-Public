@@ -7,7 +7,6 @@ export { MermaidBlock } from './mermaid-block/index.ts'
 
 // Streaming render hooks
 export {
-  useSmoothStream,
   useSmoothStreamContent,
   useStreamQueue,
   resolveBlockAnimationMeta,

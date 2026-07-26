@@ -168,7 +168,34 @@ describe('Pi 事件边界', () => {
     })])
   })
 
-  test('Given Pi 自动重试产生多个 agent_end When 最终 settled Then usage 包含失败与成功 run 且只保留最终终态', () => {
+  test('Given 后台化的 Task/Bash/KillShell When tool_execution_end Then 产出后台任务事件', () => {
+    const mapper = createPiEventMapper()
+    mapper({ type: 'turn_start' } as any)
+
+    // 后台 Task：run_in_background + 结果含 agentId
+    mapper({ type: 'tool_execution_start', toolCallId: 't-1', toolName: 'task', args: { run_in_background: true, description: '批量分析' } } as any)
+    const taskResult = mapper({ type: 'tool_execution_end', toolCallId: 't-1', toolName: 'task', result: { content: [{ type: 'text', text: 'agentId: agent-42' }] }, isError: false } as any)
+
+    // 后台 Bash：结果含 shell_id
+    mapper({ type: 'tool_execution_start', toolCallId: 't-2', toolName: 'bash', args: { command: 'sleep 100 &', run_in_background: true } } as any)
+    const bashResult = mapper({ type: 'tool_execution_end', toolCallId: 't-2', toolName: 'bash', result: { content: [{ type: 'text', text: 'shell_id: shell-7' }] }, isError: false } as any)
+
+    // KillShell
+    mapper({ type: 'tool_execution_start', toolCallId: 't-3', toolName: 'kill_shell', args: { shell_id: 'shell-7' } } as any)
+    const killResult = mapper({ type: 'tool_execution_end', toolCallId: 't-3', toolName: 'kill_shell', result: { content: [{ type: 'text', text: 'killed' }] }, isError: false } as any)
+
+    expect(taskResult).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'task_backgrounded', toolUseId: 't-1', taskId: 'agent-42', intent: '批量分析', turnId: 'pi-turn-1' }),
+    ]))
+    expect(bashResult).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'shell_backgrounded', toolUseId: 't-2', shellId: 'shell-7', command: 'sleep 100 &' }),
+    ]))
+    expect(killResult).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'shell_killed', shellId: 'shell-7' }),
+    ]))
+  })
+
+  test('Given 自动重试产生多个 agent_end When 最终 settled Then usage 包含失败与成功 run 且只保留最终终态', () => {
     const mapper = createPiEventMapper({ contextWindow: 200000 })
 
     expect(mapper({

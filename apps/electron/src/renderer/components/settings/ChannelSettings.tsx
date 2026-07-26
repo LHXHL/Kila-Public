@@ -581,7 +581,7 @@ export function ChannelSettings(): React.ReactElement {
                                 className={cn(
                                   'rounded-md px-3 py-1 text-xs',
                                   selectedChannel.enabled
-                                    ? 'bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]'
+                                    ? 'bg-status-success-soft text-status-success-foreground'
                                     : 'bg-muted text-muted-foreground',
                                 )}
                               >
@@ -643,7 +643,7 @@ export function ChannelSettings(): React.ReactElement {
                     <div className={cn(
                       'rounded-xl border px-4 py-3 text-sm',
                       doctorResult.ok
-                        ? 'border-[hsl(var(--status-success))]/25 bg-[hsl(var(--status-success-soft))]/40'
+                        ? 'border-status-success/25 bg-status-success-soft/40'
                         : 'border-destructive/25 bg-destructive/5',
                     )}>
                       <div className="mb-2 flex items-center gap-2 font-medium text-foreground">

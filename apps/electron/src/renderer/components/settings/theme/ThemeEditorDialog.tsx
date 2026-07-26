@@ -202,7 +202,7 @@ export function ThemeEditorDialog({
                 {contrasts.map((item) => (
                   <div key={item.label} className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">{item.label}</span>
-                    <span className={item.ratio >= item.threshold ? 'text-[hsl(var(--status-success))]' : 'text-destructive'}>
+                    <span className={item.ratio >= item.threshold ? 'text-status-success' : 'text-destructive'}>
                       {item.ratio.toFixed(1)}:1 · {item.ratio >= item.threshold ? '通过' : '不足'}
                     </span>
                   </div>
@@ -210,7 +210,7 @@ export function ThemeEditorDialog({
               </div>
             </div>
             {(submitIssues.length > 0 || validation.issues.length > 0) && (
-              <div role="alert" className="rounded-xl bg-[hsl(var(--status-danger-soft))] p-3 text-xs text-[hsl(var(--status-danger-foreground))]">
+              <div role="alert" className="rounded-xl bg-status-danger-soft p-3 text-xs text-status-danger-foreground">
                 {(submitIssues.length > 0 ? submitIssues : validation.issues).slice(0, 5).map((issue) => (
                   <div key={`${issue.path}-${issue.code}`}>{issue.path}: {issue.message}</div>
                 ))}

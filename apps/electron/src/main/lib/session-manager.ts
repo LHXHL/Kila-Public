@@ -74,6 +74,25 @@ function invalidateCache(): void {
   cachedIndex = null
 }
 
+/**
+ * 会话完整消息的进程内缓存，按文件 mtime + size 失效。
+ *
+ * getSessionMessages 每次都 readFileSync + split + 逐行 JSON.parse，
+ * 而编排器单轮内会多次全量读取同一 transcript（上下文装配、完成收敛、记忆回填）。
+ * 追加写会改变 mtime/size，缓存自动失效，无需手动 invalidate；仅默认路径启用，测试注入 deps 不缓存。
+ */
+interface CachedMessages {
+  mtimeMs: number
+  size: number
+  messages: SessionMessage[]
+}
+const MESSAGE_CACHE_MAX_ENTRIES = 32
+const messageCache = new Map<string, CachedMessages>()
+
+function invalidateMessageCache(sessionId: string): void {
+  messageCache.delete(sessionId)
+}
+
 function normalizeSessionMeta(session: SessionMeta): SessionMeta {
   return {
     ...session,
@@ -406,6 +425,7 @@ export function deleteSession(id: string, deps?: SessionManagerDeps): void {
 
   cleanupSessionProject(removed.project)
   cleanupSessionBoard(id)
+  invalidateMessageCache(id)
   if (!deps?.paths) markSessionSearchIndexDirty(id)
 }
 
@@ -415,7 +435,25 @@ export function getSessionMessages(id: string, deps?: SessionManagerDeps): Sessi
     return []
   }
 
+  // 测试注入 deps 时不走缓存，避免跨用例串扰。
+  const useCache = !deps?.paths
+
   try {
+    if (useCache) {
+      const stat = statSync(filePath)
+      const cached = messageCache.get(id)
+      if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+        return cached.messages
+      }
+      const messages = readSessionMessageLines(filePath, id).messages
+      // 简单 FIFO 淘汰，避免缓存无界增长。
+      if (messageCache.size >= MESSAGE_CACHE_MAX_ENTRIES) {
+        const oldestKey = messageCache.keys().next().value
+        if (oldestKey !== undefined) messageCache.delete(oldestKey)
+      }
+      messageCache.set(id, { mtimeMs: stat.mtimeMs, size: stat.size, messages })
+      return messages
+    }
     return readSessionMessageLines(filePath, id).messages
   } catch (error) {
     log.error(`[Session 管理] 读取消息失败 (${id}):`, error)
@@ -508,6 +546,7 @@ export function appendSessionMessage(id: string, message: SessionMessage, deps?:
   } else {
     readSessionMessageLines(filePath, id)
   }
+  invalidateMessageCache(id)
   if (!deps?.paths) markSessionSearchIndexDirty(id)
 }
 
@@ -518,6 +557,7 @@ export function saveSessionMessages(id: string, messages: SessionMessage[], deps
   if (existsSync(filePath)) {
     readSessionMessageLines(filePath, id)
   }
+  invalidateMessageCache(id)
   if (!deps?.paths) markSessionSearchIndexDirty(id)
 }
 

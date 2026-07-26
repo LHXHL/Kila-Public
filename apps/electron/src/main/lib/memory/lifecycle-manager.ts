@@ -1,5 +1,5 @@
 import type { MemoryRunTrace } from '@kila/shared'
-import { getMemoryRuntimeConfig } from './config'
+import { getMemoryRuntimeConfig, isNowledgeConfigured } from './config'
 import { createLogger } from '../logger'
 import { memoryProviderManager } from './provider-manager'
 import { memoryStateStore } from './state-store'
@@ -11,6 +11,24 @@ const log = createLogger('Memory Lifecycle')
 
 export function shouldPersistRunMemory(incognito?: boolean): boolean {
   return incognito !== true
+}
+
+/** 记忆是否启用：仅当 Nowledge 已配置。未配置则整个记忆功能（召回/写回/工具）禁用。 */
+function isMemoryEnabled(): boolean {
+  return isNowledgeConfigured(getMemoryRuntimeConfig())
+}
+
+function disabledTrace(incognito?: boolean): MemoryRunTrace {
+  return {
+    enabled: false,
+    recalledMemoryCount: 0,
+    relatedThreadCount: 0,
+    notebookCount: 0,
+    usedGlobalWorkingMemory: false,
+    usedProjectWorkingMemory: false,
+    incognito: incognito === true,
+    recallStatus: 'disabled',
+  }
 }
 
 interface MemorySourceMessage {
@@ -26,21 +44,13 @@ export class MemoryLifecycleManager {
     messages: MemorySourceMessage[]
     incognito?: boolean
   }): Promise<{ text: string; trace: MemoryRunTrace }> {
+    // 未配置 Nowledge → 记忆禁用，不注入任何召回上下文。
+    if (!isMemoryEnabled()) {
+      return { text: '', trace: disabledTrace(input.incognito) }
+    }
     const config = getMemoryRuntimeConfig()
     if (!config.sessionContextEnabled) {
-      return {
-        text: '',
-        trace: {
-          enabled: false,
-          recalledMemoryCount: 0,
-          relatedThreadCount: 0,
-          notebookCount: 0,
-          usedGlobalWorkingMemory: false,
-          usedProjectWorkingMemory: false,
-          incognito: input.incognito === true,
-          recallStatus: 'disabled',
-        },
-      }
+      return { text: '', trace: disabledTrace(input.incognito) }
     }
     try {
       return await memorySnapshotManager.buildPromptContext(input)
@@ -75,6 +85,7 @@ export class MemoryLifecycleManager {
     projectPath?: string
     messages: MemorySourceMessage[]
   }): Promise<void> {
+    if (!isMemoryEnabled()) return
     await syncSessionThreadTail(input)
   }
 
@@ -83,10 +94,12 @@ export class MemoryLifecycleManager {
     projectPath?: string
     messages: MemorySourceMessage[]
   }): Promise<void> {
+    if (!isMemoryEnabled()) return
     await syncSessionThreadTail(input)
   }
 
   async onBeforeDeleteSession(sessionId: string): Promise<void> {
+    if (!isMemoryEnabled()) return
     markSessionMemoryDeleting(sessionId)
     await waitForSessionPostRunMemoryFlush(sessionId)
     await memoryProviderManager.cleanupSession(sessionId)
@@ -97,6 +110,7 @@ export class MemoryLifecycleManager {
     projectPath?: string
     messages: MemorySourceMessage[]
   }): Promise<MemoryFlushResult> {
+    if (!isMemoryEnabled()) return Promise.resolve({ status: 'written', writtenCount: 0 })
     return triggerPostRunMemoryFlush(input)
   }
 }

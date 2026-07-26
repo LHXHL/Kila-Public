@@ -36,6 +36,7 @@ import { ToolSelectorPopover } from '@/components/composer/ToolSelectorPopover'
 
 const SessionSidePanel = React.lazy(() => import('@/components/session/SessionSidePanel').then((module) => ({ default: module.SessionSidePanel })))
 import { RichTextInput, type RichTextInputHandle } from '@/components/ai-elements/rich-text-input'
+import { useSessionLifecycleActions } from './use-session-lifecycle-actions'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -1340,99 +1341,22 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     replayTurn(messageId)
   }, [replayTurn])
 
-  const handleConfirmRewind = React.useCallback(async (): Promise<void> => {
-    if (!rewindTargetMessageId) return
-    try {
-      const retained = await window.electronAPI.rewindSession({
-        sessionId,
-        messageId: rewindTargetMessageId,
-      })
-      setMessages(retained
-        .map(sessionMessageToLegacyAgentMessage)
-        .filter((message): message is AgentMessage => message !== null))
-      toast.success('会话已回退', {
-        description: '后续消息已移除；如需保留另一条路线，请先使用“分叉会话”',
-      })
-    } catch (error) {
-      console.error('[AgentView] 回退会话失败:', error)
-      toast.error(error instanceof Error ? error.message : '回退会话失败')
-    } finally {
-      setRewindTargetMessageId(null)
-    }
-  }, [rewindTargetMessageId, sessionId])
-
-  const handleBranchFromMessage = React.useCallback((messageId: string): void => {
-    window.electronAPI.branchSessionFromMessage({
-      sessionId,
-      messageId,
-    }).then(async (meta) => {
-      const nextSessions = await window.electronAPI.listSessions()
-      setSessions(nextSessions)
-      const result = openTab(tabs, layout, { type: 'agent', sessionId: meta.id, title: meta.title })
-      setTabs(result.tabs)
-      setLayout(result.layout)
-      setCurrentSessionId(meta.id)
-      toast.success('已创建分叉会话', {
-        description: `${meta.title} 已打开；项目、模型和能力配置已继承`,
-      })
-    }).catch((error) => {
-      console.error('[AgentView] 创建分叉会话失败:', error)
-      toast.error(error instanceof Error ? error.message : '创建分叉会话失败')
-    })
-  }, [layout, sessionId, setCurrentSessionId, setLayout, setSessions, setTabs, tabs])
-
-  /** 在新会话中重试：创建新会话 + 切换 tab + 发送引用旧会话的提示词 */
-  const handleRetryInNewSession = React.useCallback(async (): Promise<void> => {
-    if (!currentSelection.channelId) return
-
-    try {
-      const meta = await window.electronAPI.createSession({
-        channelId: currentSelection.channelId ?? undefined,
-        modelId: currentSelection.modelId || undefined,
-        thinkingLevel: thinkingLevel,
-        historyTurns: historyTurns,
-        projectPath: projectPath ?? undefined,
-      })
-      const sessions = await window.electronAPI.listSessions()
-      setSessions(sessions)
-
-      // 切换到新会话 tab
-      const result = openTab(tabs, layout, { type: 'agent', sessionId: meta.id, title: meta.title })
-      setTabs(result.tabs)
-      setLayout(result.layout)
-      setCurrentSessionId(meta.id)
-
-      // 发送引用旧会话的默认提示词
-      const prompt = `上个会话的 id 是 ${sessionId}，可以参考同项目目录下的会话继续完成工作`
-
-      // 初始化新会话流式状态
-      setStreamingStates((prev) => {
-        const map = new Map(prev)
-        map.set(meta.id, {
-          running: true,
-          content: '',
-          toolActivities: [],
-          processEvents: [],
-          model: currentSelection.modelId || undefined,
-          startedAt: Date.now(),
-        })
-        return map
-      })
-
-      window.electronAPI.sendSessionMessage({
-        sessionId: meta.id,
-        userMessage: prompt,
-        channelId: currentSelection.channelId ?? undefined,
-        modelId: currentSelection.modelId || undefined,
-        thinkingLevel: thinkingLevel,
-        historyTurns: historyTurns,
-        enabledToolIds,
-        skipAutoTitle: true,
-      }).catch(console.error)
-    } catch (error) {
-      console.error('[AgentView] 在新会话中重试失败:', error)
-    }
-  }, [sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, historyTurns, thinkingLevel, projectPath, tabs, layout, setCurrentSessionId, setSessions, setTabs, setLayout, setStreamingStates])
+  // 会话生命周期动作（回退 / 分叉 / 在新会话中重试）已拆分至 useSessionLifecycleActions。
+  const {
+    handleConfirmRewind,
+    handleBranchFromMessage,
+    handleRetryInNewSession,
+  } = useSessionLifecycleActions({
+    sessionId,
+    currentSelection,
+    thinkingLevel,
+    historyTurns,
+    projectPath,
+    enabledToolIds,
+    rewindTargetMessageId,
+    setRewindTargetMessageId,
+    setMessages,
+  })
 
   const canSend = (inputContent.trim().length > 0 || pendingFiles.length > 0) && currentSelection.channelId !== null
   const railGutterClassName = 'mx-3 md:mx-[24px]'
@@ -1451,7 +1375,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   }, [handleStartEditTurn])
 
   return (
-    <div className="flex h-full overflow-hidden bg-[hsl(var(--workspace))]">
+    <div className="flex h-full overflow-hidden bg-workspace">
       {/* 主内容区域 */}
       <div className="flex h-full min-w-0 flex-1 flex-col">
         {/* Agent Header */}
@@ -1543,7 +1467,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           <div
             className={cn(
               'workspace-floating-panel workspace-composer-panel overflow-hidden rounded-[var(--kila-panel-radius)] transition-all duration-200',
-              isDragOver && 'border-dashed border-primary/50 bg-[hsl(var(--brand-soft))]'
+              isDragOver && 'border-dashed border-primary/50 bg-brand-soft'
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -1551,7 +1475,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           >
             {/* 无 Agent 渠道提示 */}
             {!currentSelection.channelId && (
-              <div className="flex items-center gap-2 px-4 py-3 text-sm text-[hsl(var(--status-warning-foreground))]">
+              <div className="flex items-center gap-2 px-4 py-3 text-sm text-status-warning-foreground">
                 <Settings size={14} />
                 <span>请先配置并启用可用渠道</span>
                 <button
@@ -1583,7 +1507,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
             {/* Agent 建议提示 */}
             {suggestion && !streaming && !editingTurn && (
               <div className="px-4 pb-2 pt-1">
-                <div className="group flex w-full items-start rounded-xl border border-border/70 bg-[hsl(var(--brand-soft))] text-sm transition-colors hover:bg-[hsl(var(--brand-soft-hover))]">
+                <div className="group flex w-full items-start rounded-xl border border-border/70 bg-brand-soft text-sm transition-colors hover:bg-brand-soft-hover">
                   <button type="button" className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2.5 text-left" onClick={handleSend}>
                     <Sparkles className="mt-0.5 size-4 shrink-0 text-primary/70 group-hover:text-primary" />
                     <span className="min-w-0 flex-1 line-clamp-3 text-foreground/80 group-hover:text-foreground">{suggestion}</span>
@@ -1619,7 +1543,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                     {queuedSends.map((item) => (
                       <div
                         key={item.id}
-                        className="flex min-h-7 items-center gap-2 rounded-lg bg-[hsl(var(--workspace))]/72 px-2 text-xs text-foreground/80"
+                        className="flex min-h-7 items-center gap-2 rounded-lg bg-workspace/72 px-2 text-xs text-foreground/80"
                       >
                         <span className="min-w-0 flex-1 truncate">
                           {item.input.userMessage.trim()

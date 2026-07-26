@@ -14,11 +14,15 @@
 
 import { watch, existsSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
+import { watch as chokidarWatch } from 'chokidar'
 import { resolve } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import type { SessionMeta } from '@kila/shared'
 import { AGENT_IPC_CHANNELS } from '@kila/shared'
 import { getAgentWorkspacesDir, getGlobalAgentConfigDir } from './config-paths'
+import { createLogger } from './logger'
+
+const log = createLogger('工作区监听')
 
 /** debounce 延迟（ms） */
 const DEBOUNCE_MS = 500
@@ -27,11 +31,42 @@ interface CloseableWatcher {
   close(): void
 }
 
+/**
+ * 跨平台递归目录监听。
+ *
+ * macOS / Windows 用 OS 原生 `fs.watch({recursive})`（单 watcher、开销低）；
+ * Linux 不支持 recursive fs.watch，回退到 chokidar，并忽略 node_modules/.git 等
+ * 高频且与文件浏览器/能力刷新无关的重目录，避免海量 watcher 拖垮进程。
+ *
+ * onChange 回传发生变化的路径（fs.watch 为相对路径，chokidar 为绝对路径；
+ * 上层仅做 endsWith / includes 子串判断，两者均适用），无法获知时回传 null。
+ */
+function createRecursiveWatcher(
+  dirPath: string,
+  onChange: (changedPath: string | null) => void,
+): CloseableWatcher {
+  if (process.platform === 'linux') {
+    const chokidarWatcher = chokidarWatch(dirPath, {
+      ignoreInitial: true,
+      ignored: (watchedPath: string) =>
+        watchedPath.includes('/node_modules/') || watchedPath.includes('/.git/'),
+    })
+    chokidarWatcher.on('all', (_event, changedPath) => onChange(changedPath ?? null))
+    chokidarWatcher.on('error', (error) => log.warn('[递归监听] chokidar 错误:', error))
+    return { close: () => { void chokidarWatcher.close() } }
+  }
+
+  const fsWatcher = watch(dirPath, { recursive: true }, (_eventType, filename) =>
+    onChange(typeof filename === 'string' ? filename : null),
+  )
+  return { close: () => fsWatcher.close() }
+}
+
 interface SessionProjectWatchRegistryDeps {
   directoryExists: (dirPath: string) => boolean
   watchDirectory: (dirPath: string, onChange: () => void) => CloseableWatcher
   onFilesChanged: () => void
-  logger?: Pick<typeof console, 'log' | 'warn' | 'error'>
+  logger?: Pick<typeof console, 'info' | 'warn' | 'error'>
 }
 
 interface WatchedProjectPathEntry {
@@ -52,8 +87,8 @@ interface SessionProjectWatchRegistry {
   getSnapshot: () => SessionProjectWatchRegistrySnapshot
 }
 
-let watcher: FSWatcher | null = null
-let globalAgentWatcher: FSWatcher | null = null
+let watcher: CloseableWatcher | null = null
+let globalAgentWatcher: CloseableWatcher | null = null
 let capabilitiesTimer: ReturnType<typeof setTimeout> | null = null
 let workspaceFilesTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -92,6 +127,11 @@ export function createSessionProjectWatchRegistry(
   const logger = deps.logger ?? console
   const sessionProjectPaths = new Map<string, string>()
   const watchedProjectPaths = new Map<string, WatchedProjectPathEntry>()
+  // 会话监听的两类“持有”来源：可见 Pane reconcile 持有、以及运行时/headless 直接持有。
+  // 只要任一来源持有，会话监听就保留——避免可见 Pane reconcile 误拆一个正在后台运行
+  // （bridge / scheduled / cli）会话的项目监听。
+  const reconcileHeldSessionIds = new Set<string>()
+  const explicitHeldSessionIds = new Set<string>()
 
   const retainProjectPath = (projectPath: string): boolean => {
     const normalizedPath = normalizeWatchPath(projectPath)
@@ -113,7 +153,7 @@ export function createSessionProjectWatchRegistry(
         watcher: pathWatcher,
         refCount: 1,
       })
-      logger.log('[Session 项目监听] 已启动:', normalizedPath)
+      logger.info('[Session 项目监听] 已启动:', normalizedPath)
       return true
     } catch (error) {
       logger.error('[Session 项目监听] 启动失败:', normalizedPath, error)
@@ -133,10 +173,11 @@ export function createSessionProjectWatchRegistry(
 
     current.watcher.close()
     watchedProjectPaths.delete(normalizedPath)
-    logger.log('[Session 项目监听] 已停止:', normalizedPath)
+    logger.info('[Session 项目监听] 已停止:', normalizedPath)
   }
 
-  const watchSessionProject = (sessionId: string, projectPath: string): void => {
+  // 确保某会话监听到指定路径（幂等）；路径变化时释放旧路径、保留新路径。
+  const ensureSessionWatch = (sessionId: string, projectPath: string): void => {
     const normalizedPath = normalizeWatchPath(projectPath)
     const previousPath = sessionProjectPaths.get(sessionId)
 
@@ -144,31 +185,44 @@ export function createSessionProjectWatchRegistry(
     if (!retainProjectPath(normalizedPath)) return
 
     sessionProjectPaths.set(sessionId, normalizedPath)
-
     if (previousPath) {
       releaseProjectPath(previousPath)
     }
   }
 
-  const unwatchSessionProject = (sessionId: string): void => {
+  // 仅当两类持有来源都不再持有该会话时，才真正停止其项目监听。
+  const dropSessionWatchIfUnheld = (sessionId: string): void => {
+    if (reconcileHeldSessionIds.has(sessionId) || explicitHeldSessionIds.has(sessionId)) return
     const previousPath = sessionProjectPaths.get(sessionId)
     if (!previousPath) return
-
     sessionProjectPaths.delete(sessionId)
     releaseProjectPath(previousPath)
+  }
+
+  const watchSessionProject = (sessionId: string, projectPath: string): void => {
+    explicitHeldSessionIds.add(sessionId)
+    ensureSessionWatch(sessionId, projectPath)
+  }
+
+  const unwatchSessionProject = (sessionId: string): void => {
+    explicitHeldSessionIds.delete(sessionId)
+    dropSessionWatchIfUnheld(sessionId)
   }
 
   const restoreSessionProjectWatches = (sessions: Array<Pick<SessionMeta, 'id' | 'project'>>): void => {
     const incomingSessionIds = new Set(sessions.map((session) => session.id))
 
-    for (const existingSessionId of Array.from(sessionProjectPaths.keys())) {
+    // 释放不再可见的 reconcile 持有；若该会话仍被 headless 显式持有，则保留监听。
+    for (const existingSessionId of Array.from(reconcileHeldSessionIds)) {
       if (!incomingSessionIds.has(existingSessionId)) {
-        unwatchSessionProject(existingSessionId)
+        reconcileHeldSessionIds.delete(existingSessionId)
+        dropSessionWatchIfUnheld(existingSessionId)
       }
     }
 
     for (const session of sessions) {
-      watchSessionProject(session.id, session.project.path)
+      reconcileHeldSessionIds.add(session.id)
+      ensureSessionWatch(session.id, session.project.path)
     }
   }
 
@@ -183,6 +237,8 @@ export function createSessionProjectWatchRegistry(
       }
       watchedProjectPaths.clear()
       sessionProjectPaths.clear()
+      reconcileHeldSessionIds.clear()
+      explicitHeldSessionIds.clear()
     },
 
     getSnapshot(): SessionProjectWatchRegistrySnapshot {
@@ -198,12 +254,11 @@ export function createSessionProjectWatchRegistry(
 
 const sessionProjectWatchRegistry = createSessionProjectWatchRegistry({
   directoryExists: existsSync,
-  watchDirectory: (dirPath, onChange) => watch(dirPath, { recursive: true }, () => {
-    onChange()
-  }),
+  watchDirectory: (dirPath, onChange) => createRecursiveWatcher(dirPath, onChange),
   onFilesChanged: () => {
     emitWorkspaceFilesChanged()
   },
+  logger: log,
 })
 
 /**
@@ -217,10 +272,10 @@ export function startWorkspaceWatcher(win: BrowserWindow): void {
   const globalAgentDir = getGlobalAgentConfigDir()
 
   if (!existsSync(watchDir)) {
-    console.warn('[工作区监听] 目录不存在，跳过:', watchDir)
+    log.warn('[工作区监听] 目录不存在，跳过:', watchDir)
   } else {
     try {
-      watcher = watch(watchDir, { recursive: true }, (_eventType, filename) => {
+      watcher = createRecursiveWatcher(watchDir, (filename) => {
         if (!filename || win.isDestroyed()) return
 
         // filename 格式: {slug}/mcp.json、{slug}/.agents/skills/xxx/SKILL.md 或 {slug}/{sessionId}/file.txt
@@ -239,25 +294,25 @@ export function startWorkspaceWatcher(win: BrowserWindow): void {
         }
       })
 
-      console.log('[工作区监听] 已启动文件监听:', watchDir)
+      log.info('[工作区监听] 已启动文件监听:', watchDir)
     } catch (error) {
-      console.error('[工作区监听] 启动失败:', error)
+      log.error('[工作区监听] 启动失败:', error)
     }
   }
 
   if (!existsSync(globalAgentDir)) {
-    console.warn('[全局 Agent 配置监听] 目录不存在，跳过:', globalAgentDir)
+    log.warn('[全局 Agent 配置监听] 目录不存在，跳过:', globalAgentDir)
     return
   }
 
   try {
-    globalAgentWatcher = watch(globalAgentDir, { recursive: true }, () => {
+    globalAgentWatcher = createRecursiveWatcher(globalAgentDir, () => {
       if (win.isDestroyed()) return
       emitCapabilitiesChanged()
     })
-    console.log('[全局 Agent 配置监听] 已启动:', globalAgentDir)
+    log.info('[全局 Agent 配置监听] 已启动:', globalAgentDir)
   } catch (error) {
-    console.error('[全局 Agent 配置监听] 启动失败:', error)
+    log.error('[全局 Agent 配置监听] 启动失败:', error)
   }
 }
 
@@ -268,19 +323,19 @@ export function stopWorkspaceWatcher(): void {
   if (watcher) {
     watcher.close()
     watcher = null
-    console.log('[工作区监听] 已停止')
+    log.info('[工作区监听] 已停止')
   }
 
   if (globalAgentWatcher) {
     globalAgentWatcher.close()
     globalAgentWatcher = null
-    console.log('[全局 Agent 配置监听] 已停止')
+    log.info('[全局 Agent 配置监听] 已停止')
   }
 
   // 同时清理所有附加目录监听器
   for (const [dirPath, w] of attachedWatchers) {
     w.close()
-    console.log('[附加目录监听] 已停止:', dirPath)
+    log.info('[附加目录监听] 已停止:', dirPath)
   }
   attachedWatchers.clear()
 
@@ -307,7 +362,7 @@ export function watchAttachedDirectory(dirPath: string): void {
 
   if (attachedWatchers.has(normalizedPath)) return
   if (!existsSync(normalizedPath)) {
-    console.warn('[附加目录监听] 目录不存在，跳过:', normalizedPath)
+    log.warn('[附加目录监听] 目录不存在，跳过:', normalizedPath)
     return
   }
 
@@ -317,9 +372,9 @@ export function watchAttachedDirectory(dirPath: string): void {
     })
 
     attachedWatchers.set(normalizedPath, w)
-    console.log('[附加目录监听] 已启动:', normalizedPath)
+    log.info('[附加目录监听] 已启动:', normalizedPath)
   } catch (error) {
-    console.error('[附加目录监听] 启动失败:', normalizedPath, error)
+    log.error('[附加目录监听] 启动失败:', normalizedPath, error)
   }
 }
 
@@ -332,7 +387,7 @@ export function unwatchAttachedDirectory(dirPath: string): void {
   if (w) {
     w.close()
     attachedWatchers.delete(normalizedPath)
-    console.log('[附加目录监听] 已停止:', normalizedPath)
+    log.info('[附加目录监听] 已停止:', normalizedPath)
   }
 }
 

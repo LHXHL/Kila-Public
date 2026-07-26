@@ -85,7 +85,7 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
       {/* 可拖动标题栏区域，用于窗口拖动 */}
       <div className="titlebar-drag-region fixed left-0 right-0 top-0 h-[50px] z-[var(--kila-z-titlebar)]" />
 
-      <div className="flex h-screen w-screen overflow-hidden bg-[hsl(var(--workspace))]">
+      <div className="flex h-screen w-screen overflow-hidden bg-workspace">
         {/* 左侧边栏：可折叠 */}
         <LeftSidebar width={sidebarWidth} isResizing={isResizingSidebar} />
 

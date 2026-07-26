@@ -37,14 +37,14 @@ function DiffTokenLine({ tokens, rawLine }: { tokens: HighlightToken[] | undefin
 function lineTone(line: DiffDisplayLine): string {
   if (line.kind === 'addition') return 'bg-[hsl(var(--status-success-soft)/0.72)]'
   if (line.kind === 'deletion') return 'bg-[hsl(var(--status-danger-soft)/0.7)]'
-  if (line.kind === 'header') return 'bg-[hsl(var(--status-info-soft)/0.7)] text-[hsl(var(--status-info-foreground))]'
+  if (line.kind === 'header') return 'bg-[hsl(var(--status-info-soft)/0.7)] text-status-info-foreground'
   if (line.kind === 'meta') return 'bg-muted/25 text-muted-foreground/70'
   return 'text-foreground/88 hover:bg-foreground/[0.025]'
 }
 
 function markerTone(line: DiffDisplayLine): string {
-  if (line.kind === 'addition') return 'text-[hsl(var(--status-success-foreground))]'
-  if (line.kind === 'deletion') return 'text-[hsl(var(--status-danger-foreground))]'
+  if (line.kind === 'addition') return 'text-status-success-foreground'
+  if (line.kind === 'deletion') return 'text-status-danger-foreground'
   return 'text-muted-foreground/35'
 }
 

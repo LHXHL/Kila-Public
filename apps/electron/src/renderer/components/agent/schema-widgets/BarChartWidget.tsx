@@ -101,7 +101,7 @@ export function BarChartWidget({ spec, onBarClick }: BarChartWidgetProps): JSX.E
                     rx="6"
                     fill={getChartColor(series.colorIndex ?? ((seriesIndex % 5) + 1) as 1 | 2 | 3 | 4 | 5)}
                     fillOpacity="0.88"
-                    className={onBarClick ? 'cursor-pointer outline-none focus:stroke-[hsl(var(--ring))] focus:stroke-2' : undefined}
+                    className={onBarClick ? 'cursor-pointer outline-none focus:stroke-ring focus:stroke-2' : undefined}
                     role={onBarClick ? 'button' : undefined}
                     tabIndex={onBarClick ? 0 : undefined}
                     aria-label={`${String(row[spec.xKey] ?? '')}，${series.label}：${numericValue}`}

@@ -20,6 +20,3 @@ export type { StreamAnimatedOptions } from './rehypeStreamAnimated.ts'
 
 // Layer 3: 插件稳定化
 export { useStablePlugins, isSamePlugins } from './useStablePlugins.ts'
-
-// 旧版 hook（deprecated，内部转发到 useSmoothStreamContent）
-export { useSmoothStream } from './useSmoothStream.ts'

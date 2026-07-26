@@ -188,4 +188,41 @@ describe('Agent stream 终态收敛', () => {
       message.role === 'assistant' && message.content === '重试成功'
     ))).toBe(true)
   })
+
+  test('Given Pi 内部自动重试，When 新 attempt 前已有失败内容，Then 持久化只保留成功 attempt 内容且不重复思考块', async () => {
+    const context = createContext()
+    // ownsRetry 默认 true：模拟 Pi 在同一次 query 内部自动重试。
+    const adapter = createAdapter(async function* () {
+      // —— 失败 attempt 的内容（思考 + 文本）——
+      yield { type: 'thinking_start', contentIndex: 0 }
+      yield { type: 'thinking_delta', contentIndex: 0, text: '失败前的思考' }
+      yield { type: 'thinking_end', contentIndex: 0, text: '失败前的思考' }
+      yield { type: 'text_delta', text: '失败 attempt 的部分正文' }
+      yield { type: 'error', message: '瞬时网络错误' }
+      // —— Pi 触发内部重试，进入新 attempt ——
+      yield { type: 'retrying', attempt: 1, maxAttempts: 3, delaySeconds: 0, reason: '瞬时网络错误' }
+      yield {
+        type: 'retry_attempt',
+        attemptData: { attempt: 1, timestamp: 0, reason: '瞬时网络错误', errorMessage: '瞬时网络错误', delaySeconds: 0 },
+      }
+      yield { type: 'retry_cleared' }
+      // —— 成功 attempt 的内容 ——
+      yield { type: 'text_delta', text: '成功回复' }
+      yield { type: 'complete', stopReason: 'stop' }
+    })
+
+    const result = await runWithAdapter(adapter, context.input)
+    const messages = getAgentMessages(context.sessionId)
+    const assistant = messages.find((message) => message.role === 'assistant')
+
+    // 终态为成功，且失败 attempt 的 error 不污染终态。
+    expect(result.outcomes).toEqual(['success'])
+    // 持久化正文只保留成功 attempt。
+    expect(assistant?.content).toBe('成功回复')
+    // 失败 attempt 的思考内容不得残留在持久化事件里（否则重载会渲染出重复思考块）。
+    const thinkingDeltas = (assistant?.events ?? []).filter((event) => event.type === 'thinking_delta')
+    expect(thinkingDeltas).toHaveLength(0)
+    // 但重试历史标记必须保留。
+    expect((assistant?.events ?? []).some((event) => event.type === 'retry_attempt')).toBe(true)
+  })
 })

@@ -1,6 +1,6 @@
 {
   "name": "@kila/shared",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "license": "Apache-2.0",
   "description": "Shared types, configs and utilities for kila",
   "type": "module",

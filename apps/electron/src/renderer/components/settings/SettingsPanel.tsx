@@ -140,7 +140,7 @@ export function SettingsPanel(): React.ReactElement {
   }, [activeTab, setActiveTab, setSettingsDirty, settingsDirty])
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[hsl(var(--workspace))] md:flex-row">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-workspace md:flex-row">
       {/* 左侧 Tab 导航 */}
       <div className="w-full shrink-0 overflow-x-auto border-b border-border/50 bg-muted/45 px-2 pb-2 pt-12 scrollbar-none md:min-h-0 md:w-[212px] md:overflow-y-auto md:border-b-0 md:border-r md:pb-0 md:pt-14">
         <h2 className="mb-2 px-3 text-base font-medium text-foreground">
@@ -160,14 +160,14 @@ export function SettingsPanel(): React.ReactElement {
               className={cn(
                 'flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm md:text-base',
                 activeTab === tab.id
-                  ? 'bg-[hsl(var(--kila-accent-muted))] text-foreground font-medium'
+                  ? 'bg-kila-accent-muted text-foreground font-medium'
                   : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
               )}
             >
               {tab.icon}
               <span>{tab.label}</span>
               {tab.id === 'about' && (hasUpdate || hasEnvironmentIssues) && (
-                <span className="h-2 w-2 rounded-full bg-[hsl(var(--status-danger))]" />
+                <span className="h-2 w-2 rounded-full bg-status-danger" />
               )}
             </button>
           ))}

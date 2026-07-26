@@ -240,19 +240,14 @@ function main(): void {
   printStepResult(results[results.length - 1])
 
   // Windows 打包需要 busybox bash
+  // 始终执行下载脚本：脚本内部做 SHA256 校验，已存在且校验通过时秒速跳过；
+  // 旧版本或损坏的二进制会被自动替换（不能只看 existsSync，否则永远不更新）
   if (opts.platform === 'win') {
     step++
     printStepStart(step, totalSteps, '检查 Windows bash (busybox)')
-    const bashPath = join(import.meta.dir, '..', 'vendor', 'bash', 'win32-x64', 'bash.exe')
-    if (!existsSync(bashPath)) {
-      console.log(`${color.yellow}  vendor/bash/win32-x64/bash.exe 不存在，正在下载...${color.reset}`)
-      results.push(
-        runStep('下载 busybox', 'bun', ['run', 'scripts/download-bash.ts'], { verbose: opts.verbose })
-      )
-    } else {
-      console.log(`${color.green}  bash.exe 已存在，跳过下载${color.reset}`)
-      results.push({ name: '检查 Windows bash (busybox)', duration: 0, success: true, skipped: true })
-    }
+    results.push(
+      runStep('下载/校验 busybox', 'bun', ['run', 'scripts/download-bash.ts'], { verbose: opts.verbose })
+    )
     printStepResult(results[results.length - 1])
   }
 

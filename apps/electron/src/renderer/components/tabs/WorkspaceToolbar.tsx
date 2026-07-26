@@ -93,7 +93,7 @@ export function WorkspaceToolbar(): React.ReactElement {
   }, [activeSessionId, sidePanelActiveToolMap, setSidePanelActiveToolMap, setSidePanelCloseRequestMap])
 
   return (
-    <div className="flex h-[var(--kila-toolbar-height)] items-center gap-2 border-b border-border/35 bg-[hsl(var(--workspace))] px-2 titlebar-drag-region">
+    <div className="flex h-[var(--kila-toolbar-height)] items-center gap-2 border-b border-border/35 bg-workspace px-2 titlebar-drag-region">
       {/* 空白拖拽区域：支持拖动窗口 */}
       <div className="flex-1 h-full" />
 
@@ -116,7 +116,7 @@ export function WorkspaceToolbar(): React.ReactElement {
                   className={cn(
                     'size-8 rounded-lg border border-transparent text-muted-foreground/70 transition-colors',
                     active
-                      ? 'border-primary/25 bg-[hsl(var(--kila-accent-muted))] text-primary'
+                      ? 'border-primary/25 bg-kila-accent-muted text-primary'
                       : 'hover:border-border/55 hover:bg-muted/35 hover:text-foreground/82',
                   )}
                   onClick={() => handleToggleSessionTool(tool.id)}

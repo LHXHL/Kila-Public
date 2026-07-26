@@ -369,7 +369,7 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
   const unstaged = visibleFiles.filter((file) => file.unstaged || file.untracked)
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[hsl(var(--workspace))] p-2">
+    <div className="flex h-full min-h-0 flex-col bg-workspace p-2">
       <div className="flex items-center justify-between gap-3 border-b border-border/55 px-3 py-2.5">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium"><GitBranch className="size-4" />{snapshot?.branch ?? 'detached'}</div>
@@ -453,7 +453,7 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
           )}
         </div>
 
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/55 bg-[hsl(var(--code-surface))]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/55 bg-code-surface">
           {selectedFile ? (
             <>
               <div className="flex items-center justify-between gap-2 border-b border-border/55 px-3 py-2 text-xs">

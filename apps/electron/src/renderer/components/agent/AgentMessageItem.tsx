@@ -92,7 +92,7 @@ function AttachedFileChip({ file, role = 'assistant' }: { file: AttachedFileRef;
     <div className={cn(
       "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px]",
       role === 'user'
-        ? "bg-[hsl(var(--brand-strong)/0.08)] text-[hsl(var(--brand-soft-foreground))]"
+        ? "bg-[hsl(var(--brand-strong)/0.08)] text-brand-soft-foreground"
         : "bg-muted/60 text-muted-foreground"
     )}>
       <Icon className={cn(

@@ -423,7 +423,7 @@ function renderTextWithMentions(text: string, basePath?: string): React.ReactNod
       parts.push(
         <span
           key={key}
-          className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]"
+          className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-brand-soft text-brand-soft-foreground"
           title={filePath}
         >
           <FileText className="size-3 inline shrink-0" />
@@ -433,7 +433,7 @@ function renderTextWithMentions(text: string, basePath?: string): React.ReactNod
     } else if (match[2]) {
       const skillName = formatGlobalSkillMentionLabel(match[2])
       parts.push(
-        <span key={key} className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]">
+        <span key={key} className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-brand-soft text-brand-soft-foreground">
           <Wand2 className="size-3 inline shrink-0" />
           {skillName}
         </span>
@@ -441,7 +441,7 @@ function renderTextWithMentions(text: string, basePath?: string): React.ReactNod
     } else if (match[3]) {
       const mcpName = match[3]
       parts.push(
-        <span key={key} className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]">
+        <span key={key} className="inline-flex items-center gap-0.5 rounded px-1 py-[1px] text-[13px] font-medium whitespace-nowrap align-baseline bg-brand-soft text-brand-soft-foreground">
           <Server className="size-3 inline shrink-0" />
           {mcpName}
         </span>
@@ -514,7 +514,7 @@ export const UserMessageContent = React.memo(
     return (
       <div
         className={cn(
-          'relative inline-flex w-fit max-w-[min(100%,42rem)] min-w-0 flex-col rounded-xl border border-[hsl(var(--kila-user-bubble-border)/0.72)] bg-[hsl(var(--kila-user-bubble))] px-3.5 py-2.5 text-[hsl(var(--kila-user-bubble-foreground))]',
+          'relative inline-flex w-fit max-w-[min(100%,42rem)] min-w-0 flex-col rounded-xl border border-[hsl(var(--kila-user-bubble-border)/0.72)] bg-kila-user-bubble px-3.5 py-2.5 text-kila-user-bubble-foreground',
           shouldCollapse && !isExpanded && 'pb-6',
           className
         )}
@@ -524,7 +524,7 @@ export const UserMessageContent = React.memo(
         <div
           ref={attachContentRef}
           className={cn(
-            'min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-left overflow-hidden transition-[max-height] duration-200 text-[0.9375rem] leading-[1.62] text-[hsl(var(--kila-user-bubble-foreground))]',
+            'min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-left overflow-hidden transition-[max-height] duration-200 text-[0.9375rem] leading-[1.62] text-kila-user-bubble-foreground',
             '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
             shouldCollapse && !isExpanded && 'max-h-[6.5em]'
           )}
@@ -536,9 +536,9 @@ export const UserMessageContent = React.memo(
             type="button"
             onClick={toggleExpand}
             className={cn(
-              'mt-1 flex items-center gap-1 text-xs text-[hsl(var(--kila-user-bubble-foreground)/0.72)] transition-colors hover:text-[hsl(var(--kila-user-bubble-foreground))]',
+              'mt-1 flex items-center gap-1 text-xs text-[hsl(var(--kila-user-bubble-foreground)/0.72)] transition-colors hover:text-kila-user-bubble-foreground',
               !isExpanded &&
-                'absolute bottom-0 left-0 right-0 rounded-b-xl bg-gradient-to-t from-[hsl(var(--kila-user-bubble))] via-[hsl(var(--kila-user-bubble))] to-transparent px-3.5 pb-2.5 pt-4'
+                'absolute bottom-0 left-0 right-0 rounded-b-xl bg-gradient-to-t from-kila-user-bubble via-kila-user-bubble to-transparent px-3.5 pb-2.5 pt-4'
             )}
           >
             {isExpanded ? (

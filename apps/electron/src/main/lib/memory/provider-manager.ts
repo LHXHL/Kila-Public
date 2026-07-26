@@ -1,7 +1,5 @@
 import { getMemoryRuntimeConfig, isNowledgeConfigured, type MemoryRuntimeConfig } from './config'
-import { LocalMarkdownMemoryProvider } from './local-markdown-provider'
 import { NowledgeMemoryProvider } from './nowledge-provider'
-import { pendingMemoryWriteBuffer } from './pending-write-buffer'
 import type { MemoryProvider } from './provider'
 import { memoryStateStore } from './state-store'
 import type {
@@ -24,10 +22,6 @@ import type {
   MemoryTimelineEvent,
   MemoryTimelineInput,
   MemoryWriteInput,
-  NotebookEditInput,
-  NotebookEntry,
-  NotebookWriteInput,
-  QueuedMemoryWriteView,
   WorkingMemory,
   WorkingMemoryInput,
   WorkingMemoryPatchInput,
@@ -36,19 +30,8 @@ import type {
 
 const NOWLEDGE_HEALTH_CACHE_MS = 15_000
 
-export type LocalMemoryProviderLike = MemoryProvider & Pick<
-  LocalMarkdownMemoryProvider,
-  | 'listNotebookEntries'
-  | 'readNotebookEntry'
-  | 'writeNotebookEntry'
-  | 'editNotebookEntry'
-  | 'forgetNotebookEntry'
-  | 'getIndexContext'
->
-
 export interface MemoryProviderManagerDeps {
   getConfig?: () => MemoryRuntimeConfig
-  localProvider?: LocalMemoryProviderLike
   createNowledgeProvider?: (config: MemoryRuntimeConfig) => MemoryProvider | null
 }
 
@@ -58,35 +41,6 @@ function normalizeDuplicateText(value: string | undefined): string {
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-/**
- * 合并本地兼容记忆与 Nowledge 记忆。
- * 同内容时保留当前长期记忆来源，避免设置页展示错误后端的重复条目。
- */
-export function mergeMemoryLists(
-  localEntries: MemoryEntry[],
-  nowledgeEntries: MemoryEntry[],
-  input: MemoryListInput = {},
-  preferredProvider: MemoryProviderMode = 'local',
-): MemoryEntry[] {
-  const seenContent = new Set<string>()
-  const merged: MemoryEntry[] = []
-  const orderedEntries = preferredProvider === 'nowledge'
-    ? [...nowledgeEntries, ...localEntries]
-    : [...localEntries, ...nowledgeEntries]
-
-  for (const entry of orderedEntries) {
-    const signature = normalizeDuplicateText(entry.content)
-    if (signature && seenContent.has(signature)) continue
-    if (signature) seenContent.add(signature)
-    merged.push(entry)
-  }
-
-  merged.sort((a, b) => b.updatedAt - a.updatedAt)
-  const offset = Math.max(Math.floor(input.offset ?? 0), 0)
-  const limit = Math.min(Math.max(Math.floor(input.limit ?? 50), 1), 500)
-  return merged.slice(offset, offset + limit)
 }
 
 function duplicateSignature(entry: MemoryEntry): { signature: string; reason: string } | null {
@@ -147,8 +101,14 @@ function patchMarkdownSection(
   return [...lines.slice(0, startIndex), lines[startIndex]!, nextBody, ...lines.slice(endIndex)].join('\n').trim()
 }
 
+/**
+ * 记忆 Provider 管理器（仅 Nowledge）。
+ *
+ * Kila 记忆已收敛为“长期记忆只走 Nowledge”：不再有任何本地 Markdown 存储。
+ * 未配置 Nowledge（未启用或地址无效）时，读/写/召回一律禁用（空结果或抛错），
+ * 上层据此关闭召回注入、写回与记忆工具。
+ */
 export class MemoryProviderManager {
-  private readonly localProvider: LocalMemoryProviderLike
   private readonly getConfig: () => MemoryRuntimeConfig
   private readonly createNowledgeProvider: (config: MemoryRuntimeConfig) => MemoryProvider | null
   private nowledgeProvider: MemoryProvider | null = null
@@ -156,10 +116,9 @@ export class MemoryProviderManager {
   private initialized = false
   private nowledgeHealthy = false
   private lastCheckedAt = 0
-  private detail = '本地 Markdown 存储可用'
+  private detail = 'Nowledge 未配置，记忆功能已禁用'
 
   constructor(deps: MemoryProviderManagerDeps = {}) {
-    this.localProvider = deps.localProvider ?? new LocalMarkdownMemoryProvider()
     this.getConfig = deps.getConfig ?? getMemoryRuntimeConfig
     this.createNowledgeProvider = deps.createNowledgeProvider ?? ((config) => {
       if (!isNowledgeConfigured(config) || !config.nowledgeBaseUrl) return null
@@ -173,16 +132,12 @@ export class MemoryProviderManager {
   }
 
   async initialize(): Promise<void> {
-    if (!this.initialized) {
-      await this.localProvider.initialize()
-      this.initialized = true
-    }
+    this.initialized = true
     await this.syncNowledgeWithConfig()
   }
 
   async dispose(): Promise<void> {
     await this.nowledgeProvider?.dispose()
-    await this.localProvider.dispose()
     this.nowledgeProvider = null
     this.activeConfig = null
     this.nowledgeHealthy = false
@@ -190,85 +145,61 @@ export class MemoryProviderManager {
     this.initialized = false
   }
 
-  async search(input: MemorySearchInput): Promise<MemorySearchResult[]> {
+  /** 记忆功能是否可用：等价于 Nowledge 已配置且健康。 */
+  async isMemoryAvailable(): Promise<boolean> {
     await this.initialize()
-    const localResults = await this.localProvider.search(input)
-    if (!await this.isNowledgeAvailable()) return localResults
+    return this.isNowledgeAvailable()
+  }
 
+  async search(input: MemorySearchInput): Promise<MemorySearchResult[]> {
+    if (!await this.isMemoryAvailable()) return []
     try {
-      const externalResults = await this.nowledgeProvider!.search(input)
-      const seen = new Set<string>()
-      return [...externalResults, ...localResults]
-        .filter((result) => {
-          const key = normalizeDuplicateText(result.entry.content)
-          if (key && seen.has(key)) return false
-          if (key) seen.add(key)
-          return true
-        })
-        .sort((a, b) => b.score - a.score)
-        .slice(0, Math.min(Math.max(input.limit ?? 4, 1), 10))
+      return await this.nowledgeProvider!.search(input)
     } catch (error) {
       memoryStateStore.appendRuntimeEvent({
         eventType: 'nowledge_search_failed',
         status: 'warn',
         detail: error instanceof Error ? error.message : String(error),
       })
-      return localResults
+      return []
     }
   }
 
   async read(uri: string): Promise<MemoryEntry | null> {
-    await this.initialize()
-    if (this.isLocalMemoryUri(uri)) return this.localProvider.read(uri)
-    if (await this.isNowledgeAvailable()) return this.nowledgeProvider!.read(uri)
-    return null
+    if (!await this.isMemoryAvailable()) return null
+    return this.nowledgeProvider!.read(uri)
   }
 
   async write(input: MemoryWriteInput): Promise<MemoryEntry> {
-    const provider = await this.getLongTermWriteProvider()
+    const provider = await this.getNowledgeMutationProvider()
     return provider.write(input)
   }
 
   async edit(input: MemoryEditInput): Promise<MemoryEntry | null> {
-    await this.initialize()
-    if (this.isLocalMemoryUri(input.uri)) return this.localProvider.edit(input)
     const provider = await this.getNowledgeMutationProvider()
     return provider.edit(input)
   }
 
   async forget(uri: string): Promise<boolean> {
-    await this.initialize()
-    if (this.isLocalMemoryUri(uri)) return this.localProvider.forget(uri)
     const provider = await this.getNowledgeMutationProvider()
     return provider.forget(uri)
   }
 
   async list(input: MemoryListInput = {}): Promise<MemoryEntry[]> {
-    await this.initialize()
-    const offset = Math.max(Math.floor(input.offset ?? 0), 0)
-    const limit = Math.min(Math.max(Math.floor(input.limit ?? 50), 1), 500)
-    const sourceInput = { ...input, offset: 0, limit: offset + limit }
-    const localEntries = await this.localProvider.list(sourceInput)
-
-    if (!await this.isNowledgeAvailable()) {
-      return mergeMemoryLists(localEntries, [], input)
-    }
-
+    if (!await this.isMemoryAvailable()) return []
     try {
-      const nowledgeEntries = await this.nowledgeProvider!.list(sourceInput)
-      return mergeMemoryLists(localEntries, nowledgeEntries, input, 'nowledge')
+      return await this.nowledgeProvider!.list(input)
     } catch (error) {
       memoryStateStore.appendRuntimeEvent({
         eventType: 'nowledge_list_failed',
         status: 'warn',
         detail: error instanceof Error ? error.message : String(error),
       })
-      return mergeMemoryLists(localEntries, [], input)
+      return []
     }
   }
 
   async listDuplicateGroups(input: { limit?: number } = {}): Promise<MemoryDuplicateGroup[]> {
-    await this.initialize()
     const entries = await this.list({ limit: Math.min(Math.max(input.limit ?? 100, 2), 500) })
     const groups = new Map<string, MemoryDuplicateGroup>()
     for (const entry of entries) {
@@ -298,35 +229,22 @@ export class MemoryProviderManager {
     return merged
   }
 
-  listPendingWrites(sessionId?: string): QueuedMemoryWriteView[] {
-    return pendingMemoryWriteBuffer.list(sessionId)
-  }
-
-  clearPendingWrites(sessionId?: string): number {
-    const count = pendingMemoryWriteBuffer.list(sessionId).length
-    pendingMemoryWriteBuffer.clear(sessionId)
-    return count
-  }
-
   async getWorkingMemory(input: WorkingMemoryInput): Promise<WorkingMemory | null> {
-    await this.initialize()
-    if (input.scope === 'project') return this.localProvider.getWorkingMemory(input)
-    if (!await this.isNowledgeAvailable()) return this.localProvider.getWorkingMemory(input)
+    // 项目级 working memory 仅本地实现，已随本地存储移除。
+    if (input.scope === 'project') return null
+    if (!await this.isMemoryAvailable()) return null
     return this.nowledgeProvider!.getWorkingMemory(input)
   }
 
   async setWorkingMemory(input: WorkingMemoryUpdateInput): Promise<WorkingMemory> {
-    await this.initialize()
-    if (input.scope === 'project') return this.localProvider.setWorkingMemory(input)
-    const provider = await this.getLongTermWriteProvider()
+    if (input.scope === 'project') throw new Error('项目级 working memory 已随本地存储移除')
+    const provider = await this.getNowledgeMutationProvider()
     return provider.setWorkingMemory(input)
   }
 
   async patchWorkingMemory(input: WorkingMemoryPatchInput): Promise<WorkingMemory> {
-    await this.initialize()
-    const provider = input.scope === 'project'
-      ? this.localProvider
-      : await this.getLongTermWriteProvider()
+    if (input.scope === 'project') throw new Error('项目级 working memory 已随本地存储移除')
+    const provider = await this.getNowledgeMutationProvider()
     if (provider.patchWorkingMemory) return provider.patchWorkingMemory(input)
     const current = await provider.getWorkingMemory(input)
     return provider.setWorkingMemory({
@@ -336,64 +254,33 @@ export class MemoryProviderManager {
     })
   }
 
-  async listNotebookEntries(input?: MemoryListInput): Promise<NotebookEntry[]> {
-    await this.initialize()
-    return this.localProvider.listNotebookEntries(input)
-  }
-
-  async readNotebookEntry(uri: string): Promise<NotebookEntry | null> {
-    await this.initialize()
-    return this.localProvider.readNotebookEntry(uri)
-  }
-
-  async writeNotebookEntry(input: NotebookWriteInput): Promise<NotebookEntry> {
-    await this.initialize()
-    return this.localProvider.writeNotebookEntry(input)
-  }
-
-  async editNotebookEntry(input: NotebookEditInput): Promise<NotebookEntry | null> {
-    await this.initialize()
-    return this.localProvider.editNotebookEntry(input)
-  }
-
-  async forgetNotebookEntry(uri: string): Promise<boolean> {
-    await this.initialize()
-    return this.localProvider.forgetNotebookEntry(uri)
-  }
-
   async captureThread(input: MemoryThreadCaptureInput): Promise<void> {
-    await this.initialize()
-    if (!await this.isNowledgeAvailable()) return
+    if (!await this.isMemoryAvailable()) return
     await this.nowledgeProvider!.captureThread(input)
   }
 
   async searchThreads(input: MemoryThreadSearchInput): Promise<MemoryThreadSearchResult[]> {
-    await this.initialize()
-    if (!this.nowledgeProvider?.searchThreads || !await this.isNowledgeAvailable()) return []
+    if (!await this.isMemoryAvailable() || !this.nowledgeProvider?.searchThreads) return []
     return this.nowledgeProvider.searchThreads(input)
   }
 
   async fetchThread(input: MemoryThreadFetchInput): Promise<MemoryThreadFetchResult | null> {
-    await this.initialize()
-    if (!this.nowledgeProvider?.fetchThread || !await this.isNowledgeAvailable()) return null
+    if (!await this.isMemoryAvailable() || !this.nowledgeProvider?.fetchThread) return null
     return this.nowledgeProvider.fetchThread(input)
   }
 
   async listTimelineEvents(input: MemoryTimelineInput): Promise<MemoryTimelineEvent[]> {
-    await this.initialize()
-    if (!this.nowledgeProvider?.listTimelineEvents || !await this.isNowledgeAvailable()) return []
+    if (!await this.isMemoryAvailable() || !this.nowledgeProvider?.listTimelineEvents) return []
     return this.nowledgeProvider.listTimelineEvents(input)
   }
 
   async getConnections(input: MemoryConnectionsInput): Promise<MemoryConnectionsResult | null> {
-    await this.initialize()
-    if (!this.nowledgeProvider?.getConnections || !await this.isNowledgeAvailable()) return null
+    if (!await this.isMemoryAvailable() || !this.nowledgeProvider?.getConnections) return null
     return this.nowledgeProvider.getConnections(input)
   }
 
   async deleteThread(threadId: string): Promise<boolean> {
-    await this.initialize()
-    if (!this.nowledgeProvider?.deleteThread || !await this.isNowledgeAvailable()) return false
+    if (!await this.isMemoryAvailable() || !this.nowledgeProvider?.deleteThread) return false
     return this.nowledgeProvider.deleteThread(threadId)
   }
 
@@ -403,47 +290,36 @@ export class MemoryProviderManager {
     memoryStateStore.deleteSessionState(sessionId)
   }
 
-  getIndexContext(projectPath?: string): string {
-    return this.localProvider.getIndexContext(projectPath)
-  }
-
   async getStatus(): Promise<MemoryProviderStatus> {
     await this.initialize()
     const config = this.getConfig()
-    const localStatus = await this.localProvider.getStatus()
     const configured = isNowledgeConfigured(config)
     const healthy = configured ? await this.refreshNowledgeHealth() : false
     const nowledgeStatus = healthy ? await this.nowledgeProvider?.getStatus() : undefined
-    const selectedProvider: MemoryProviderMode = config.nowledgeEnabled ? 'nowledge' : 'local'
     return {
-      mode: selectedProvider,
-      activeProvider: selectedProvider,
-      localReady: localStatus.localReady,
-      memoryDirectory: localStatus.memoryDirectory,
+      mode: 'nowledge',
+      activeProvider: 'nowledge',
+      // 本地存储已移除：保留字段以兼容既有状态类型，恒为不可用。
+      localReady: false,
+      memoryDirectory: '',
       nowledgeEnabled: config.nowledgeEnabled,
       nowledgeConfigured: configured,
       nowledgeHealthy: healthy,
       nowledgeBackendVersion: nowledgeStatus?.nowledgeBackendVersion,
       checkedAt: this.lastCheckedAt || Date.now(),
-      detail: config.nowledgeEnabled
+      detail: configured
         ? healthy
-          ? 'Nowledge 本地 API 可用；Embedding 凭证由 Nowledge 管理'
+          ? 'Nowledge 本地 API 可用；记忆仅由 Nowledge 管理'
           : this.detail
-        : '本地 Markdown 长期记忆可用',
+        : 'Nowledge 未配置，记忆功能已禁用',
     }
   }
 
-  private async getLongTermWriteProvider(): Promise<MemoryProvider> {
+  private async getNowledgeMutationProvider(): Promise<MemoryProvider> {
     await this.initialize()
     const config = this.getConfig()
-    if (!config.nowledgeEnabled) return this.localProvider
-    return this.getNowledgeMutationProvider()
-  }
-
-  private async getNowledgeMutationProvider(): Promise<MemoryProvider> {
-    const config = this.getConfig()
     if (!config.nowledgeEnabled) {
-      throw new Error('Nowledge 未启用，无法修改该长期记忆')
+      throw new Error('Nowledge 未启用，记忆功能已禁用')
     }
     if (!isNowledgeConfigured(config) || !this.nowledgeProvider) {
       throw new Error('Nowledge 已启用，但本地服务地址尚未正确配置')
@@ -464,10 +340,6 @@ export class MemoryProviderManager {
     )
   }
 
-  private isLocalMemoryUri(uri: string): boolean {
-    return uri.startsWith('memory://global/') || uri.startsWith('memory://project/')
-  }
-
   private async syncNowledgeWithConfig(): Promise<void> {
     const config = this.getConfig()
     if (this.configEquals(this.activeConfig, config)) return
@@ -481,7 +353,7 @@ export class MemoryProviderManager {
       this.lastCheckedAt = Date.now()
       this.detail = config.nowledgeEnabled
         ? 'Nowledge 已启用，但本地服务地址尚未正确配置'
-        : '本地 Markdown 长期记忆可用；Nowledge 未启用'
+        : 'Nowledge 未配置，记忆功能已禁用'
       return
     }
 

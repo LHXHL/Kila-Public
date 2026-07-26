@@ -29,7 +29,7 @@ function createHarness(existingPaths: string[]) {
     },
     onFilesChanged: () => undefined,
     logger: {
-      log: () => undefined,
+      info: () => undefined,
       warn: () => undefined,
       error: () => undefined,
     },
@@ -76,5 +76,43 @@ describe('visible session project watches', () => {
     expect(registry.getSnapshot().watchedProjectPaths).toEqual([
       { path: '/project/shared', refCount: 2 },
     ])
+  })
+
+  test('Given headless 会话显式监听项目，When 可见 Pane reconcile 不含它，Then 不误拆其监听', () => {
+    const { registry, watchers } = createHarness(['/project/headless', '/project/a'])
+
+    // headless（bridge/scheduled/cli）直接监听，不经可见 Pane 预算。
+    registry.watchSessionProject('session-headless', '/project/headless')
+    // 可见 Pane reconcile 只含另一个会话。
+    registry.restoreSessionProjectWatches([
+      { id: 'session-a', project: project('/project/a') },
+    ])
+
+    // headless 会话的监听必须保留（不被 reconcile 误拆）。
+    expect(watchers.find((watcher) => watcher.path === '/project/headless')?.closed).toBe(false)
+    expect(registry.getSnapshot().sessionProjectPaths).toEqual([
+      ['session-a', '/project/a'],
+      ['session-headless', '/project/headless'],
+    ])
+
+    // headless 结束显式释放后，才真正停止监听。
+    registry.unwatchSessionProject('session-headless')
+    expect(watchers.find((watcher) => watcher.path === '/project/headless')?.closed).toBe(true)
+  })
+
+  test('Given 会话同时被可见与 headless 持有，When 仅移出可见集合，Then 监听保留至 headless 也释放', () => {
+    const { registry, watchers } = createHarness(['/project/dual'])
+
+    registry.watchSessionProject('session-dual', '/project/dual')
+    registry.restoreSessionProjectWatches([
+      { id: 'session-dual', project: project('/project/dual') },
+    ])
+    // 移出可见集合，但 headless 仍持有。
+    registry.restoreSessionProjectWatches([])
+    expect(watchers.find((watcher) => watcher.path === '/project/dual')?.closed).toBe(false)
+
+    // headless 也释放后，监听停止。
+    registry.unwatchSessionProject('session-dual')
+    expect(watchers.find((watcher) => watcher.path === '/project/dual')?.closed).toBe(true)
   })
 })

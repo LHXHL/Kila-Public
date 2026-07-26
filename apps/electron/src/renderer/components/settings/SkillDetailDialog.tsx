@@ -114,7 +114,7 @@ export function SkillDetailDialog({
           {detail ? (
             <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="flex min-w-0 items-start gap-4">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-[hsl(var(--kila-accent-muted))] text-primary">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-kila-accent-muted text-primary">
                   {detail.kind === 'plugin'
                     ? <Blocks className="size-5" />
                     : <Wand2 className="size-5" />}
@@ -153,7 +153,7 @@ export function SkillDetailDialog({
                       type="button"
                       aria-label="打开所在目录"
                       onClick={() => { void window.electronAPI.openGlobalAgentPath(detail.path) }}
-                      className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-[hsl(var(--kila-accent-muted))] hover:text-foreground"
+                      className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-kila-accent-muted hover:text-foreground"
                     >
                       <FolderOpen className="size-4" />
                     </button>
@@ -170,7 +170,7 @@ export function SkillDetailDialog({
                           aria-label="更新 Skill"
                           onClick={() => onUpdate(detail)}
                           disabled={installing}
-                          className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-[hsl(var(--kila-accent-muted))] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-kila-accent-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <RefreshCw className={cn('size-4', installing && 'animate-spin')} />
                         </button>
@@ -236,7 +236,7 @@ export function SkillDetailDialog({
                     </div>
                     <div className="min-w-0 px-4 py-4 sm:px-5 sm:py-5">
                       {detail.contentType === 'json' ? (
-                        <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-[16px] border border-border/45 bg-[hsl(var(--code-surface))] p-4 font-mono text-[12px] leading-6 text-foreground">
+                        <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-[16px] border border-border/45 bg-code-surface p-4 font-mono text-[12px] leading-6 text-foreground">
                           {contentPreview}
                         </pre>
                       ) : (
@@ -247,7 +247,7 @@ export function SkillDetailDialog({
                             '[&_h1]:break-words [&_h2]:break-words [&_h3]:break-words',
                             '[&_h1]:text-[24px] [&_h2]:text-[20px] [&_h3]:text-[17px] sm:[&_h1]:text-[28px] sm:[&_h2]:text-[22px]',
                             '[&_a]:break-all [&_li]:break-words [&_p]:break-words [&_p]:text-[14px]',
-                            '[&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:bg-[hsl(var(--code-surface))]',
+                            '[&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:bg-code-surface',
                           )}
                           compact
                         >

@@ -202,7 +202,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
   }, [isSelectingProjectFolder, projectLocked, sessionId, setSessions, setStateMap])
 
   return (
-    <div className="flex h-full min-h-0 gap-0 bg-[hsl(var(--workspace))]">
+    <div className="flex h-full min-h-0 gap-0 bg-workspace">
       <div
         className="flex flex-shrink-0 flex-col overflow-hidden border-r border-border/55"
         style={{ width: explorerWidth }}

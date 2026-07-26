@@ -1,8 +1,8 @@
 import type { TimelineSpec } from '@kila/shared'
 
 const STATUS_CLASS_NAME = {
-  done: 'bg-[hsl(var(--status-success))]',
-  active: 'bg-[hsl(var(--chart-1))]',
+  done: 'bg-status-success',
+  active: 'bg-chart-1',
   pending: 'bg-muted-foreground/35',
   error: 'bg-destructive',
 } as const

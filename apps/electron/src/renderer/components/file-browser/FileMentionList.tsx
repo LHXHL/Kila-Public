@@ -86,7 +86,7 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
             onClick={() => onSelect(item)}
           >
             {item.type === 'dir' ? (
-              <Folder className="size-3 flex-shrink-0 text-[hsl(var(--brand-soft-foreground))]" />
+              <Folder className="size-3 flex-shrink-0 text-brand-soft-foreground" />
             ) : (
               <FileText className="size-3 text-muted-foreground flex-shrink-0" />
             )}

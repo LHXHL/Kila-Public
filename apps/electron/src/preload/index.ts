@@ -430,9 +430,6 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
     detail?: string
   }>
 
-  /** 打开 Kila 管理的 Markdown 记忆目录 */
-  openMemoryDirectory: () => Promise<void>
-
   /** 获取已有记忆列表 */
   listMemories: (input?: { limit?: number; offset?: number; projectPath?: string }) => Promise<Array<{
     uri: string
@@ -473,20 +470,6 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
   /** 删除长期记忆 */
   forgetMemory: (uri: string) => Promise<boolean>
 
-  /** 查看兼容版本遗留或失败重试的记忆写入队列 */
-  listPendingMemoryWrites: (input?: { sessionId?: string }) => Promise<Array<{
-    content: string
-    title?: string
-    tags?: string[]
-    category?: string
-    key?: string
-    sourceSessionId: string
-    projectPath?: string
-  }>>
-
-  /** 清空兼容版本遗留或失败重试的记忆写入队列 */
-  clearPendingMemoryWrites: (input?: { sessionId?: string }) => Promise<{ cleared: number }>
-
   /** 获取记忆调试状态 */
   getMemoryDebug: (input?: { sessionId?: string; projectPath?: string }) => Promise<{
     sessionId?: string
@@ -500,62 +483,6 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
       sessionContextEnabled: boolean
     }
   }>
-
-  /** 获取 notebook 条目列表 */
-  listNotebookEntries: (input?: { limit?: number; offset?: number; projectPath?: string }) => Promise<Array<{
-    uri: string
-    key?: string
-    title?: string
-    content: string
-    tags: string[]
-    sourceSessionId?: string
-    projectPath?: string
-    createdAt: number
-    updatedAt: number
-  }>>
-
-  /** 新建 notebook 条目 */
-  writeNotebookEntry: (input: {
-    key?: string
-    title?: string
-    content: string
-    tags?: string[]
-    sourceSessionId?: string
-    projectPath?: string
-  }) => Promise<{
-    uri: string
-    key?: string
-    title?: string
-    content: string
-    tags: string[]
-    sourceSessionId?: string
-    projectPath?: string
-    createdAt: number
-    updatedAt: number
-  }>
-
-  /** 编辑 notebook 条目 */
-  editNotebookEntry: (input: {
-    uri: string
-    key?: string
-    title?: string
-    content?: string
-    tags?: string[]
-    projectPath?: string
-  }) => Promise<{
-    uri: string
-    key?: string
-    title?: string
-    content: string
-    tags: string[]
-    sourceSessionId?: string
-    projectPath?: string
-    createdAt: number
-    updatedAt: number
-  } | null>
-
-  /** 删除 notebook 条目 */
-  forgetNotebookEntry: (uri: string) => Promise<boolean>
 
   /** 检测本地 Nowledge */
   detectLocalNowledge: () => Promise<{
@@ -1160,10 +1087,6 @@ const electronAPI: ElectronAPI = {
     return invoke('memory:get-status')
   },
 
-  openMemoryDirectory: () => {
-    return invoke('memory:open-directory')
-  },
-
   listMemories: (input?: { limit?: number; offset?: number; projectPath?: string }) => {
     return invoke('memory:list', input)
   },
@@ -1180,46 +1103,8 @@ const electronAPI: ElectronAPI = {
     return invoke('memory:forget', uri)
   },
 
-  listPendingMemoryWrites: (input?: { sessionId?: string }) => {
-    return invoke('memory:list-pending-writes', input)
-  },
-
-  clearPendingMemoryWrites: (input?: { sessionId?: string }) => {
-    return invoke('memory:clear-pending-writes', input)
-  },
-
   getMemoryDebug: (input?: { sessionId?: string; projectPath?: string }) => {
     return invoke('memory:get-debug', input)
-  },
-
-  listNotebookEntries: (input?: { limit?: number; offset?: number; projectPath?: string }) => {
-    return invoke('memory:list-notebook', input)
-  },
-
-  writeNotebookEntry: (input: {
-    key?: string
-    title?: string
-    content: string
-    tags?: string[]
-    sourceSessionId?: string
-    projectPath?: string
-  }) => {
-    return invoke('memory:write-notebook', input)
-  },
-
-  editNotebookEntry: (input: {
-    uri: string
-    key?: string
-    title?: string
-    content?: string
-    tags?: string[]
-    projectPath?: string
-  }) => {
-    return invoke('memory:edit-notebook', input)
-  },
-
-  forgetNotebookEntry: (uri: string) => {
-    return invoke('memory:forget-notebook', uri)
   },
 
   detectLocalNowledge: () => {

@@ -327,7 +327,7 @@ export function BridgeSettings(): React.ReactElement {
           divided={false}
           className={
             activeTestResult.success
-              ? 'border-[hsl(var(--status-success)/0.28)] bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]'
+              ? 'border-[hsl(var(--status-success)/0.28)] bg-status-success-soft text-status-success-foreground'
               : 'border-destructive/30 bg-destructive/5 text-destructive'
           }
         >

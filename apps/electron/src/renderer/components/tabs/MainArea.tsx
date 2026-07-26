@@ -97,7 +97,7 @@ export function MainArea(): React.ReactElement {
   return (
     <Panel
       variant="grow"
-      className="bg-[hsl(var(--workspace))]"
+      className="bg-workspace"
     >
       <WorkspaceToolbar />
       {tabs.length === 0 ? (

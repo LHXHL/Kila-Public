@@ -338,15 +338,15 @@ export function ComputerUseSettings(): React.ReactElement {
         <SettingsCard>
           <div className="space-y-3 px-5 py-4 text-sm text-muted-foreground">
             <div className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--status-warning))]" />
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-status-warning" />
               <span>cua-driver 能操控整个桌面（鼠标、键盘、文件系统），建议在 <strong className="text-foreground">Ask</strong> 权限模式下使用，所有工具调用需确认后执行</span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--status-warning))]" />
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-status-warning" />
               <span>macOS 需要在「系统设置 → 隐私与安全性 → 辅助功能」中授权应用</span>
             </div>
             <div className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--status-success))]" />
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-status-success" />
               <span>cua-driver 以 MCP 服务器方式运行，所有工具调用都经过 Kila 的权限系统管控</span>
             </div>
           </div>

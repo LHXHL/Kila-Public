@@ -89,7 +89,7 @@ function ThemeCard({
     <div
       className={cn(
         'group relative rounded-2xl bg-card/75 p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
-        selected && 'bg-[hsl(var(--kila-accent-muted))] shadow-[0_0_0_1px_hsl(var(--primary)/0.22)]',
+        selected && 'bg-kila-accent-muted shadow-[0_0_0_1px_hsl(var(--primary)/0.22)]',
       )}
     >
       <button type="button" className="block w-full text-left" onClick={onSelect}>
@@ -347,7 +347,7 @@ export function AppearanceSettings(): React.ReactElement {
             </div>
 
             {themeCatalog.issues.length > 0 && (
-              <div className="rounded-xl bg-[hsl(var(--status-warning-soft))] p-3 text-xs text-[hsl(var(--status-warning-foreground))]">
+              <div className="rounded-xl bg-status-warning-soft p-3 text-xs text-status-warning-foreground">
                 <div className="font-medium">有 {themeCatalog.issues.length} 个主题文件未能加载</div>
                 {themeCatalog.issues.slice(0, 3).map((issue) => <div key={issue.fileName} className="mt-1">{issue.fileName}: {issue.message}</div>)}
               </div>

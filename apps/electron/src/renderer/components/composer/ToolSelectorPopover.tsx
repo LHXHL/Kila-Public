@@ -83,7 +83,7 @@ export function ToolSelectorPopover({
             buttonClassName ?? 'size-[30px] rounded-lg',
             disabled && 'cursor-not-allowed opacity-45',
             hasActiveTools
-              ? 'bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))]'
+              ? 'bg-brand-soft text-brand-soft-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
             open && !hasActiveTools && 'bg-muted/50',
           )}

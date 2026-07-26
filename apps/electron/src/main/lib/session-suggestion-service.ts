@@ -263,11 +263,11 @@ function renderSuggestionContext(input: {
  * 从 Memory 系统获取结构化记忆数据，构建建议上下文
  */
 async function buildSuggestionContext(): Promise<{ memoryContext: string; recentSessionTitles: string } | null> {
-  // 1. 从 Memory 系统并行获取结构化数据
+  // 1. 从 Memory 系统并行获取结构化数据（笔记随本地存储移除，恒为空）
   const [globalWM, memories, notebooks, impressionResult] = await Promise.all([
     memoryProviderManager.getWorkingMemory({ scope: 'global' }).catch(() => null),
     memoryProviderManager.list({ limit: 8 }).catch(() => [] as MemoryEntry[]),
-    memoryProviderManager.listNotebookEntries({ limit: 3 }).catch(() => [] as NotebookEntry[]),
+    Promise.resolve<NotebookEntry[]>([]),
     memoryProviderManager.getWorkingMemory({ scope: 'global' }).catch(() => null),
   ])
 

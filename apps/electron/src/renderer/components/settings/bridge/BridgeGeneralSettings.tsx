@@ -133,7 +133,7 @@ export function BridgeGeneralSettings({
                   </div>
                   <span className={cn(
                     'rounded-md px-2 py-1 text-center text-[11px]',
-                    item.enabled ? 'bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]' : 'bg-muted/55 text-muted-foreground',
+                    item.enabled ? 'bg-status-success-soft text-status-success-foreground' : 'bg-muted/55 text-muted-foreground',
                   )}>
                     {item.enabled ? '已启用' : '未启用'}
                   </span>
@@ -144,7 +144,7 @@ export function BridgeGeneralSettings({
                     {item.configured ? '已配置' : '缺少配置'}
                   </span>
                   <div className="min-w-0 text-right text-muted-foreground">
-                    <div className={cn('truncate', item.status === 'error' && 'text-destructive', item.status === 'connected' && 'text-[hsl(var(--status-success-foreground))]')}>
+                    <div className={cn('truncate', item.status === 'error' && 'text-destructive', item.status === 'connected' && 'text-status-success-foreground')}>
                       {STATUS_LABELS[item.status]}
                     </div>
                     <div className="mt-0.5 truncate text-[11px]">{formatTime(item.lastConnectedAt)}</div>

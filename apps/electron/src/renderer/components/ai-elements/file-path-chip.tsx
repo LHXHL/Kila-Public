@@ -90,7 +90,7 @@ export function FilePathChip({ filePath, basePath, className }: FilePathChipProp
       title={fullPath}
       className={cn(
         'inline-flex items-center gap-1 rounded px-1.5 py-[2px] text-[12px] font-medium leading-[1.6]',
-        'bg-[hsl(var(--brand-soft))] text-[hsl(var(--brand-soft-foreground))] hover:bg-[hsl(var(--brand-soft-hover))]',
+        'bg-brand-soft text-brand-soft-foreground hover:bg-brand-soft-hover',
         'transition-colors duration-150',
         'align-baseline not-prose',
         className

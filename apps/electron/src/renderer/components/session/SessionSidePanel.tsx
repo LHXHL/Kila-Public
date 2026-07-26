@@ -157,7 +157,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
         'relative flex-shrink-0 titlebar-drag-region',
         !isResizing && 'transition-[width] duration-200 ease-out',
         shouldRenderPanel
-          ? 'overflow-hidden bg-[hsl(var(--workspace))]'
+          ? 'overflow-hidden bg-workspace'
           : 'overflow-hidden bg-transparent',
       )}
       style={{ width: visiblePanelWidth }}

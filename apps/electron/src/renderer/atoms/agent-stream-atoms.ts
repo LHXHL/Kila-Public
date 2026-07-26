@@ -51,11 +51,30 @@ export const agentStartedAtAtom = atom<number | undefined>((get) => {
   return get(agentStreamingStatesAtom).get(currentId)?.startedAt
 })
 
+// 运行中会话 id 集合的引用稳定化缓存。
+// agentStreamingStatesAtom 在每个 token chunk 都会变更（content 累积），若每次都返回新 Set，
+// 订阅方（如 LeftSidebar 整个会话列表）会在流式期间高频重渲染，即使运行中的 id 集合并未变化。
+// 仅当成员集合真正变化时才替换引用。
+let cachedRunningSessionIds = new Set<string>()
+
 export const agentRunningSessionIdsAtom = atom<Set<string>>((get) => {
   const states = get(agentStreamingStatesAtom)
-  const ids = new Set<string>()
+  const next = new Set<string>()
   for (const [id, state] of states) {
-    if (state.running) ids.add(id)
+    if (state.running) next.add(id)
   }
-  return ids
+
+  if (next.size === cachedRunningSessionIds.size) {
+    let identical = true
+    for (const id of next) {
+      if (!cachedRunningSessionIds.has(id)) {
+        identical = false
+        break
+      }
+    }
+    if (identical) return cachedRunningSessionIds
+  }
+
+  cachedRunningSessionIds = next
+  return next
 })

@@ -5,7 +5,6 @@ import type {
   MemoryCategory,
   MemoryEntry,
   MemoryWriteInput,
-  NotebookEntry,
   WorkingMemoryScope,
 } from '../memory/types'
 
@@ -106,43 +105,12 @@ const MEMORY_CONNECTIONS_SCHEMA = Type.Object({
   query: Type.Optional(Type.String()),
 })
 
-const NOTEBOOK_WRITE_SCHEMA = Type.Object({
-  content: Type.String({ description: '笔记内容' }),
-  title: Type.Optional(Type.String()),
-  tags: Type.Optional(Type.Array(Type.String())),
-  key: Type.Optional(Type.String()),
-})
-
-const NOTEBOOK_READ_SCHEMA = Type.Object({
-  uri: Type.String({ description: 'notebook://... 形式的笔记 URI' }),
-})
-
-const NOTEBOOK_EDIT_SCHEMA = Type.Object({
-  uri: Type.String({ description: 'notebook://... 形式的笔记 URI' }),
-  content: Type.Optional(Type.String()),
-  title: Type.Optional(Type.String()),
-  tags: Type.Optional(Type.Array(Type.String())),
-  key: Type.Optional(Type.String()),
-})
-
-const NOTEBOOK_FORGET_SCHEMA = Type.Object({
-  uri: Type.String({ description: 'notebook://... 形式的笔记 URI' }),
-})
-
 function formatMemoryEntry(entry: MemoryEntry): string {
   const title = entry.title ? `标题: ${entry.title}\n` : ''
   const tags = entry.tags.length > 0 ? `标签: ${entry.tags.join(', ')}\n` : ''
   const key = entry.key ? `Key: ${entry.key}\n` : ''
   const project = entry.projectPath ? `项目: ${entry.projectPath}\n` : ''
   return `${title}${tags}${key}${project}URI: ${entry.uri}\n类别: ${entry.category}\n内容: ${entry.content}`
-}
-
-function formatNotebookEntry(entry: NotebookEntry): string {
-  const title = entry.title ? `标题: ${entry.title}\n` : ''
-  const tags = entry.tags.length > 0 ? `标签: ${entry.tags.join(', ')}\n` : ''
-  const key = entry.key ? `Key: ${entry.key}\n` : ''
-  const project = entry.projectPath ? `项目: ${entry.projectPath}\n` : ''
-  return `${title}${tags}${key}${project}URI: ${entry.uri}\n内容: ${entry.content}`
 }
 
 function resolveScope(scope?: WorkingMemoryScope): WorkingMemoryScope {
@@ -516,84 +484,6 @@ export function createMemoryTools(
     },
   }
 
-  const notebookReadTool: AgentTool<typeof NOTEBOOK_READ_SCHEMA> = {
-    name: 'notebook_read',
-    label: 'Notebook Read',
-    description: '读取本地 notebook 条目。',
-    parameters: NOTEBOOK_READ_SCHEMA,
-    execute: async (_toolCallId, params) => {
-      const entry = await memoryProviderManager.readNotebookEntry(params.uri)
-      if (!entry) {
-        return {
-          content: [{ type: 'text', text: '指定笔记不存在。' }],
-          details: { found: false },
-        }
-      }
-      return {
-        content: [{ type: 'text', text: formatNotebookEntry(entry) }],
-        details: { found: true, uri: entry.uri },
-      }
-    },
-  }
-
-  const notebookWriteTool: AgentTool<typeof NOTEBOOK_WRITE_SCHEMA> = {
-    name: 'notebook_write',
-    label: 'Notebook Write',
-    description: '写入本地 notebook 条目。',
-    parameters: NOTEBOOK_WRITE_SCHEMA,
-    execute: async (_toolCallId, params) => {
-      const entry = await memoryProviderManager.writeNotebookEntry({
-        content: params.content,
-        title: params.title,
-        tags: params.tags,
-        key: params.key,
-        sourceSessionId: options.sessionId,
-        projectPath: options.projectPath,
-      })
-
-      return {
-        content: [{ type: 'text', text: `笔记已保存：${entry.uri}` }],
-        details: { uri: entry.uri },
-      }
-    },
-  }
-
-  const notebookEditTool: AgentTool<typeof NOTEBOOK_EDIT_SCHEMA> = {
-    name: 'notebook_edit',
-    label: 'Notebook Edit',
-    description: '编辑本地 notebook 条目。',
-    parameters: NOTEBOOK_EDIT_SCHEMA,
-    execute: async (_toolCallId, params) => {
-      const entry = await memoryProviderManager.editNotebookEntry({
-        uri: params.uri,
-        content: params.content,
-        title: params.title,
-        tags: params.tags,
-        key: params.key,
-        projectPath: options.projectPath,
-      })
-
-      return {
-        content: [{ type: 'text', text: entry ? `笔记已更新：${entry.uri}` : '指定笔记不存在。' }],
-        details: { updated: Boolean(entry), uri: entry?.uri },
-      }
-    },
-  }
-
-  const notebookForgetTool: AgentTool<typeof NOTEBOOK_FORGET_SCHEMA> = {
-    name: 'notebook_forget',
-    label: 'Notebook Forget',
-    description: '删除本地 notebook 条目。',
-    parameters: NOTEBOOK_FORGET_SCHEMA,
-    execute: async (_toolCallId, params) => {
-      const deleted = await memoryProviderManager.forgetNotebookEntry(params.uri)
-      return {
-        content: [{ type: 'text', text: deleted ? `已删除笔记：${params.uri}` : '指定笔记不存在。' }],
-        details: { deleted, uri: params.uri },
-      }
-    },
-  }
-
   // 后端未配置时只注册 memory_status，避免 AI 盲调其他工具
   if (!options.backendAvailable) {
     return [memoryStatusTool]
@@ -613,9 +503,5 @@ export function createMemoryTools(
     memoryThreadFetchTool,
     memoryTimelineTool,
     memoryConnectionsTool,
-    notebookReadTool,
-    notebookWriteTool,
-    notebookEditTool,
-    notebookForgetTool,
   ]
 }

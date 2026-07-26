@@ -9,9 +9,11 @@ import { useTranslation } from 'react-i18next'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import {
   Check,
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   Download,
+  ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
@@ -19,6 +21,7 @@ import {
   Plus,
   Search,
   Settings,
+  Square,
   Trash2,
   Upload,
   X,
@@ -110,21 +113,29 @@ interface SessionItemProps {
   streaming: boolean
   editing: boolean
   editValue: string
-  onSelect: () => void
-  onStartEdit: () => void
+  selectMode: boolean
+  checked: boolean
+  onToggleSelect: (sessionId: string) => void
+  onSelect: (session: SessionMeta) => void
+  onStartEdit: (session: SessionMeta) => void
   onEditChange: (value: string) => void
   onEditSubmit: () => void
   onEditCancel: () => void
-  onTogglePin: () => void
-  onRequestDelete: () => void
+  onTogglePin: (sessionId: string) => void
+  onRequestDelete: (sessionId: string) => void
 }
 
-function SessionItem({
+// React.memo：配合父组件的稳定回调，避免侧栏任一状态变化（如标题编辑逐字输入）
+// 导致所有会话行重渲染——只有 props 真正变化的行才重渲染。
+const SessionItem = React.memo(function SessionItem({
   session,
   active,
   streaming,
   editing,
   editValue,
+  selectMode,
+  checked,
+  onToggleSelect,
   onSelect,
   onStartEdit,
   onEditChange,
@@ -147,13 +158,13 @@ function SessionItem({
     </>
   ) : (
     <>
-      <button type="button" onClick={onTogglePin} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={session.pinned ? '取消置顶' : '置顶'}>
+      <button type="button" onClick={() => onTogglePin(session.id)} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={session.pinned ? '取消置顶' : '置顶'}>
         <Pin className={cn('size-3.5', session.pinned && 'fill-current text-primary')} />
       </button>
-      <button type="button" onClick={onStartEdit} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label="重命名">
+      <button type="button" onClick={() => onStartEdit(session)} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label="重命名">
         <Pencil className="size-3.5" />
       </button>
-      <button type="button" onClick={onRequestDelete} className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="删除">
+      <button type="button" onClick={() => onRequestDelete(session.id)} className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="删除">
         <Trash2 className="size-3.5" />
       </button>
     </>
@@ -162,14 +173,18 @@ function SessionItem({
   return (
     <div data-session-id={session.id}>
     <WorkspaceEntityRow
-      selected={active}
-      onClick={editing ? undefined : onSelect}
+      selected={selectMode ? checked : active}
+      onClick={selectMode ? () => onToggleSelect(session.id) : (editing ? undefined : () => onSelect(session))}
       overlayActions
       compact
       tabIndex={0}
       className="sidebar-session-row pr-2"
       contentClassName="py-0.5"
-      icon={streaming ? <span className="size-1.5 rounded-full bg-primary" /> : undefined}
+      icon={selectMode
+        ? (checked
+            ? <CheckSquare className="size-3.5 text-primary" />
+            : <Square className="size-3.5 text-muted-foreground/60" />)
+        : (streaming ? <span className="size-1.5 rounded-full bg-primary" /> : undefined)}
       title={editing ? (
         <input
           value={editValue}
@@ -204,7 +219,7 @@ function SessionItem({
     />
     </div>
   )
-}
+})
 
 export interface LeftSidebarProps {
   width?: number
@@ -239,6 +254,10 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
   const [workflowFilter, setWorkflowFilter] = React.useState<WorkflowFilter>('all')
   const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null)
   const [deleteSubmitting, setDeleteSubmitting] = React.useState<boolean>(false)
+  // 批量选择/删除
+  const [selectMode, setSelectMode] = React.useState<boolean>(false)
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [pendingBatchDelete, setPendingBatchDelete] = React.useState<boolean>(false)
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [editValue, setEditValue] = React.useState('')
   const [sessionSearch, setSessionSearch] = React.useState('')
@@ -442,6 +461,57 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
     }
   }, [cleanupMapAtoms, currentSessionId, layout, pendingDeleteId, refreshAllLists, setLayout, setSessions, setTabs, syncSelection, tabs])
 
+  const toggleSelectMode = React.useCallback((): void => {
+    setSelectMode((prev) => {
+      if (prev) setSelectedIds(new Set())
+      return !prev
+    })
+  }, [])
+
+  const toggleSelectSession = React.useCallback((sessionId: string): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(sessionId)) next.delete(sessionId)
+      else next.add(sessionId)
+      return next
+    })
+  }, [])
+
+  const handleConfirmBatchDelete = React.useCallback(async (): Promise<void> => {
+    if (selectedIds.size === 0) return
+    setDeleteSubmitting(true)
+
+    const targetIds = Array.from(selectedIds)
+    let nextTabs = tabs
+    let nextLayout = layout
+    try {
+      for (const targetId of targetIds) {
+        const tabResult = closeTab(nextTabs, nextLayout, targetId)
+        nextTabs = tabResult.tabs
+        nextLayout = tabResult.layout
+        cleanupMapAtoms(targetId)
+        // 复用单会话删除入口（内部走 deleteSessionWithCleanup），逐个清理运行时/磁盘态。
+        await window.electronAPI.deleteSession(targetId)
+      }
+      setTabs(nextTabs)
+      setLayout(nextLayout)
+
+      const removed = new Set(targetIds)
+      setSessions((prev) => prev.filter((session) => !removed.has(session.id)))
+      if (currentSessionId && removed.has(currentSessionId)) {
+        const focusedPanel = nextLayout.panels[nextLayout.focusedPanelIndex]
+        syncSelection(focusedPanel?.activeTabId ?? null)
+      }
+
+      setSelectedIds(new Set())
+      setSelectMode(false)
+      setPendingBatchDelete(false)
+      void refreshAllLists()
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }, [cleanupMapAtoms, currentSessionId, layout, refreshAllLists, selectedIds, setLayout, setSessions, setTabs, syncSelection, tabs])
+
   const pendingSessionIds = React.useMemo(() => {
     const ids = new Set<string>()
     for (const [sessionId, requests] of pendingPermissionMap) {
@@ -481,6 +551,33 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
     return agentRunningSessionIds.has(session.id)
   }, [agentRunningSessionIds])
 
+  // 稳定回调：用 ref 承接易变的 handleSelectSession / handleRename / handleTogglePin，
+  // 使传给 SessionItem 的回调引用恒定，配合 React.memo 让标题编辑、选中态变化等
+  // 只重渲染受影响的行，而非整个会话列表。
+  const sidebarHandlersRef = React.useRef({ handleSelectSession, handleRename, handleTogglePin })
+  sidebarHandlersRef.current = { handleSelectSession, handleRename, handleTogglePin }
+
+  const stableOnSelect = React.useCallback((session: SessionMeta) => {
+    sidebarHandlersRef.current.handleSelectSession(session)
+  }, [])
+  const stableOnStartEdit = React.useCallback((session: SessionMeta) => {
+    setEditingId(session.id)
+    setEditValue(session.title)
+  }, [])
+  const stableOnEditSubmit = React.useCallback(() => {
+    void sidebarHandlersRef.current.handleRename()
+  }, [])
+  const stableOnEditCancel = React.useCallback(() => {
+    setEditingId(null)
+    setEditValue('')
+  }, [])
+  const stableOnTogglePin = React.useCallback((sessionId: string) => {
+    void sidebarHandlersRef.current.handleTogglePin(sessionId)
+  }, [])
+  const stableOnRequestDelete = React.useCallback((sessionId: string) => {
+    setPendingDeleteId(sessionId)
+  }, [])
+
   const renderSessionItem = (session: SessionMeta): React.ReactElement => (
     <SessionItem
       key={session.id}
@@ -489,19 +586,16 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
       streaming={isStreaming(session)}
       editing={editingId === session.id}
       editValue={editingId === session.id ? editValue : session.title}
-      onSelect={() => handleSelectSession(session)}
-      onStartEdit={() => {
-        setEditingId(session.id)
-        setEditValue(session.title)
-      }}
+      selectMode={selectMode}
+      checked={selectedIds.has(session.id)}
+      onToggleSelect={toggleSelectSession}
+      onSelect={stableOnSelect}
+      onStartEdit={stableOnStartEdit}
       onEditChange={setEditValue}
-      onEditSubmit={() => { void handleRename() }}
-      onEditCancel={() => {
-        setEditingId(null)
-        setEditValue('')
-      }}
-      onTogglePin={() => { void handleTogglePin(session.id) }}
-      onRequestDelete={() => setPendingDeleteId(session.id)}
+      onEditSubmit={stableOnEditSubmit}
+      onEditCancel={stableOnEditCancel}
+      onTogglePin={stableOnTogglePin}
+      onRequestDelete={stableOnRequestDelete}
     />
   )
 
@@ -570,7 +664,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                   >
                     <Settings size={18} />
                     {(hasUpdate || hasEnvironmentIssues) && (
-                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[hsl(var(--status-danger))]" />
+                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-status-danger" />
                     )}
                   </button>
                 </TooltipTrigger>
@@ -625,6 +719,18 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    onClick={toggleSelectMode}
+                    data-selected={selectMode ? 'true' : undefined}
+                    className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-lg text-foreground/45 transition-colors hover:bg-muted/55 hover:text-foreground/70 data-[selected=true]:bg-brand-soft data-[selected=true]:text-brand-soft-foreground"
+                  >
+                    <ListChecks size={16} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{selectMode ? '退出多选' : '多选删除'}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
                     onClick={() => setSidebarCollapsed(true)}
                     className="titlebar-no-drag mt-0.5 flex size-10 items-center justify-center rounded-lg text-foreground/40 transition-colors hover:bg-muted/55 hover:text-foreground/60"
                   >
@@ -644,11 +750,11 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                   value={sessionSearch}
                   onChange={(event) => setSessionSearch(event.target.value)}
                   placeholder="搜索会话与消息"
-                  className="workspace-floating-control h-9 w-full rounded-lg pl-8 pr-3 text-[12.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/62 focus:border-primary/35 focus:bg-[hsl(var(--workspace))]"
+                  className="workspace-floating-control h-9 w-full rounded-lg pl-8 pr-3 text-[12.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/62 focus:border-primary/35 focus:bg-workspace"
                 />
               </div>
               {sessionSearch.trim().length >= 2 && (
-                <div className="workspace-floating-control mt-2 overflow-hidden rounded-lg bg-[hsl(var(--workspace))]">
+                <div className="workspace-floating-control mt-2 overflow-hidden rounded-lg bg-workspace">
                   {sessionSearchLoading && (
                     <div className="px-3 py-2 text-[12px] text-muted-foreground">搜索中…</div>
                   )}
@@ -688,6 +794,31 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 </button>
               ))}
             </div>
+            {selectMode && (
+              <div className="titlebar-no-drag mb-3 flex items-center gap-2 rounded-lg bg-brand-soft px-2.5 py-1.5 text-[12px] text-brand-soft-foreground">
+                <span className="tabular-nums">已选 {selectedIds.size}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allSelected = filteredSessions.length > 0 && filteredSessions.every((session) => selectedIds.has(session.id))
+                    setSelectedIds(allSelected ? new Set() : new Set(filteredSessions.map((session) => session.id)))
+                  }}
+                  className="rounded-md px-2 py-1 hover:bg-background/40"
+                >
+                  {filteredSessions.length > 0 && filteredSessions.every((session) => selectedIds.has(session.id)) ? '取消全选' : '全选'}
+                </button>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => { if (selectedIds.size > 0) setPendingBatchDelete(true) }}
+                  disabled={selectedIds.size === 0}
+                  className="flex items-center gap-1 rounded-md bg-destructive px-2 py-1 text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Trash2 className="size-3.5" />
+                  <span>删除</span>
+                </button>
+              </div>
+            )}
             <OverlayScrollbarArea
               className="kila-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-0"
               options={{ overflow: { x: 'hidden', y: 'scroll' } }}
@@ -750,7 +881,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
               <Settings size={16} />
               <span>设置</span>
               {(hasUpdate || hasEnvironmentIssues) && (
-                <span className="ml-auto h-2 w-2 rounded-full bg-[hsl(var(--status-danger))]" />
+                <span className="ml-auto h-2 w-2 rounded-full bg-status-danger" />
               )}
             </button>
           </div>
@@ -778,6 +909,32 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
               disabled={deleteSubmitting}
             >
               {deleteSubmitting ? t('sidebar.deleting') : t('sidebar.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={pendingBatchDelete} onOpenChange={(open) => {
+        if (!open && !deleteSubmitting) setPendingBatchDelete(false)
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>批量删除会话</AlertDialogTitle>
+            <AlertDialogDescription>
+              确认删除选中的 {selectedIds.size} 个会话？此操作不可恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSubmitting}>{t('sidebar.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault()
+                void handleConfirmBatchDelete()
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteSubmitting}
+            >
+              {deleteSubmitting ? t('sidebar.deleting') : `删除 ${selectedIds.size} 个`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

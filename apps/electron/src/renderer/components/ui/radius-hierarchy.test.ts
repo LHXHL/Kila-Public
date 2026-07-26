@@ -32,8 +32,8 @@ describe('圆角层级', () => {
     const skillDetailSource = readRendererSource('../settings/SkillDetailDialog.tsx')
     const toolActivitySource = readRendererSource('../agent/ToolActivityItem.tsx')
 
-    expect(tokenUsageSource).toContain("'rounded-lg bg-[hsl(var(--brand-soft))]")
-    expect(tokenUsageSource).not.toContain("'rounded-full bg-[hsl(var(--brand-soft))]")
+    expect(tokenUsageSource).toContain("'rounded-lg bg-brand-soft")
+    expect(tokenUsageSource).not.toContain("'rounded-full bg-brand-soft")
     expect(skillDetailSource).toContain('max-w-full rounded-md border')
     expect(toolActivitySource).toContain('rounded-md px-2 py-1 text-[11px]')
   })
@@ -43,6 +43,6 @@ describe('圆角层级', () => {
     const pendingSource = readRendererSource('../agent/GlobalPendingRequestsButton.tsx')
 
     expect(contextSource).toContain("'h-full rounded-full transition-all duration-300'")
-    expect(pendingSource).toContain('rounded-full bg-[hsl(var(--status-warning))]')
+    expect(pendingSource).toContain('rounded-full bg-status-warning')
   })
 })

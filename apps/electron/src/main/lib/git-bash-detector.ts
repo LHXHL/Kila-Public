@@ -1,30 +1,20 @@
 /**
  * Bash 环境检测模块（Windows 平台）
  *
- * 检测策略：
- * - 打包模式：直接使用内置 busybox bash（开箱即用，不依赖系统 Git Bash）
- * - 开发模式：查找 PATH 中的 bash（开发者本机已安装 Git for Windows 等）
- *
- * 注意：busybox 使用 ash shell，不支持 `bash --version`，
- * 因此内置 bash 直接信任，不做版本验证。
+ * 状态检测统一委托给 shell-resolver（与执行层 process-registry 共享同一
+ * 真相源），保证设置页显示的状态与 Agent 实际使用的 shell 一致：
+ * - 打包模式：内置 busybox bash（开箱即用，不依赖系统 Git Bash）
+ * - 开发模式：PATH 中的真 bash（排除 System32 的 WSL 启动器）→ 开发版内置 busybox
+ * - 都不可用时携带明确的修复指引，不降级
  */
 
-import { app } from 'electron'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import type { GitBashStatus } from '@kila/shared'
-
-import { createLogger } from './logger'
-const log = createLogger('Bash 检测')
+import { resolveShell } from './shell-resolver'
 
 /**
  * 检测 Bash 环境
  *
- * 策略：
- * 1. 打包模式下直接使用内置 busybox bash
- * 2. 开发模式下查找系统 PATH 中的 bash
- *
- * @returns Bash 可用状态
+ * @returns Bash 可用状态（version 字段：busybox = 内置 shell，system = 系统真 bash）
  */
 export async function detectGitBash(): Promise<GitBashStatus> {
   // 仅在 Windows 平台执行
@@ -37,56 +27,20 @@ export async function detectGitBash(): Promise<GitBashStatus> {
     }
   }
 
-  // 打包模式：直接使用内置 busybox bash
-  if (app.isPackaged) {
-    const bundledBashPath = join(process.resourcesPath, 'vendor', 'bash', 'bash.exe')
-    if (existsSync(bundledBashPath)) {
-      log.info(`[Bash 检测] 使用内置 bash: ${bundledBashPath}`)
-      return {
-        available: true,
-        path: bundledBashPath,
-        version: 'busybox',
-        error: null,
-      }
-    }
-
-    log.warn('[Bash 检测] 内置 bash 不存在')
+  const shell = resolveShell()
+  if (shell.kind === 'none' || !shell.path) {
     return {
       available: false,
       path: null,
       version: null,
-      error: '内置 bash 缺失，请重新安装',
+      error: shell.error,
     }
   }
 
-  // 开发模式：查找系统 bash
-  const { execSync } = await import('node:child_process')
-  try {
-    const output = execSync('where bash', {
-      encoding: 'utf-8',
-      timeout: 5000,
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    const bashPath = output.trim().split('\n')[0]?.trim()
-    if (bashPath && existsSync(bashPath)) {
-      log.info(`[Bash 检测] 开发模式，使用系统 bash: ${bashPath}`)
-      return {
-        available: true,
-        path: bashPath,
-        version: 'system',
-        error: null,
-      }
-    }
-  } catch {
-    // where bash 失败
-  }
-
-  log.warn('[Bash 检测] 未找到可用的 bash 环境')
   return {
-    available: false,
-    path: null,
-    version: null,
-    error: '未找到 bash 环境',
+    available: true,
+    path: shell.path,
+    version: shell.kind === 'busybox' ? 'busybox' : 'system',
+    error: null,
   }
 }

@@ -340,8 +340,14 @@ export function isToolResultError(result: unknown): boolean {
   return false
 }
 
-/** 检测后台任务/Shell 事件 */
-function detectBackgroundEvents(
+/**
+ * 检测后台任务/Shell 事件
+ *
+ * 从单个工具结果里识别后台化的 Task/Shell（run_in_background）与 KillShell，
+ * 供 Pi 适配器在 tool_execution_end 处产出 task_backgrounded / shell_backgrounded / shell_killed，
+ * 驱动渲染端后台任务面板（backgroundTasksAtomFamily）。
+ */
+export function detectBackgroundEvents(
   toolUseId: string,
   entry: ToolEntry,
   resultStr: string,

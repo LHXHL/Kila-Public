@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import type { AssistantMessage, ImageContent, Message, Model, TextContent, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai'
+import type { AssistantMessage, ImageContent, Message, Model, TextContent, ToolCall, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai'
 import type { AgentMessage, AgentToolResultImage, FileAttachment } from '@kila/shared'
 import { extractKilaImageAttachments, withLegacyAttachedFilesBlock } from '@kila/shared'
 import { resolveAttachmentPath } from '../config-paths'
@@ -47,10 +47,16 @@ async function attachmentToImageContent(attachment: Pick<FileAttachment, 'localP
   }
 }
 
-function createAssistantTextMessage(message: AgentMessage, model: PiModel): AssistantMessage {
+function createAssistantMessage(message: AgentMessage, model: PiModel, toolCalls: ToolCall[]): AssistantMessage {
+  const content: Array<TextContent | ToolCall> = []
+  if (message.content.trim()) {
+    content.push({ type: 'text', text: message.content })
+  }
+  content.push(...toolCalls)
+
   return {
     role: 'assistant',
-    content: [{ type: 'text', text: message.content }],
+    content,
     api: model.api,
     provider: model.provider,
     model: message.model ?? model.id,
@@ -68,9 +74,46 @@ function createAssistantTextMessage(message: AgentMessage, model: PiModel): Assi
         total: 0,
       },
     },
-    stopReason: 'stop',
+    // 有工具调用的历史轮次必须标记为 toolUse，否则 Pi/Anthropic 会认为 assistant 已终止，
+    // 破坏 toolUse↔toolResult 的配对结构。
+    stopReason: toolCalls.length > 0 ? 'toolUse' : 'stop',
     timestamp: message.createdAt,
   }
+}
+
+/**
+ * 从一条 assistant 消息的事件里重建 Pi 需要的 toolCall 块。
+ *
+ * 以 tool_result 事件为驱动，保证生成的 toolCall 与后续 toolResult 严格 1:1 配对——
+ * 严格 provider（如 Anthropic）要求每个 tool_result 前必须有对应的 tool_use，
+ * 否则首次迁移灌入 Pi sidecar 后，第一条 prompt 会报 "tool_result without preceding tool_use"。
+ * 优先复用 tool_start 里更完整的入参；缺失时回退到 tool_result 自带的 input。
+ */
+function collectToolCallsFromEvents(message: AgentMessage): ToolCall[] {
+  const events = message.events ?? []
+  const startById = new Map<string, Extract<NonNullable<AgentMessage['events']>[number], { type: 'tool_start' }>>()
+  for (const event of events) {
+    if (event.type === 'tool_start') {
+      startById.set(event.toolUseId, event)
+    }
+  }
+
+  const toolCalls: ToolCall[] = []
+  const seen = new Set<string>()
+  for (const event of events) {
+    if (event.type !== 'tool_result') continue
+    if (seen.has(event.toolUseId)) continue
+    seen.add(event.toolUseId)
+    const start = startById.get(event.toolUseId)
+    toolCalls.push({
+      type: 'toolCall',
+      id: event.toolUseId,
+      name: start?.toolName ?? event.toolName ?? 'unknown_tool',
+      arguments: (start?.input ?? event.input ?? {}) as Record<string, unknown>,
+    })
+  }
+
+  return toolCalls
 }
 
 function buildUserTextContent(content: string, attachments?: FileAttachment[]): string {
@@ -198,8 +241,12 @@ export async function convertHistoryToPiMessages(
       continue
     }
 
-    if (message.content.trim()) {
-      result.push(createAssistantTextMessage(message, model))
+    // 先重建 toolCall 块，再决定是否产出 assistant 消息：
+    // 即使文本为空，只要本轮有工具调用，也必须产出带 toolCall 的 assistant 消息，
+    // 否则后续 toolResult 会成为“孤儿”，破坏严格 provider 的配对校验。
+    const toolCalls = collectToolCallsFromEvents(message)
+    if (message.content.trim() || toolCalls.length > 0) {
+      result.push(createAssistantMessage(message, model, toolCalls))
     }
 
     const toolResultMessages = await createToolResultMessages(message)

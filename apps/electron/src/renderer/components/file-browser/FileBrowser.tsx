@@ -629,9 +629,9 @@ function FileTreeItem({
         {/* 文件/文件夹图标 */}
         {entry.isDirectory ? (
           expanded ? (
-            <FolderOpen className="size-4 flex-shrink-0 text-[hsl(var(--brand-soft-foreground))]" />
+            <FolderOpen className="size-4 flex-shrink-0 text-brand-soft-foreground" />
           ) : (
-            <Folder className="size-4 flex-shrink-0 text-[hsl(var(--brand-soft-foreground))]" />
+            <Folder className="size-4 flex-shrink-0 text-brand-soft-foreground" />
           )
         ) : (
           <FileText className="size-4 text-muted-foreground flex-shrink-0" />

@@ -1,14 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { postRunMemoryFlush, type PostRunMemoryFlushDeps } from './post-run'
-import type { MemoryWriteInput } from './types'
-import type { QueuedMemoryWrite } from './pending-write-buffer'
 
 function createDeps(overrides: Partial<PostRunMemoryFlushDeps> = {}): PostRunMemoryFlushDeps {
   return {
-    drainWrites: () => [],
-    acknowledgeWrite: () => {},
-    failWrite: () => {},
-    writeMemory: async () => ({}) as never,
     appendRuntimeEvent: () => ({}) as never,
     rebuildSnapshot: async () => '',
     captureThread: async () => null,
@@ -16,23 +10,18 @@ function createDeps(overrides: Partial<PostRunMemoryFlushDeps> = {}): PostRunMem
   }
 }
 
-describe('post-run memory flush', () => {
-  test('Given 两条待写记忆，When flush 成功，Then 返回 written 与准确数量', async () => {
-    const writes: QueuedMemoryWrite[] = [
-      { queueId: 'queue-1', content: '第一条', sourceSessionId: 'session-success' },
-      { queueId: 'queue-2', content: '第二条', sourceSessionId: 'session-success' },
-    ]
-    const persisted: MemoryWriteInput[] = []
+describe('post-run memory flush（仅线程归档 + 快照重建）', () => {
+  test('Given 线程归档与快照重建成功，When flush，Then 返回 written', async () => {
+    let captured = false
     let rebuilt = false
 
     const result = await postRunMemoryFlush({
       sessionId: 'session-success',
       messages: [{ role: 'assistant', content: 'done' }],
     }, createDeps({
-      drainWrites: () => writes,
-      writeMemory: async (entry) => {
-        persisted.push(entry)
-        return {} as never
+      captureThread: async () => {
+        captured = true
+        return null
       },
       rebuildSnapshot: async () => {
         rebuilt = true
@@ -40,44 +29,52 @@ describe('post-run memory flush', () => {
       },
     }))
 
-    expect(result).toEqual({ status: 'written', writtenCount: 2 })
-    expect(persisted).toEqual(writes)
+    expect(result).toEqual({ status: 'written', writtenCount: 0 })
+    expect(captured).toBe(true)
     expect(rebuilt).toBe(true)
   })
 
-  test('Given 第二条写入失败，When flush，Then 保留成功计数并返回错误', async () => {
-    const runtimeEvents: Array<{ eventType: string; detail?: string }> = []
-    const failedQueueIds: string[] = []
-    let callCount = 0
+  test('Given 线程归档失败，When flush，Then 记录 warn 但仍完成快照重建', async () => {
+    const runtimeEvents: Array<{ eventType: string; status?: string }> = []
+    let rebuilt = false
 
     const result = await postRunMemoryFlush({
-      sessionId: 'session-failure',
+      sessionId: 'session-thread-fail',
       messages: [],
     }, createDeps({
-      drainWrites: () => [
-        { queueId: 'queue-1', content: '第一条', sourceSessionId: 'session-failure' },
-        { queueId: 'queue-2', content: '第二条', sourceSessionId: 'session-failure' },
-      ],
-      writeMemory: async () => {
-        callCount += 1
-        if (callCount === 2) throw new Error('provider offline')
-        return {} as never
-      },
+      captureThread: async () => { throw new Error('thread sync offline') },
       appendRuntimeEvent: (event) => {
         runtimeEvents.push(event)
         return {} as never
       },
-      failWrite: (_sessionId, queueId) => { failedQueueIds.push(queueId) },
+      rebuildSnapshot: async () => {
+        rebuilt = true
+        return ''
+      },
     }))
 
-    expect(result).toEqual({
-      status: 'failed',
-      writtenCount: 1,
-      error: 'provider offline',
-    })
+    expect(result.status).toBe('written')
+    expect(rebuilt).toBe(true)
+    expect(runtimeEvents.some((event) => event.eventType === 'nowledge_thread_sync_failed')).toBe(true)
+  })
+
+  test('Given 快照重建抛错，When flush，Then 返回 failed 并记录错误', async () => {
+    const runtimeEvents: Array<{ eventType: string; detail?: string }> = []
+
+    const result = await postRunMemoryFlush({
+      sessionId: 'session-rebuild-fail',
+      messages: [],
+    }, createDeps({
+      rebuildSnapshot: async () => { throw new Error('snapshot offline') },
+      appendRuntimeEvent: (event) => {
+        runtimeEvents.push(event)
+        return {} as never
+      },
+    }))
+
+    expect(result).toEqual({ status: 'failed', writtenCount: 0, error: 'snapshot offline' })
     expect(runtimeEvents.some((event) => (
-      event.eventType === 'post_run_flush_failed' && event.detail === 'provider offline'
+      event.eventType === 'post_run_flush_failed' && event.detail === 'snapshot offline'
     ))).toBe(true)
-    expect(failedQueueIds).toEqual(['queue-2'])
   })
 })

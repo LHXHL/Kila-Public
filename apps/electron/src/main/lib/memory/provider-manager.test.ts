@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { MemoryProvider } from './provider'
-import { MemoryProviderManager, mergeMemoryLists } from './provider-manager'
+import { MemoryProviderManager } from './provider-manager'
 import type {
   MemoryConnectionsInput,
   MemoryConnectionsResult,
@@ -18,9 +18,6 @@ import type {
   MemoryTimelineEvent,
   MemoryTimelineInput,
   MemoryWriteInput,
-  NotebookEditInput,
-  NotebookEntry,
-  NotebookWriteInput,
   WorkingMemory,
   WorkingMemoryInput,
   WorkingMemoryPatchInput,
@@ -44,16 +41,13 @@ function memory(input: Pick<MemoryEntry, 'uri' | 'content' | 'updatedAt'> & Part
   }
 }
 
-class FakeMemoryProvider implements MemoryProvider {
+class FakeNowledgeProvider implements MemoryProvider {
   readonly calls: string[] = []
   readonly entries = new Map<string, MemoryEntry>()
   health = true
   workingMemory: WorkingMemory | null = null
 
-  constructor(private readonly name: string) {}
-
   initialize(): void {}
-
   dispose(): void {}
 
   async healthCheck(): Promise<boolean> {
@@ -62,12 +56,12 @@ class FakeMemoryProvider implements MemoryProvider {
 
   async getStatus(): Promise<MemoryProviderStatus> {
     return {
-      mode: this.name === 'nowledge' ? 'nowledge' : 'local',
-      activeProvider: this.name === 'nowledge' ? 'nowledge' : 'local',
-      localReady: true,
-      memoryDirectory: this.name === 'local' ? '/tmp/kila-memory-test' : '',
-      nowledgeEnabled: this.name === 'nowledge',
-      nowledgeConfigured: this.name === 'nowledge',
+      mode: 'nowledge',
+      activeProvider: 'nowledge',
+      localReady: false,
+      memoryDirectory: '',
+      nowledgeEnabled: true,
+      nowledgeConfigured: true,
       nowledgeHealthy: this.health,
       checkedAt: Date.now(),
     }
@@ -86,7 +80,7 @@ class FakeMemoryProvider implements MemoryProvider {
   async write(input: MemoryWriteInput): Promise<MemoryEntry> {
     this.calls.push('write')
     const entry = memory({
-      uri: `memory://${this.name}/written-${this.calls.filter((call) => call === 'write').length}`,
+      uri: `memory://written-${this.calls.filter((call) => call === 'write').length}`,
       content: input.content,
       title: input.title,
       tags: input.tags,
@@ -141,14 +135,8 @@ class FakeMemoryProvider implements MemoryProvider {
   async patchWorkingMemory(input: WorkingMemoryPatchInput): Promise<WorkingMemory> {
     this.calls.push('patchWorkingMemory')
     const current = this.workingMemory?.content ?? ''
-    const content = input.append
-      ? `${current}\n${input.append}`.trim()
-      : input.content ?? current
-    return this.setWorkingMemory({
-      scope: input.scope,
-      projectPath: input.projectPath,
-      content,
-    })
+    const content = input.append ? `${current}\n${input.append}`.trim() : input.content ?? current
+    return this.setWorkingMemory({ scope: input.scope, projectPath: input.projectPath, content })
   }
 
   async searchThreads(_input: MemoryThreadSearchInput): Promise<MemoryThreadSearchResult[]> {
@@ -175,30 +163,6 @@ class FakeMemoryProvider implements MemoryProvider {
     this.calls.push('getConnections')
     return null
   }
-
-  listNotebookEntries(_input?: MemoryListInput): Promise<NotebookEntry[]> {
-    return Promise.resolve([])
-  }
-
-  readNotebookEntry(_uri: string): Promise<NotebookEntry | null> {
-    return Promise.resolve(null)
-  }
-
-  writeNotebookEntry(_input: NotebookWriteInput): Promise<NotebookEntry> {
-    throw new Error('not used in provider routing tests')
-  }
-
-  editNotebookEntry(_input: NotebookEditInput): Promise<NotebookEntry | null> {
-    throw new Error('not used in provider routing tests')
-  }
-
-  forgetNotebookEntry(_uri: string): Promise<boolean> {
-    throw new Error('not used in provider routing tests')
-  }
-
-  getIndexContext(_projectPath?: string): string {
-    return ''
-  }
 }
 
 function config(nowledgeEnabled: boolean) {
@@ -210,124 +174,64 @@ function config(nowledgeEnabled: boolean) {
   }
 }
 
-describe('MemoryProviderManager list aggregation', () => {
-  test('Given 本地与 Nowledge 都有记忆，When 合并长期记忆列表，Then 历史 Nowledge 条目不会被隐藏', () => {
-    const local = memory({
-      uri: 'memory://global/local-1',
-      content: 'Kila 本地 Markdown 记忆',
-      updatedAt: 200,
-    })
-    const nowledge = memory({
-      uri: 'memory://nowledge-1',
-      content: '重构前保存在 Nowledge 的历史记忆',
-      updatedAt: 100,
-    })
-
-    const result = mergeMemoryLists([local], [nowledge], { limit: 10 })
-
-    expect(result.map((entry) => entry.uri)).toEqual([
-      'memory://global/local-1',
-      'memory://nowledge-1',
-    ])
-  })
-
-  test('Given 两端存在相同内容，When 合并并分页，Then 本地条目优先且分页稳定', () => {
-    const local = memory({
-      uri: 'memory://global/local-duplicate',
-      content: '回复优先使用中文。',
-      updatedAt: 300,
-    })
-    const duplicate = memory({
-      uri: 'memory://nowledge-duplicate',
-      content: '回复优先使用中文。',
-      updatedAt: 250,
-    })
-    const historical = memory({
-      uri: 'memory://nowledge-historical',
-      content: '历史项目使用 Bun。',
-      updatedAt: 200,
-    })
-
-    const result = mergeMemoryLists([local], [duplicate, historical], { offset: 1, limit: 1 })
-
-    expect(result).toHaveLength(1)
-    expect(result[0]?.uri).toBe('memory://nowledge-historical')
-  })
-
-  test('Given Nowledge 是当前后端，When 合并相同内容，Then Nowledge 条目优先', () => {
-    const local = memory({ uri: 'memory://global/legacy', content: '同一条记忆', updatedAt: 300 })
-    const nowledge = memory({ uri: 'memory://nmem-1', content: '同一条记忆', updatedAt: 200 })
-
-    const result = mergeMemoryLists([local], [nowledge], { limit: 10 }, 'nowledge')
-
-    expect(result.map((entry) => entry.uri)).toEqual(['memory://nmem-1'])
-  })
-})
-
-describe('MemoryProviderManager provider routing', () => {
-  function createManager(nowledgeEnabled: boolean, nowledge: FakeMemoryProvider, local = new FakeMemoryProvider('local')) {
+describe('MemoryProviderManager 仅 Nowledge 路由', () => {
+  function createManager(nowledgeEnabled: boolean, nowledge = new FakeNowledgeProvider()) {
     return {
-      local,
       nowledge,
       manager: new MemoryProviderManager({
         getConfig: () => config(nowledgeEnabled),
-        localProvider: local,
-        createNowledgeProvider: () => nowledge,
+        createNowledgeProvider: () => (nowledgeEnabled ? nowledge : null),
       }),
     }
   }
 
-  test('Given Nowledge 健康且已启用，When 写入长期记忆，Then 只调用 Nowledge', async () => {
-    const { manager, local, nowledge } = createManager(true, new FakeMemoryProvider('nowledge'))
-
+  test('Given Nowledge 健康且已启用，When 写入长期记忆，Then 调用 Nowledge', async () => {
+    const { manager, nowledge } = createManager(true)
     await manager.write({ content: '回复优先使用中文', category: 'preference' })
-
     expect(nowledge.calls).toContain('write')
-    expect(local.calls).not.toContain('write')
   })
 
-  test('Given Nowledge 已启用但离线，When 写入长期记忆，Then 明确失败且不回退本地', async () => {
-    const nowledge = new FakeMemoryProvider('nowledge')
+  test('Given Nowledge 已启用但离线，When 写入长期记忆，Then 明确失败', async () => {
+    const nowledge = new FakeNowledgeProvider()
     nowledge.health = false
-    const { manager, local } = createManager(true, nowledge)
-
+    const { manager } = createManager(true, nowledge)
     await expect(manager.write({ content: '不得静默回退' })).rejects.toThrow('Nowledge 已启用但当前不可用')
-
-    expect(local.calls).not.toContain('write')
   })
 
-  test('Given Nowledge 未启用，When 写入长期记忆，Then 使用本地 Markdown', async () => {
-    const { manager, local, nowledge } = createManager(false, new FakeMemoryProvider('nowledge'))
-
-    await manager.write({ content: '本地长期记忆' })
-
-    expect(local.calls).toContain('write')
-    expect(nowledge.calls).toEqual([])
+  test('Given Nowledge 未启用，When 写入长期记忆，Then 抛错（记忆已禁用），不写本地', async () => {
+    const { manager } = createManager(false)
+    await expect(manager.write({ content: '未配置不应写入' })).rejects.toThrow('Nowledge 未启用')
   })
 
-  test('Given 记忆 URI 指向不同后端，When 编辑或删除，Then 按 URI 路由到对应 Provider', async () => {
-    const { manager, local, nowledge } = createManager(true, new FakeMemoryProvider('nowledge'))
-    local.entries.set('memory://global/local-1', memory({ uri: 'memory://global/local-1', content: '本地', updatedAt: 1 }))
+  test('Given Nowledge 未启用，When 读/搜/列，Then 返回空且不抛错（记忆禁用）', async () => {
+    const { manager } = createManager(false)
+    expect(await manager.search({ query: 'x' })).toEqual([])
+    expect(await manager.list({})).toEqual([])
+    expect(await manager.read('memory://nmem-1')).toBeNull()
+  })
+
+  test('Given Nowledge 已启用，When 编辑/删除，Then 路由到 Nowledge', async () => {
+    const { manager, nowledge } = createManager(true)
     nowledge.entries.set('memory://nmem-1', memory({ uri: 'memory://nmem-1', content: '远端', updatedAt: 1 }))
-
-    await manager.edit({ uri: 'memory://global/local-1', content: '本地更新' })
     await manager.edit({ uri: 'memory://nmem-1', content: '远端更新' })
-    await manager.forget('memory://global/local-1')
     await manager.forget('memory://nmem-1')
-
-    expect(local.calls).toContain('edit:memory://global/local-1')
-    expect(local.calls).toContain('forget:memory://global/local-1')
     expect(nowledge.calls).toContain('edit:memory://nmem-1')
     expect(nowledge.calls).toContain('forget:memory://nmem-1')
   })
 
-  test('Given Nowledge 已启用，When 更新全局与项目 Working Memory，Then 全局走 Nowledge、项目走本地', async () => {
-    const { manager, local, nowledge } = createManager(true, new FakeMemoryProvider('nowledge'))
-
+  test('Given Nowledge 已启用，When 更新全局 Working Memory，Then 走 Nowledge；项目级抛错（已移除）', async () => {
+    const { manager, nowledge } = createManager(true)
     await manager.setWorkingMemory({ scope: 'global', content: '全局约束' })
-    await manager.setWorkingMemory({ scope: 'project', projectPath: '/tmp/project', content: '项目约束' })
-
     expect(nowledge.calls).toContain('setWorkingMemory')
-    expect(local.calls).toContain('setWorkingMemory')
+    await expect(manager.setWorkingMemory({ scope: 'project', projectPath: '/tmp/p', content: 'x' }))
+      .rejects.toThrow('项目级 working memory 已随本地存储移除')
+  })
+
+  test('Given Nowledge 未启用，When 查询状态，Then 记忆不可用', async () => {
+    const { manager } = createManager(false)
+    const status = await manager.getStatus()
+    expect(status.nowledgeConfigured).toBe(false)
+    expect(status.localReady).toBe(false)
+    expect(await manager.isMemoryAvailable()).toBe(false)
   })
 })

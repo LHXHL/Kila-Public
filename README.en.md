@@ -34,7 +34,7 @@ Kila Session
 └─ Project profile: MCP, Skills, and permission settings
 ```
 
-Kila uses the Pi `0.80.10` canonical runtime. A product Session maps to one Pi AgentSession, while user data and runtime state remain separate. This allows tasks to resume after restarting the app or compacting a long conversation.
+Kila uses the Pi `0.82.1` canonical runtime. A product Session maps to one Pi AgentSession, while user data and runtime state remain separate. This allows tasks to resume after restarting the app or compacting a long conversation.
 
 ## Quick Start
 

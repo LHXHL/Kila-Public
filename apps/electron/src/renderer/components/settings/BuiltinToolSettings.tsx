@@ -167,7 +167,7 @@ function WebSearchSettings(): React.ReactElement {
           </div>
 
           {testResult && (
-            <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${testResult.success ? 'bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]' : 'bg-destructive/10 text-destructive'}`}>
+            <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${testResult.success ? 'bg-status-success-soft text-status-success-foreground' : 'bg-destructive/10 text-destructive'}`}>
               {testResult.success ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : <XCircle size={16} className="mt-0.5 shrink-0" />}
               <span>{testResult.message}</span>
             </div>

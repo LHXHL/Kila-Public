@@ -37,7 +37,7 @@ import type {
   ModelMetadataOverride,
   ProviderDbModel,
 } from '@kila/shared'
-import { extractKilaImageAttachments, inferApiTypeFromProvider, resolveModelMetadata, resolveThinkingLevel, type ModelCapabilitiesOverride } from '@kila/shared'
+import { extractKilaImageAttachments, inferApiTypeFromProvider, resolveModelMetadata, resolveThinkingLevel, detectBackgroundEvents, type ModelCapabilitiesOverride } from '@kila/shared'
 import { convertHistoryToPiMessages } from './pi-history-converter'
 import { getPiAgentDir, getPiSessionDir } from '../config-paths'
 import { resolveModelCost } from '../model-pricing'
@@ -141,6 +141,14 @@ const PI_SESSION_EVENT_TYPES_ACCOUNTED_FOR: Record<AgentSessionEvent['type'], tr
   compaction_end: true,
   auto_retry_start: true,
   auto_retry_end: true,
+  // Pi 0.82：压缩 / 分支摘要的重试韧性事件。产品侧压缩成功/失败仍由 compaction_end 收敛，
+  // 这些只是底层 summarization 调用的重试生命周期，Kila 无需单独持久化或 UI 呈现。
+  summarization_retry_scheduled: true,
+  summarization_retry_attempt_start: true,
+  summarization_retry_finished: true,
+  // Pi 0.82：bash 工具的流式输出增量。Kila 已通过 tool_execution_update / tool_result 呈现工具输出，
+  // 暂不单独消费该事件（未来若要实时 bash 流，可映射为 tool_update）。
+  bash_execution_update: true,
 }
 
 /** Pi assistant 流内部事件同样必须在升级时显式审计。 */
@@ -507,6 +515,12 @@ export function mapPiEventToKilaEvents(
     case 'entry_appended':
     case 'session_info_changed':
     case 'thinking_level_changed':
+    // Pi 0.82 新增：压缩/分支摘要的重试韧性事件 + bash 流式输出增量。
+    // 经审计属 Pi 内部生命周期，产品终态与工具输出已由 compaction_end / tool_execution_* 收敛，显式忽略。
+    case 'summarization_retry_scheduled':
+    case 'summarization_retry_attempt_start':
+    case 'summarization_retry_finished':
+    case 'bash_execution_update':
       return []
 
     case 'message_update':
@@ -652,6 +666,8 @@ export function createPiEventMapper(
   options?: { contextWindow?: number },
 ): ((event: PiRuntimeEvent) => AgentEvent[]) & { flush: () => AgentEvent[] } {
   const accumulatedToolResults = new Map<string, string>()
+  // 记录每个工具调用的入参（来自 tool_execution_start），tool_execution_end 时用于后台任务检测。
+  const toolInputsById = new Map<string, Record<string, unknown>>()
   let turnSequence = 0
   let activeTurnId: string | undefined
   const pendingAgentEnds: Array<Extract<PiRuntimeEvent, { type: 'agent_end' }>> = []
@@ -667,6 +683,11 @@ export function createPiEventMapper(
 
     if (event.type === 'turn_start') {
       activeTurnId = `pi-turn-${++turnSequence}`
+    }
+
+    // 记录工具入参，供 tool_execution_end 的后台任务检测使用（Pi 的 end 事件不含入参）。
+    if (event.type === 'tool_execution_start') {
+      toolInputsById.set(event.toolCallId, (event.args ?? {}) as Record<string, unknown>)
     }
 
     const mapped = event.type === 'agent_settled' && pendingAgentEnds.length > 0
@@ -716,6 +737,22 @@ export function createPiEventMapper(
 
       if (eventWithTurn.type === 'tool_result') {
         accumulatedToolResults.delete(eventWithTurn.toolUseId)
+        normalized.push(eventWithTurn)
+
+        // 后台任务/Shell 检测：Pi 路径的唯一接入点。
+        // 用 tool_execution_start 记录的入参 + 本次结果，产出 task_backgrounded /
+        // shell_backgrounded / shell_killed，驱动渲染端后台任务面板。
+        const toolInput = toolInputsById.get(eventWithTurn.toolUseId) ?? {}
+        toolInputsById.delete(eventWithTurn.toolUseId)
+        const backgroundEvents = detectBackgroundEvents(
+          eventWithTurn.toolUseId,
+          { name: eventWithTurn.toolName ?? '', input: toolInput },
+          eventWithTurn.result,
+          eventWithTurn.isError,
+          activeTurnId,
+        )
+        normalized.push(...backgroundEvents)
+        continue
       }
       normalized.push(eventWithTurn)
     }
@@ -1097,7 +1134,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
           await runtime.session.compact(manualCompactInstructions || undefined)
           queue.push({ type: 'complete', stopReason: 'compact' })
         } catch (error) {
-          // Pi 0.80.10 的 compact() 会先同步发送 compaction_end，再 reject Promise。
+          // Pi 0.82.1 的 compact() 会先同步发送 compaction_end，再 reject Promise。
           // 错误/取消已经由 subscription 映射；这里再次 throw 会让外层 catch 重复发送错误。
           // `Nothing to compact` / `Already compacted` 只额外补产品终态，避免流式状态悬挂。
           if (getCompactionNoopMessage(error)) {

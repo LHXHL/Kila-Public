@@ -743,9 +743,10 @@ export async function getBuiltinAgentTools(
     enabledToolIds: options.enabledToolIds,
   }))
 
-  // 本地笔记和兼容记忆始终可用；长期记忆写入由当前选定后端严格处理。
+  // 记忆已收敛为仅 Nowledge：仅当 Nowledge 已配置且健康时才注册完整记忆工具，
+  // 否则只保留 memory_status（未配置 Nowledge → 记忆功能禁用）。
   const memoryAvailable = await memoryProviderManager.getStatus()
-    .then((status) => status.localReady)
+    .then((status) => status.nowledgeConfigured && status.nowledgeHealthy)
     .catch(() => false)
   tools.push(...createMemoryTools({
     sessionId: options.sessionId,

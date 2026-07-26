@@ -382,8 +382,8 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
                 className={cn(
                   'flex items-start gap-2 px-3 py-2 rounded-md text-sm',
                   testResult.success
-                    ? 'bg-[hsl(var(--status-success-soft))] text-[hsl(var(--status-success-foreground))]'
-                    : 'bg-[hsl(var(--status-danger-soft))] text-[hsl(var(--status-danger-foreground))]'
+                    ? 'bg-status-success-soft text-status-success-foreground'
+                    : 'bg-status-danger-soft text-status-danger-foreground'
                 )}
               >
                 {testResult.success ? (
@@ -402,7 +402,7 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
 
             {/* 未测试警告 */}
             {!testResult && !testing && (
-              <div className="flex items-start gap-2 rounded-md bg-[hsl(var(--status-warning-soft))] px-3 py-2 text-sm text-[hsl(var(--status-warning-foreground))]">
+              <div className="flex items-start gap-2 rounded-md bg-status-warning-soft px-3 py-2 text-sm text-status-warning-foreground">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <div className="text-xs">
                   尚未测试连接。请先点击"测试连接"按钮验证配置是否正确。

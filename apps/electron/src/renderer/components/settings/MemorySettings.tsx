@@ -1,6 +1,5 @@
 import * as React from 'react'
 import {
-  BookOpen,
   Brain,
   CheckCircle2,
   Clipboard,
@@ -8,8 +7,6 @@ import {
   ChevronRight,
   ExternalLink,
   FileText,
-  FolderOpen,
-  HardDrive,
   Loader2,
   RefreshCw,
   Trash2,
@@ -24,8 +21,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { SettingsCard, SettingsInput, SettingsToggle } from './primitives'
 import type { AppSettings } from '../../../types'
@@ -53,16 +48,6 @@ interface MemoryItem {
   updatedAt: number
 }
 
-interface NotebookItem {
-  uri: string
-  title?: string
-  content: string
-  tags: string[]
-  projectPath?: string
-  createdAt: number
-  updatedAt: number
-}
-
 const DEFAULT_NOWLEDGE_URL = 'http://127.0.0.1:14242'
 const RECENT_MEMORY_LIMIT = 12
 const ALL_MEMORY_PAGE_SIZE = 20
@@ -74,7 +59,7 @@ const NOWLEDGE_SETUP_PROMPT = `请帮我完成 Kila 的 Nowledge Mem 本地配�
 3. 启动后检查本地服务 http://127.0.0.1:14242/health；只配置 localhost，不使用远程服务。
 4. 如果 nmem CLI 可用，运行 nmem status 验证；不可用时不强制安装，Kila 可以直接访问本地 HTTP 服务。
 5. 回到 Kila「设置 → 记忆」，点击「自动检测并启用」。
-6. 最后说明：启用 Nowledge 后，新的长期记忆直接写入 Nowledge；本地笔记、项目 Working Memory 和旧 Markdown 记忆仍保存在 ~/.kila/memory。`
+6. 最后说明：Kila 的记忆完全由 Nowledge 管理；未配置 Nowledge 时记忆功能保持关闭，不会在本地写入任何记忆文件。`
 
 function formatTime(value: number): string {
   return new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -87,10 +72,6 @@ function isLocalUrl(value: string): boolean {
   } catch {
     return false
   }
-}
-
-function isLocalMemoryUri(uri: string): boolean {
-  return uri.startsWith('memory://global/') || uri.startsWith('memory://project/')
 }
 
 interface MemoryRowProps {
@@ -107,7 +88,6 @@ function MemoryRow({ item, onSelect, onDelete }: MemoryRowProps): React.ReactEle
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">{item.title || item.category}</span>
           <span className="text-xs text-muted-foreground">{formatTime(item.updatedAt)}</span>
-          {!isLocalMemoryUri(item.uri) && <span className="rounded-md bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">Nowledge</span>}
         </div>
         <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{item.content}</p>
         <Button variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => onSelect(item)}>
@@ -125,9 +105,6 @@ export function MemorySettings(): React.ReactElement {
   const [settings, setSettings] = React.useState<AppSettings | null>(null)
   const [status, setStatus] = React.useState<MemoryStatus | null>(null)
   const [memories, setMemories] = React.useState<MemoryItem[]>([])
-  const [notebooks, setNotebooks] = React.useState<NotebookItem[]>([])
-  const [pendingCount, setPendingCount] = React.useState(0)
-  const [projectPath, setProjectPath] = React.useState<string | undefined>()
   const [refreshing, setRefreshing] = React.useState(false)
   const [selectedMemory, setSelectedMemory] = React.useState<MemoryItem | null>(null)
   const [allMemoriesOpen, setAllMemoriesOpen] = React.useState(false)
@@ -138,26 +115,18 @@ export function MemorySettings(): React.ReactElement {
   const [allMemoriesError, setAllMemoriesError] = React.useState<string | null>(null)
   const allMemoriesScrollRef = React.useRef<HTMLDivElement>(null)
   const [nowledgeUrl, setNowledgeUrl] = React.useState(DEFAULT_NOWLEDGE_URL)
-  const [noteTitle, setNoteTitle] = React.useState('')
-  const [noteContent, setNoteContent] = React.useState('')
-  const [savingNote, setSavingNote] = React.useState(false)
+
+  const memoryEnabled = Boolean(status?.nowledgeConfigured)
 
   const loadRuntime = React.useCallback(async (requestedMemoryLimit: number): Promise<void> => {
-    const foreground = await window.electronAPI.getForegroundSession().catch(() => null)
-    const currentProjectPath = foreground?.project?.path
-    setProjectPath(currentProjectPath)
-    const [nextSettings, nextStatus, nextMemories, nextNotebooks, pending] = await Promise.all([
+    const [nextSettings, nextStatus, nextMemories] = await Promise.all([
       window.electronAPI.getSettings(),
       window.electronAPI.getMemoryStatus(),
       window.electronAPI.listMemories({ limit: requestedMemoryLimit }),
-      window.electronAPI.listNotebookEntries({ limit: 8, projectPath: currentProjectPath }),
-      window.electronAPI.listPendingMemoryWrites(),
     ])
     setSettings(nextSettings)
     setStatus(nextStatus as MemoryStatus)
     setMemories(nextMemories)
-    setNotebooks(nextNotebooks)
-    setPendingCount(pending.length)
     setNowledgeUrl(nextSettings.memoryNowledgeBaseUrl || DEFAULT_NOWLEDGE_URL)
   }, [])
 
@@ -286,43 +255,6 @@ export function MemorySettings(): React.ReactElement {
     allMemoriesScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
   }, [allMemoriesPage])
 
-  const handleOpenMemoryDirectory = React.useCallback(async (): Promise<void> => {
-    try {
-      await window.electronAPI.openMemoryDirectory()
-    } catch (error) {
-      console.error('[MemorySettings] 打开记忆目录失败:', error)
-      toast.error(error instanceof Error ? error.message : '无法打开记忆目录')
-    }
-  }, [])
-
-  const handleCreateNote = React.useCallback(async (): Promise<void> => {
-    if (!noteContent.trim()) {
-      toast.error('请填写笔记内容')
-      return
-    }
-    setSavingNote(true)
-    try {
-      await window.electronAPI.writeNotebookEntry({
-        title: noteTitle.trim() || undefined,
-        content: noteContent.trim(),
-        projectPath,
-      })
-      setNoteTitle('')
-      setNoteContent('')
-      await loadRuntime(RECENT_MEMORY_LIMIT)
-      toast.success('笔记已保存为本地 Markdown')
-    } finally {
-      setSavingNote(false)
-    }
-  }, [loadRuntime, noteContent, noteTitle, projectPath])
-
-  const handleDeleteNote = React.useCallback(async (uri: string): Promise<void> => {
-    if (!window.confirm('确定删除这条本地笔记吗？')) return
-    await window.electronAPI.forgetNotebookEntry(uri)
-    await loadRuntime(RECENT_MEMORY_LIMIT)
-    toast.success('本地笔记已删除')
-  }, [loadRuntime])
-
   const handleCopySetupPrompt = React.useCallback(async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(NOWLEDGE_SETUP_PROMPT)
@@ -340,53 +272,18 @@ export function MemorySettings(): React.ReactElement {
     <div className="w-full space-y-6 pb-8">
       <header>
         <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-[hsl(var(--kila-accent))]" />
+          <Brain className="h-5 w-5 text-kila-accent" />
           <h2 className="text-base font-semibold text-foreground">记忆</h2>
         </div>
         <p className="mt-1 max-w-[65ch] text-sm text-muted-foreground">
-          启用 Nowledge 后，长期记忆直接写入 Nowledge；未启用时使用本地 Markdown。
+          Kila 的长期记忆完全由本机 Nowledge 管理。未配置 Nowledge 时记忆功能保持关闭，不会在本地写入任何记忆文件。
         </p>
       </header>
 
       <section className="space-y-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">本地存储</h3>
-          <p className="mt-1 text-sm text-muted-foreground">用于本地笔记、项目 Working Memory 和旧 Markdown 记忆兼容。</p>
-        </div>
-        <SettingsCard divided={false} className="p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"><HardDrive className="h-4 w-4" /></span>
-                本地存储已就绪
-              </div>
-              <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{status?.memoryDirectory ?? '~/.kila/memory'}</p>
-              {projectPath && <p className="mt-1 truncate text-xs text-muted-foreground">当前项目：{projectPath}</p>}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => void handleOpenMemoryDirectory()}>
-              <FolderOpen className="h-4 w-4" />打开目录
-            </Button>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-            <div className="rounded-lg bg-muted/45 px-3 py-2.5"><div className="text-xs text-muted-foreground">最近记忆</div><div className="mt-1 text-lg font-semibold tabular-nums">{memories.length}</div></div>
-            <div className="rounded-lg bg-muted/45 px-3 py-2.5"><div className="text-xs text-muted-foreground">最近笔记</div><div className="mt-1 text-lg font-semibold tabular-nums">{notebooks.length}</div></div>
-            <div className="rounded-lg bg-muted/45 px-3 py-2.5"><div className="text-xs text-muted-foreground">待恢复</div><div className="mt-1 text-lg font-semibold tabular-nums">{pendingCount}</div></div>
-          </div>
-        </SettingsCard>
-        <SettingsCard>
-          <SettingsToggle
-            label="自动注入相关记忆"
-            description="运行前从当前长期记忆来源及本地兼容记忆中检索相关内容。"
-            checked={settings.memorySessionContextEnabled ?? true}
-            onCheckedChange={(checked) => void persist({ memorySessionContextEnabled: checked })}
-          />
-        </SettingsCard>
-      </section>
-
-      <section className="space-y-3">
-        <div>
           <h3 className="text-sm font-semibold text-foreground">Nowledge 长期记忆</h3>
-          <p className="mt-1 text-sm text-muted-foreground">启用后，新的长期记忆会直接写入本机 Nowledge。</p>
+          <p className="mt-1 text-sm text-muted-foreground">启用并连接本机 Nowledge 后，记忆的召回与写入才会开启。</p>
         </div>
         <SettingsCard>
           <div className="flex items-center justify-between gap-4 px-5 py-4">
@@ -395,7 +292,7 @@ export function MemorySettings(): React.ReactElement {
                 {status?.nowledgeHealthy ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
               </span>
               <div>
-                <div className="text-sm font-medium text-foreground">{status?.nowledgeHealthy ? '本地服务已连接' : settings.memoryNowledgeEnabled ? '服务不可用' : '尚未启用'}</div>
+                <div className="text-sm font-medium text-foreground">{status?.nowledgeHealthy ? '本地服务已连接，记忆已启用' : settings.memoryNowledgeEnabled ? '服务不可用，记忆已禁用' : '尚未启用，记忆已禁用'}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">{status?.detail ?? '安装 Nowledge Mem 后可启用长期记忆'}</div>
               </div>
             </div>
@@ -427,6 +324,15 @@ export function MemorySettings(): React.ReactElement {
           </div>
         </SettingsCard>
 
+        <SettingsCard>
+          <SettingsToggle
+            label="自动注入相关记忆"
+            description="运行前从 Nowledge 检索相关长期记忆并注入上下文。需先启用 Nowledge。"
+            checked={settings.memorySessionContextEnabled ?? true}
+            onCheckedChange={(checked) => void persist({ memorySessionContextEnabled: checked })}
+          />
+        </SettingsCard>
+
         <div className="grid grid-cols-[28px_1fr] gap-x-3 gap-y-3 rounded-lg bg-muted/35 px-4 py-4 text-sm">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">1</span><div><div className="font-medium text-foreground">安装并启动桌面客户端</div><div className="mt-0.5 text-muted-foreground">无需登录即可使用本机服务；确保托盘或 Dock 中能看到运行图标。</div></div>
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">2</span><div><div className="font-medium text-foreground">在 Kila 中自动检测</div><div className="mt-0.5 text-muted-foreground">Kila 检查 127.0.0.1:14242，并保存本地连接配置。</div></div>
@@ -436,9 +342,9 @@ export function MemorySettings(): React.ReactElement {
 
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
-          <div><h3 className="text-sm font-semibold text-foreground">长期记忆</h3><p className="mt-1 text-sm text-muted-foreground">展示全部项目与全局记忆的最近条目。</p></div>
+          <div><h3 className="text-sm font-semibold text-foreground">长期记忆</h3><p className="mt-1 text-sm text-muted-foreground">展示 Nowledge 中的最近记忆条目。</p></div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" disabled={refreshing} onClick={() => void handleShowAllMemories()}>
+            <Button variant="ghost" size="sm" disabled={refreshing || !memoryEnabled} onClick={() => void handleShowAllMemories()}>
               查看全部
             </Button>
             <Button variant="ghost" size="sm" disabled={refreshing} onClick={() => void handleRefresh()}>
@@ -447,7 +353,9 @@ export function MemorySettings(): React.ReactElement {
           </div>
         </div>
         <SettingsCard divided={false}>
-          {memories.length === 0 ? (
+          {!memoryEnabled ? (
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">记忆功能未启用。请先在上方配置并启用本机 Nowledge。</div>
+          ) : memories.length === 0 ? (
             <div className="px-5 py-8 text-center text-sm text-muted-foreground">还没有长期记忆。明确告诉 Agent“请记住……”即可创建第一条。</div>
           ) : memories.map((item) => <MemoryRow key={item.uri} item={item} onSelect={setSelectedMemory} onDelete={(uri) => void handleDeleteMemory(uri)} />)}
         </SettingsCard>
@@ -525,18 +433,6 @@ export function MemorySettings(): React.ReactElement {
           )}
         </DialogContent>
       </Dialog>
-
-      <section className="space-y-3">
-        <div><h3 className="text-sm font-semibold text-foreground">本地笔记</h3><p className="mt-1 text-sm text-muted-foreground">用户主动维护的内容，不参与自动改写。</p></div>
-        <SettingsCard divided={false} className="p-5">
-          <div className="grid gap-3">
-            <Input value={noteTitle} onChange={(event) => setNoteTitle(event.target.value)} placeholder="标题（可选）" />
-            <Textarea value={noteContent} onChange={(event) => setNoteContent(event.target.value)} placeholder="记录需要长期保留的资料、清单或约束" rows={4} />
-            <div className="flex justify-end"><Button size="sm" disabled={savingNote} onClick={() => void handleCreateNote()}>{savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookOpen className="h-4 w-4" />}保存笔记</Button></div>
-          </div>
-          {notebooks.length > 0 && <div className="mt-5 space-y-3 border-t border-border/30 pt-4">{notebooks.map((note) => <div key={note.uri} className="flex gap-3 rounded-lg bg-muted/35 px-3 py-2.5"><div className="min-w-0 flex-1"><div className="text-sm font-medium text-foreground">{note.title || '未命名笔记'}</div><p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{note.content}</p></div><Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="删除笔记" onClick={() => void handleDeleteNote(note.uri)}><Trash2 className="h-4 w-4" /></Button></div>)}</div>}
-        </SettingsCard>
-      </section>
     </div>
   )
 }

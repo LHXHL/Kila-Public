@@ -405,7 +405,7 @@ export function TokenUsageSettings(): React.ReactElement {
             <button
               type="button"
               className={selectedProvider === 'all'
-                ? 'rounded-lg bg-[hsl(var(--brand-soft))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--brand-soft-foreground))]'
+                ? 'rounded-lg bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-soft-foreground'
                 : 'rounded-lg border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground'}
               onClick={() => setSelectedProvider('all')}
             >
@@ -416,7 +416,7 @@ export function TokenUsageSettings(): React.ReactElement {
                 key={provider.provider}
                 type="button"
                 className={selectedProvider === provider.provider
-                  ? 'rounded-lg bg-[hsl(var(--brand-soft))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--brand-soft-foreground))]'
+                  ? 'rounded-lg bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-soft-foreground'
                   : 'rounded-lg border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground'}
                 onClick={() => setSelectedProvider(provider.provider)}
               >

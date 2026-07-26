@@ -1,4 +1,3 @@
-import { shell } from 'electron'
 import { handle } from './shared'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -11,7 +10,6 @@ import {
 import { memoryProviderManager } from '../lib/memory/provider-manager'
 import { memorySnapshotManager } from '../lib/memory/snapshot'
 import { memoryStateStore } from '../lib/memory/state-store'
-import { getMemoryDir } from '../lib/config-paths'
 
 function serializeMemoryEntry(entry: {
   uri: string
@@ -130,17 +128,6 @@ export function registerMemoryHandlers(): void {
   )
 
   handle(
-    'memory:open-directory',
-    async (): Promise<void> => {
-      // 记忆目录不属于 Agent 工作区，不能复用 showInFolder 的工作区路径校验。
-      // 这里不接收渲染进程传入的任意路径，只打开 Kila 自己管理的目录。
-      await memoryProviderManager.initialize()
-      const error = await shell.openPath(getMemoryDir())
-      if (error) throw new Error(error)
-    },
-  )
-
-  handle(
     'memory:list-duplicates',
     async (_, input?: { limit?: number }) => {
       const groups = await memoryProviderManager.listDuplicateGroups({
@@ -177,22 +164,6 @@ export function registerMemoryHandlers(): void {
   )
 
   handle(
-    'memory:list-pending-writes',
-    async (_, input?: { sessionId?: string }) => {
-      const sessionId = typeof input?.sessionId === 'string' ? input.sessionId.trim() || undefined : undefined
-      return memoryProviderManager.listPendingWrites(sessionId)
-    },
-  )
-
-  handle(
-    'memory:clear-pending-writes',
-    async (_, input?: { sessionId?: string }) => {
-      const sessionId = typeof input?.sessionId === 'string' ? input.sessionId.trim() || undefined : undefined
-      return { cleared: memoryProviderManager.clearPendingWrites(sessionId) }
-    },
-  )
-
-  handle(
     'memory:get-debug',
     async (_, input?: { sessionId?: string; projectPath?: string }) => {
       const sessionId = input?.sessionId?.trim() || undefined
@@ -209,87 +180,6 @@ export function registerMemoryHandlers(): void {
           sessionContextEnabled: getMemoryRuntimeConfig().sessionContextEnabled,
         },
       }
-    },
-  )
-
-  handle(
-    'memory:list-notebook',
-    async (_, input?: { limit?: number; offset?: number; projectPath?: string }) => {
-      const entries = await memoryProviderManager.listNotebookEntries({
-        limit: typeof input?.limit === 'number' ? input.limit : 20,
-        offset: typeof input?.offset === 'number' ? input.offset : 0,
-        projectPath: input?.projectPath?.trim() || undefined,
-      })
-
-      return entries.map((entry) => ({
-        uri: entry.uri,
-        key: entry.key,
-        title: entry.title,
-        content: entry.content,
-        tags: entry.tags,
-        sourceSessionId: entry.sourceSessionId,
-        projectPath: entry.projectPath,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-      }))
-    },
-  )
-
-  handle(
-    'memory:write-notebook',
-    async (_, input) => {
-      const entry = await memoryProviderManager.writeNotebookEntry({
-        key: input.key,
-        title: input.title,
-        content: input.content,
-        tags: input.tags,
-        sourceSessionId: input.sourceSessionId,
-        projectPath: input.projectPath,
-      })
-      return {
-        uri: entry.uri,
-        key: entry.key,
-        title: entry.title,
-        content: entry.content,
-        tags: entry.tags,
-        sourceSessionId: entry.sourceSessionId,
-        projectPath: entry.projectPath,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-      }
-    },
-  )
-
-  handle(
-    'memory:edit-notebook',
-    async (_, input) => {
-      const entry = await memoryProviderManager.editNotebookEntry({
-        uri: input.uri,
-        key: input.key,
-        title: input.title,
-        content: input.content,
-        tags: input.tags,
-        projectPath: input.projectPath,
-      })
-      if (!entry) return null
-      return {
-        uri: entry.uri,
-        key: entry.key,
-        title: entry.title,
-        content: entry.content,
-        tags: entry.tags,
-        sourceSessionId: entry.sourceSessionId,
-        projectPath: entry.projectPath,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-      }
-    },
-  )
-
-  handle(
-    'memory:forget-notebook',
-    async (_, uri: string) => {
-      return memoryProviderManager.forgetNotebookEntry(uri)
     },
   )
 
