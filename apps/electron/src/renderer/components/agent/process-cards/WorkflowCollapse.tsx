@@ -10,6 +10,8 @@
  */
 
 import * as React from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import {
   Check,
   X,
@@ -62,12 +64,11 @@ function getCompletionStatus(
 function getStreamingHeadline(
   entries: ProcessTimelineEntry[],
   allComplete: boolean,
+  t: TFunction,
   elapsedSeconds?: number,
 ): string {
-  const tools = getToolEntries(entries)
-
   if (allComplete) {
-    return getCompletedSummary(entries, elapsedSeconds)
+    return getCompletedSummary(entries, t, elapsedSeconds)
   }
 
   // 找到最后一个未完成的条目（可能是 thinking 或 tool）
@@ -86,15 +87,16 @@ function getStreamingHeadline(
   if (lastRunning?.kind === 'thinking') {
     const preview = lastRunning.summaryText?.trim().replace(/\s+/g, ' ')
     return preview && preview.length > 40
-      ? `思考中: ${preview.slice(0, 40)}…`
-      : '思考中…'
+      ? t('agent.thinking.runningWithPreview', { preview: preview.slice(0, 40) })
+      : t('agent.thinking.running')
   }
 
-  return getCompletedSummary(entries, elapsedSeconds)
+  return getCompletedSummary(entries, t, elapsedSeconds)
 }
 
 function getCompletedSummary(
   entries: ProcessTimelineEntry[],
+  t: TFunction,
   elapsedSeconds?: number,
 ): string {
   const tools = getToolEntries(entries)
@@ -105,7 +107,7 @@ function getCompletedSummary(
     groups.set(name, (groups.get(name) ?? 0) + 1)
   }
   const parts: string[] = []
-  if (thinkingCount > 0) parts.push(`${thinkingCount} 次思考`)
+  if (thinkingCount > 0) parts.push(t('agent.workflow.thinkingCount', { count: thinkingCount }))
   for (const [name, count] of groups) {
     parts.push(count > 1 ? `${name} (${count})` : name)
   }
@@ -195,6 +197,7 @@ export function WorkflowCollapse({
   sessionPath,
   animate = false,
 }: WorkflowCollapseProps): React.ReactElement {
+  const { t } = useTranslation()
   const tools = React.useMemo(() => getToolEntries(entries), [entries])
   const allComplete = entries.length > 0 && entries.every((e) => {
     if (e.kind === 'tool') return e.activity.done
@@ -209,8 +212,8 @@ export function WorkflowCollapse({
     : elapsed
 
   const headline = React.useMemo(
-    () => getStreamingHeadline(entries, allComplete, totalElapsed),
-    [entries, allComplete, totalElapsed],
+    () => getStreamingHeadline(entries, allComplete, t, totalElapsed),
+    [entries, allComplete, t, totalElapsed],
   )
 
   // 展开状态管理：默认半展开（semi），用户可手动折叠或全展开
@@ -288,7 +291,7 @@ export function WorkflowCollapse({
         {/* 三级展开按钮 */}
         <button
           type="button"
-          aria-label={expandLevel === 'full' ? '收起过程详情' : '展开更多过程详情'}
+          aria-label={expandLevel === 'full' ? t('agent.workflow.collapseDetails') : t('agent.workflow.expandDetails')}
           className={cn(
             'flex size-6 shrink-0 items-center justify-center rounded-md transition-all duration-200',
             'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50',

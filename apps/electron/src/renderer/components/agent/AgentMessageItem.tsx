@@ -7,6 +7,7 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { FileText, FileImage, RotateCw, AlertTriangle, ChevronDown, ChevronRight, Plus, Minimize2, Pencil, GitBranch, History } from 'lucide-react'
 import {
   Message,
@@ -56,6 +57,7 @@ import type { AgentStreamState } from '@/atoms/agent-atoms'
 // ===== AttachedFileChip =====
 
 function AttachedFileChip({ file, role = 'assistant' }: { file: AttachedFileRef; role?: 'user' | 'assistant' }): React.ReactElement {
+  const { t } = useTranslation()
   const isImg = isImageFile(file.filename) || file.mediaType?.startsWith('image/')
   const Icon = isImg ? FileImage : FileText
   const image = useAttachmentImage(file.path, file.mediaType || 'image/png', isImg)
@@ -80,10 +82,10 @@ function AttachedFileChip({ file, role = 'assistant' }: { file: AttachedFileRef;
         type="button"
         className="inline-flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1 text-[12px] text-destructive hover:bg-destructive/15"
         onClick={image.retry}
-        title="点击重试读取图片"
+        title={t('agent.message.imageRetryTitle')}
       >
         <RotateCw className="size-3.5" />
-        图片读取失败，重试
+        {t('agent.message.imageLoadFailedRetry')}
       </button>
     )
   }
@@ -115,6 +117,7 @@ function RetryAttemptItem({
   isLatest: boolean
   isFailed: boolean
 }): React.ReactElement {
+  const { t } = useTranslation()
   const [showStderr, setShowStderr] = React.useState(false)
   const [showStack, setShowStack] = React.useState(false)
 
@@ -130,7 +133,7 @@ function RetryAttemptItem({
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
         <div className="flex-1 min-w-0 space-y-1">
           <div className="text-xs text-foreground/90">
-            第 {attempt.attempt} 次 ({time}) - {attempt.reason}
+            {t('agent.retry.attemptLine', { attempt: attempt.attempt, time, reason: attempt.reason })}
           </div>
           <div className="break-words font-mono text-xs text-destructive/80">
             {attempt.errorMessage}
@@ -138,10 +141,10 @@ function RetryAttemptItem({
 
           {attempt.environment && (
             <div className="space-y-0.5 text-[11px] text-muted-foreground">
-              <div>运行时: {attempt.environment.runtime}</div>
-              <div>平台: {attempt.environment.platform}</div>
-              <div>模型: {attempt.environment.model}</div>
-              {attempt.environment.workspace && <div>工作区: {attempt.environment.workspace}</div>}
+              <div>{t('agent.retry.runtime', { value: attempt.environment.runtime })}</div>
+              <div>{t('agent.retry.platform', { value: attempt.environment.platform })}</div>
+              <div>{t('agent.retry.model', { value: attempt.environment.model })}</div>
+              {attempt.environment.workspace && <div>{t('agent.retry.workspace', { value: attempt.environment.workspace })}</div>}
             </div>
           )}
 
@@ -157,7 +160,7 @@ function RetryAttemptItem({
                 ) : (
                   <ChevronRight className="size-3" />
                 )}
-                显示 stderr 输出
+                {t('agent.retry.showStderr')}
               </button>
               {showStderr && (
                 <pre className="mt-1 max-h-[200px] overflow-x-auto overflow-y-auto rounded-md border border-border/25 bg-muted/15 p-2 text-[10px] text-foreground/70">
@@ -179,7 +182,7 @@ function RetryAttemptItem({
                 ) : (
                   <ChevronRight className="size-3" />
                 )}
-                显示堆栈跟踪
+                {t('agent.retry.showStack')}
               </button>
               {showStack && (
                 <pre className="mt-1 max-h-[200px] overflow-x-auto overflow-y-auto rounded-md border border-border/25 bg-muted/15 p-2 text-[10px] text-foreground/70">
@@ -197,6 +200,7 @@ function RetryAttemptItem({
 // ===== RetryingNotice =====
 
 export function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStreamState['retrying']> }): React.ReactElement {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = React.useState(false)
   const [countdown, setCountdown] = React.useState(0)
 
@@ -241,14 +245,14 @@ export function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStream
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-foreground">
-            {retrying.failed ? '重试失败' : '正在重试'}
+            {retrying.failed ? t('agent.retry.failedTitle') : t('agent.retry.runningTitle')}
           </div>
           <div className="truncate text-[12px] text-muted-foreground/85">
           {retrying.failed
-            ? `重试失败 (${retrying.currentAttempt}/${retrying.maxAttempts})`
+            ? t('agent.retry.failedCount', { current: retrying.currentAttempt, max: retrying.maxAttempts })
             : countdown > 0
-              ? `重试倒计时 ${countdown}秒 (${retrying.currentAttempt}/${retrying.maxAttempts})`
-              : `重试中 (${retrying.currentAttempt}/${retrying.maxAttempts})`}
+              ? t('agent.retry.countdown', { seconds: countdown, current: retrying.currentAttempt, max: retrying.maxAttempts })
+              : t('agent.retry.runningCount', { current: retrying.currentAttempt, max: retrying.maxAttempts })}
             {retrying.history.length > 0 && ` · ${retrying.history[retrying.history.length - 1]?.reason}`}
           </div>
         </div>
@@ -262,7 +266,7 @@ export function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStream
       {expanded && retrying.history.length > 0 && (
         <div className="space-y-3 border-t border-border/20 px-2.5 py-2.5">
           <div className="text-[11px] font-medium text-muted-foreground">
-            尝试历史：
+            {t('agent.retry.attemptHistory')}
           </div>
           {retrying.history.map((attempt, index) => (
             <RetryAttemptItem
@@ -277,12 +281,12 @@ export function RetryingNotice({ retrying }: { retrying: NonNullable<AgentStream
               {countdown > 0 ? (
                 <>
                   <RotateCw className="size-3 animate-spin text-foreground/45" />
-                  <span>等待 {countdown} 秒后开始第 {retrying.currentAttempt} 次尝试</span>
+                  <span>{t('agent.retry.waitingNext', { seconds: countdown, attempt: retrying.currentAttempt })}</span>
                 </>
               ) : (
                 <>
                   <RotateCw className="size-3 animate-spin text-foreground/45" />
-                  <span>正在进行第 {retrying.currentAttempt} 次尝试...</span>
+                  <span>{t('agent.retry.attemptRunning', { attempt: retrying.currentAttempt })}</span>
                 </>
               )}
             </div>
@@ -548,6 +552,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
   followUpSuggestion,
   onUseFollowUp,
 }: AgentMessageItemProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const userProfile = useAtomValue(userProfileAtom)
 
   if (message.role === 'user') {
@@ -562,7 +567,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             <div className="flex items-center gap-2">
               {shouldShowMessageSourceBadge(message) && (
                 <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                  {getMessageSourceLabel(message)}
+                  {getMessageSourceLabel(message, t)}
                 </Badge>
               )}
               {message.relatedTaskId && (
@@ -603,8 +608,8 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             {messageText && <CopyButton content={messageText} />}
             {hasVisibleUserBody && onEditTurn && (
               <MessageAction
-                tooltip="编辑后重发"
-                label="编辑后重发"
+                tooltip={t('agent.message.editAndResend')}
+                label={t('agent.message.editAndResend')}
                 onClick={() => onEditTurn(message)}
               >
                 <Pencil className="size-4" />
@@ -612,8 +617,8 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             )}
             {hasVisibleUserBody && onRewindToMessage && (
               <MessageAction
-                tooltip="回退到此消息"
-                label="回退到此消息"
+                tooltip={t('agent.message.rewindToMessage')}
+                label={t('agent.message.rewindToMessage')}
                 onClick={() => onRewindToMessage(message.id)}
               >
                 <History className="size-4" />
@@ -621,8 +626,8 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             )}
             {hasVisibleUserBody && onRegenerateTurn && (
               <MessageAction
-                tooltip="重新生成"
-                label="重新生成"
+                tooltip={t('agent.message.regenerate')}
+                label={t('agent.message.regenerate')}
                 onClick={() => onRegenerateTurn(message.id)}
               >
                 <RotateCw className="size-4" />
@@ -691,8 +696,8 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             {copyText && <CopyButton content={copyText} />}
             {message.role === 'assistant' && hasVisibleAssistantBody && onBranchFromMessage && (
               <MessageAction
-                tooltip="分叉会话"
-                label="分叉会话"
+                tooltip={t('agent.message.branchSession')}
+                label={t('agent.message.branchSession')}
                 onClick={() => onBranchFromMessage(message.id)}
               >
                 <GitBranch className="size-4" />
@@ -700,8 +705,8 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             )}
             {message.role === 'assistant' && hasVisibleAssistantBody && onRewindToMessage && (
               <MessageAction
-                tooltip="回退到此消息"
-                label="回退到此消息"
+                tooltip={t('agent.message.rewindToMessage')}
+                label={t('agent.message.rewindToMessage')}
                 onClick={() => onRewindToMessage(message.id)}
               >
                 <History className="size-4" />
@@ -709,8 +714,8 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             )}
             {message.role === 'assistant' && hasVisibleAssistantBody && onRegenerateTurn && (
               <MessageAction
-                tooltip="重新生成"
-                label="重新生成"
+                tooltip={t('agent.message.regenerate')}
+                label={t('agent.message.regenerate')}
                 onClick={() => onRegenerateTurn(message.id)}
               >
                 <RotateCw className="size-4" />
@@ -753,19 +758,19 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
             {message.errorCode === 'prompt_too_long' && onCompact && (
               <Button size="sm" onClick={onCompact}>
                 <Minimize2 className="size-3.5 mr-1.5" />
-                压缩上下文
+                {t('agent.message.compactContext')}
               </Button>
             )}
             {onRetry && (
               <Button size="sm" variant={message.errorCode === 'prompt_too_long' ? 'outline' : 'default'} onClick={onRetry}>
                 <RotateCw className="size-3.5 mr-1.5" />
-                重试
+                {t('common.retry')}
               </Button>
             )}
             {onRetryInNewSession && (
               <Button size="sm" variant="outline" onClick={onRetryInNewSession}>
                 <Plus className="size-3.5 mr-1.5" />
-                在新会话中重试
+                {t('agent.message.retryInNewSession')}
               </Button>
             )}
           </div>

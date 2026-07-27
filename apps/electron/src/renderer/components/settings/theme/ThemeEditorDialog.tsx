@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   deriveThemeColorMap,
   getContrastRatio,
@@ -48,6 +49,7 @@ function ColorField({
   onChange: (value: string) => void
   optional?: boolean
 }): React.ReactElement {
+  const { t } = useTranslation()
   const hexValue = themeColorValueToHex(value)
   const convertedValue = hexColorInputToOklch(hexValue)
   const pickerValue = convertedValue ? hexValue : '#000000'
@@ -63,19 +65,19 @@ function ColorField({
   }
   return (
     <label className="space-y-1.5">
-      <span className="text-xs font-medium text-foreground">{label}{optional ? '（可选）' : ''}</span>
+      <span className="text-xs font-medium text-foreground">{label}{optional ? t('settings.themeEditor.optionalSuffix') : ''}</span>
       <div className="flex items-center gap-2">
         <input
           type="color"
           value={pickerValue}
           onChange={(event) => onChange(colorPickerValueToOklch(event.target.value))}
           className="h-9 w-11 cursor-pointer rounded-lg border border-input bg-transparent p-1"
-          aria-label={`${label}颜色选择器`}
+          aria-label={t('settings.themeEditor.colorPicker', { label })}
         />
         <Input
           value={hexValue}
           onChange={(event) => handleTextChange(event.target.value)}
-          placeholder={optional ? '留空自动生成' : '#CC7D5E'}
+          placeholder={optional ? t('settings.themeEditor.autoPlaceholder') : '#CC7D5E'}
           maxLength={7}
           spellCheck={false}
           aria-invalid={invalid}
@@ -86,13 +88,18 @@ function ColorField({
   )
 }
 
-function contrastItems(theme: ThemeDefinition, mode: 'light' | 'dark'): Array<{ label: string; ratio: number; threshold: number }> {
+/** 对比度诊断项；translate 由调用方注入，保持本函数为纯函数 */
+function contrastItems(
+  theme: ThemeDefinition,
+  mode: 'light' | 'dark',
+  t: (key: string) => string,
+): Array<{ label: string; ratio: number; threshold: number }> {
   try {
     const colors = deriveThemeColorMap(theme, mode)
     return [
-      { label: '正文 / 背景', ratio: getContrastRatio(colors['--foreground'], colors['--background']), threshold: 4.5 },
-      { label: '按钮文字 / 按钮', ratio: getContrastRatio(colors['--primary-foreground'], colors['--primary']), threshold: 4.5 },
-      { label: '弱文字 / 背景', ratio: getContrastRatio(colors['--muted-foreground'], colors['--background']), threshold: 3 },
+      { label: t('settings.themeEditor.contrastBodyBg'), ratio: getContrastRatio(colors['--foreground'], colors['--background']), threshold: 4.5 },
+      { label: t('settings.themeEditor.contrastButtonText'), ratio: getContrastRatio(colors['--primary-foreground'], colors['--primary']), threshold: 4.5 },
+      { label: t('settings.themeEditor.contrastMutedBg'), ratio: getContrastRatio(colors['--muted-foreground'], colors['--background']), threshold: 3 },
     ]
   } catch {
     return []
@@ -108,6 +115,7 @@ export function ThemeEditorDialog({
   onOpenChange,
   onSave,
 }: ThemeEditorDialogProps): React.ReactElement {
+  const { t } = useTranslation()
   const [draft, setDraft] = React.useState<ThemeDefinition | null>(initialTheme)
   const [customDark, setCustomDark] = React.useState(Boolean(initialTheme?.dark))
   const [submitIssues, setSubmitIssues] = React.useState<ThemeValidationIssue[]>([])
@@ -131,7 +139,7 @@ export function ThemeEditorDialog({
   }
   const validation = validateThemeDefinition(customDark ? draft : { ...draft, dark: undefined })
   const previewTheme = validation.theme ?? initialTheme ?? draft
-  const contrasts = contrastItems(previewTheme, mode)
+  const contrasts = contrastItems(previewTheme, mode, t)
 
   const submit = async (): Promise<void> => {
     if (!validation.valid || !validation.theme) {
@@ -145,28 +153,28 @@ export function ThemeEditorDialog({
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next) }}>
       <DialogContent className="max-h-[88vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? '编辑自定义主题' : '创建自定义主题'}</DialogTitle>
-          <DialogDescription>使用 #RRGGBB 配置 7 个核心语义颜色，其余界面颜色由 Kila 自动派生并校正对比度。</DialogDescription>
+          <DialogTitle>{editing ? t('settings.themeEditor.titleEdit') : t('settings.themeEditor.titleCreate')}</DialogTitle>
+          <DialogDescription>{t('settings.themeEditor.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1.5">
-                <span className="text-xs font-medium">名称</span>
+                <span className="text-xs font-medium">{t('settings.themeEditor.name')}</span>
                 <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} />
               </label>
               <label className="space-y-1.5">
-                <span className="text-xs font-medium">作者</span>
+                <span className="text-xs font-medium">{t('settings.themeEditor.author')}</span>
                 <Input value={draft.author ?? ''} onChange={(event) => setDraft({ ...draft, author: event.target.value || undefined })} maxLength={80} />
               </label>
             </div>
             <label className="block space-y-1.5">
-              <span className="text-xs font-medium">描述</span>
+              <span className="text-xs font-medium">{t('settings.themeEditor.desc')}</span>
               <Textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} maxLength={300} />
             </label>
             <div>
-              <h3 className="mb-3 text-sm font-medium">浅色核心配色</h3>
+              <h3 className="mb-3 text-sm font-medium">{t('settings.themeEditor.lightCore')}</h3>
               <div className="grid gap-3 sm:grid-cols-2">
                 {THEME_COLOR_FIELDS.map(([key, label]) => (
                   <ColorField key={key} label={label} value={draft.colors[key]} onChange={(value) => updateCoreColor(key, value)} />
@@ -176,8 +184,8 @@ export function ThemeEditorDialog({
             <div className="rounded-xl bg-muted/35 p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <div className="text-sm font-medium">自定义深色配色</div>
-                  <div className="text-xs text-muted-foreground">关闭时由浅色配色自动生成；开启后可按需覆盖。</div>
+                  <div className="text-sm font-medium">{t('settings.themeEditor.customDark')}</div>
+                  <div className="text-xs text-muted-foreground">{t('settings.themeEditor.customDarkHint')}</div>
                 </div>
                 <Switch checked={customDark} onCheckedChange={setCustomDark} />
               </div>
@@ -193,17 +201,17 @@ export function ThemeEditorDialog({
 
           <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
             <div className="rounded-2xl bg-muted/30 p-4 shadow-sm">
-              <div className="mb-3 text-sm font-medium">实时预览 · {mode === 'dark' ? '深色' : '浅色'}</div>
+              <div className="mb-3 text-sm font-medium">{t('settings.themeEditor.livePreview')} · {mode === 'dark' ? t('settings.themeEditor.modeDark') : t('settings.themeEditor.modeLight')}</div>
               <ThemePreview theme={previewTheme} mode={mode} />
             </div>
             <div className="rounded-2xl bg-card p-4 shadow-sm">
-              <div className="mb-3 text-sm font-medium">可读性诊断</div>
+              <div className="mb-3 text-sm font-medium">{t('settings.themeEditor.readability')}</div>
               <div className="space-y-2">
                 {contrasts.map((item) => (
                   <div key={item.label} className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">{item.label}</span>
                     <span className={item.ratio >= item.threshold ? 'text-status-success' : 'text-destructive'}>
-                      {item.ratio.toFixed(1)}:1 · {item.ratio >= item.threshold ? '通过' : '不足'}
+                      {item.ratio.toFixed(1)}:1 · {item.ratio >= item.threshold ? t('settings.themeEditor.pass') : t('settings.themeEditor.fail')}
                     </span>
                   </div>
                 ))}
@@ -220,8 +228,8 @@ export function ThemeEditorDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button>
-          <Button disabled={busy || !validation.valid} onClick={() => { void submit() }}>{busy ? '保存中…' : '保存主题'}</Button>
+          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button disabled={busy || !validation.valid} onClick={() => { void submit() }}>{busy ? t('settings.themeEditor.saving') : t('settings.themeEditor.saveTheme')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

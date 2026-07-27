@@ -51,7 +51,6 @@ import {
 } from '@/atoms/tab-atoms'
 import { userProfileAtom } from '@/atoms/user-profile'
 import { hasUpdateAtom } from '@/atoms/updater'
-import { hasEnvironmentIssuesAtom } from '@/atoms/environment'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,8 +69,10 @@ import { WorkspaceEntityRow } from '@/components/ui/workspace-entity-row'
 import type { SessionMeta, SessionSearchResult } from '@kila/shared'
 import { useTypeAhead } from '@/hooks/useTypeAhead'
 
-type DateGroup = '今天' | '昨天' | '更早'
+/** DateGroup 直接作为 `sidebar.*` 译文 key；Translate 是 t(key) 的最小签名 */
+type DateGroup = 'today' | 'yesterday' | 'earlier'
 type WorkflowFilter = 'all' | 'running' | 'pending'
+type Translate = (key: string) => string
 
 function groupByDate<T extends { updatedAt: number }>(items: T[]): Array<{ label: DateGroup; items: T[] }> {
   const now = new Date()
@@ -93,18 +94,17 @@ function groupByDate<T extends { updatedAt: number }>(items: T[]): Array<{ label
   }
 
   const groups: Array<{ label: DateGroup; items: T[] }> = []
-  if (today.length > 0) groups.push({ label: '今天', items: today })
-  if (yesterday.length > 0) groups.push({ label: '昨天', items: yesterday })
-  if (earlier.length > 0) groups.push({ label: '更早', items: earlier })
+  if (today.length > 0) groups.push({ label: 'today', items: today })
+  if (yesterday.length > 0) groups.push({ label: 'yesterday', items: yesterday })
+  if (earlier.length > 0) groups.push({ label: 'earlier', items: earlier })
   return groups
 }
 
-function getSessionSource(session: SessionMeta): { kind: 'scheduled' | 'remote' | 'manual'; label: string } {
-  const source = session.messageSource
-  const sourceLabel = session.messageSourceLabel
-  if (source === 'scheduled-task') return { kind: 'scheduled', label: sourceLabel ?? '定时' }
-  if (source === 'im-bridge') return { kind: 'remote', label: sourceLabel ?? '远程' }
-  return { kind: 'manual', label: '手动' }
+function getSessionSource(session: SessionMeta, t: Translate): { kind: 'scheduled' | 'remote' | 'manual'; label: string } {
+  const { messageSource: source, messageSourceLabel: sourceLabel } = session
+  if (source === 'scheduled-task') return { kind: 'scheduled', label: sourceLabel ?? t('sidebar.sourceScheduled') }
+  if (source === 'im-bridge') return { kind: 'remote', label: sourceLabel ?? t('sidebar.sourceRemote') }
+  return { kind: 'manual', label: t('sidebar.sourceManual') }
 }
 
 interface SessionItemProps {
@@ -144,27 +144,28 @@ const SessionItem = React.memo(function SessionItem({
   onTogglePin,
   onRequestDelete,
 }: SessionItemProps): React.ReactElement {
-  const source = getSessionSource(session)
+  const { t } = useTranslation()
+  const source = getSessionSource(session, t)
   const hasSessionBadges = streaming || source.kind !== 'manual'
 
   const actions = editing ? (
     <>
-      <button type="button" onClick={onEditSubmit} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label="确认">
+      <button type="button" onClick={onEditSubmit} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={t('common.confirm')}>
         <Check className="size-3.5" />
       </button>
-      <button type="button" onClick={onEditCancel} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label="取消">
+      <button type="button" onClick={onEditCancel} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={t('common.cancel')}>
         <X className="size-3.5" />
       </button>
     </>
   ) : (
     <>
-      <button type="button" onClick={() => onTogglePin(session.id)} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={session.pinned ? '取消置顶' : '置顶'}>
+      <button type="button" onClick={() => onTogglePin(session.id)} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={session.pinned ? t('sidebar.unpin') : t('sidebar.pin')}>
         <Pin className={cn('size-3.5', session.pinned && 'fill-current text-primary')} />
       </button>
-      <button type="button" onClick={() => onStartEdit(session)} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label="重命名">
+      <button type="button" onClick={() => onStartEdit(session)} className="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={t('common.rename')}>
         <Pencil className="size-3.5" />
       </button>
-      <button type="button" onClick={() => onRequestDelete(session.id)} className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="删除">
+      <button type="button" onClick={() => onRequestDelete(session.id)} className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label={t('common.delete')}>
         <Trash2 className="size-3.5" />
       </button>
     </>
@@ -207,7 +208,7 @@ const SessionItem = React.memo(function SessionItem({
       ) : session.title}
       metadata={hasSessionBadges ? (
         <>
-          {streaming && <EntityMetadataChip tone="accent">运行中</EntityMetadataChip>}
+          {streaming && <EntityMetadataChip tone="accent">{t('sidebar.running')}</EntityMetadataChip>}
           {source.kind !== 'manual' && (
             <EntityMetadataChip tone={source.kind === 'scheduled' ? 'warning' : 'accent'}>
               {source.label}
@@ -236,7 +237,6 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
   const pendingPermissionMap = useAtomValue(allPendingPermissionRequestsAtom)
   const pendingAskUserMap = useAtomValue(allPendingAskUserRequestsAtom)
   const hasUpdate = useAtomValue(hasUpdateAtom)
-  const hasEnvironmentIssues = useAtomValue(hasEnvironmentIssuesAtom)
 
   const [tabs, setTabs] = useAtom(tabsAtom)
   const [layout, setLayout] = useAtom(splitLayoutAtom)
@@ -331,7 +331,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
 
   const handleCreateSession = React.useCallback(async (): Promise<void> => {
     const session = await window.electronAPI.createSession({
-      title: '新会话',
+      title: t('sidebar.newSession'),
     })
 
     const sessionList = await window.electronAPI.listSessions()
@@ -345,7 +345,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
     setTabs(result.tabs)
     setLayout(result.layout)
     syncSelection(session.id)
-  }, [layout, setLayout, setSessions, setTabs, syncSelection, tabs])
+  }, [layout, setLayout, setSessions, setTabs, syncSelection, t, tabs])
 
   const handleExportCurrentSession = React.useCallback(async (): Promise<void> => {
     if (!currentSessionId) return
@@ -362,7 +362,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
     const preview = await window.electronAPI.importSession({ dryRun: true })
     if (preview.canceled || !preview.sourceDir) return
 
-    const confirmed = window.confirm(`导入会话「${preview.title ?? 'Untitled'}」？\n消息 ${preview.messageCount ?? 0} 条，附件 ${preview.attachmentCount ?? 0} 个，Pinned Widgets ${preview.boardWidgetCount ?? 0} 个。`)
+    const confirmed = window.confirm(t('sidebar.importConfirm', { title: preview.title ?? 'Untitled', messages: preview.messageCount ?? 0, attachments: preview.attachmentCount ?? 0, widgets: preview.boardWidgetCount ?? 0 }))
     if (!confirmed) return
 
     const result = await window.electronAPI.importSession({
@@ -377,12 +377,12 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
     const tabResult = openTab(tabs, layout, {
       type: 'agent',
       sessionId: result.sessionId,
-      title: session?.title ?? result.title ?? '导入会话',
+      title: session?.title ?? result.title ?? t('sidebar.importedSession'),
     })
     setTabs(tabResult.tabs)
     setLayout(tabResult.layout)
     syncSelection(result.sessionId)
-  }, [layout, setLayout, setSessions, setTabs, syncSelection, tabs])
+  }, [layout, setLayout, setSessions, setTabs, syncSelection, t, tabs])
 
   const handleSelectSession = React.useCallback((session: SessionMeta): void => {
     const result = openTab(tabs, layout, {
@@ -532,20 +532,15 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
     [agentRunningSessionIds, pendingSessionIds, sessions, workflowFilter],
   )
 
-  const pinnedSessions = React.useMemo(
-    () => filteredSessions.filter((session) => session.pinned),
-    [filteredSessions],
-  )
-  const regularGroups = React.useMemo(
-    () => groupByDate(filteredSessions.filter((session) => !session.pinned)),
-    [filteredSessions],
-  )
+  const pinnedSessions = React.useMemo(() => filteredSessions.filter((session) => session.pinned), [filteredSessions])
+  const regularGroups = React.useMemo(() => groupByDate(filteredSessions.filter((session) => !session.pinned)), [filteredSessions])
 
   const workflowFilters = React.useMemo<Array<{ id: WorkflowFilter; label: string; count: number }>>(() => [
-    { id: 'all', label: '全部', count: sessions.length },
-    { id: 'running', label: '运行中', count: sessions.filter((session) => agentRunningSessionIds.has(session.id)).length },
-    { id: 'pending', label: '待处理', count: sessions.filter((session) => pendingSessionIds.has(session.id)).length },
-  ], [agentRunningSessionIds, pendingSessionIds, sessions])
+    { id: 'all', label: t('sidebar.filterAll'), count: sessions.length },
+    { id: 'running', label: t('sidebar.filterRunning'), count: sessions.filter((session) => agentRunningSessionIds.has(session.id)).length },
+    { id: 'pending', label: t('sidebar.filterPending'), count: sessions.filter((session) => pendingSessionIds.has(session.id)).length },
+  ], [agentRunningSessionIds, pendingSessionIds, sessions, t])
+  const allFilteredSelected = filteredSessions.length > 0 && filteredSessions.every((session) => selectedIds.has(session.id))
 
   const isStreaming = React.useCallback((session: SessionMeta): boolean => {
     return agentRunningSessionIds.has(session.id)
@@ -632,7 +627,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     <PanelLeftOpen size={18} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">展开侧边栏</TooltipContent>
+                <TooltipContent side="right">{t('sidebar.expand')}</TooltipContent>
               </Tooltip>
             </div>
 
@@ -646,7 +641,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     <Plus size={16} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">新会话</TooltipContent>
+                <TooltipContent side="right">{t('sidebar.newSession')}</TooltipContent>
               </Tooltip>
             </div>
 
@@ -663,12 +658,12 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     className="workspace-floating-control titlebar-no-drag relative rounded-lg p-2 text-foreground/78 transition-colors hover:text-foreground"
                   >
                     <Settings size={18} />
-                    {(hasUpdate || hasEnvironmentIssues) && (
+                    {hasUpdate && (
                       <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-status-danger" />
                     )}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">设置</TooltipContent>
+                <TooltipContent side="right">{t('sidebar.settings')}</TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -691,7 +686,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 className="workspace-floating-control titlebar-no-drag flex h-10 flex-1 items-center gap-2 rounded-lg px-3 text-[13px] font-medium text-foreground/70 transition-colors hover:text-foreground"
               >
                 <Plus size={14} />
-                <span>新会话</span>
+                <span>{t('sidebar.newSession')}</span>
               </button>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -702,7 +697,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     <Upload size={16} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">导入会话</TooltipContent>
+                <TooltipContent side="right">{t('sidebar.importSession')}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -714,7 +709,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     <Download size={16} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">导出当前会话</TooltipContent>
+                <TooltipContent side="right">{t('sidebar.exportSession')}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -726,7 +721,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     <ListChecks size={16} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">{selectMode ? '退出多选' : '多选删除'}</TooltipContent>
+                <TooltipContent side="right">{selectMode ? t('sidebar.exitSelectMode') : t('sidebar.selectMode')}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -737,7 +732,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     <PanelLeftClose size={18} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">收起侧边栏</TooltipContent>
+                <TooltipContent side="right">{t('sidebar.collapse')}</TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -749,17 +744,17 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 <input
                   value={sessionSearch}
                   onChange={(event) => setSessionSearch(event.target.value)}
-                  placeholder="搜索会话与消息"
+                  placeholder={t('sidebar.searchPlaceholder')}
                   className="workspace-floating-control h-9 w-full rounded-lg pl-8 pr-3 text-[12.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/62 focus:border-primary/35 focus:bg-workspace"
                 />
               </div>
               {sessionSearch.trim().length >= 2 && (
                 <div className="workspace-floating-control mt-2 overflow-hidden rounded-lg bg-workspace">
                   {sessionSearchLoading && (
-                    <div className="px-3 py-2 text-[12px] text-muted-foreground">搜索中…</div>
+                    <div className="px-3 py-2 text-[12px] text-muted-foreground">{t('sidebar.searching')}</div>
                   )}
                   {!sessionSearchLoading && sessionSearchResults.length === 0 && (
-                    <div className="px-3 py-2 text-[12px] text-muted-foreground">没有匹配结果</div>
+                    <div className="px-3 py-2 text-[12px] text-muted-foreground">{t('sidebar.noResults')}</div>
                   )}
                   {!sessionSearchLoading && sessionSearchResults.map((result) => (
                     <button
@@ -770,7 +765,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-muted-foreground">
-                          {result.type === 'message' ? '消息' : result.type === 'project' ? '项目' : '会话'}
+                          {t(result.type === 'message' ? 'sidebar.resultMessage' : result.type === 'project' ? 'sidebar.resultProject' : 'sidebar.resultSession')}
                         </span>
                         <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground">{result.title}</span>
                       </span>
@@ -796,16 +791,13 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
             </div>
             {selectMode && (
               <div className="titlebar-no-drag mb-3 flex items-center gap-2 rounded-lg bg-brand-soft px-2.5 py-1.5 text-[12px] text-brand-soft-foreground">
-                <span className="tabular-nums">已选 {selectedIds.size}</span>
+                <span className="tabular-nums">{t('sidebar.selectedCount', { count: selectedIds.size })}</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    const allSelected = filteredSessions.length > 0 && filteredSessions.every((session) => selectedIds.has(session.id))
-                    setSelectedIds(allSelected ? new Set() : new Set(filteredSessions.map((session) => session.id)))
-                  }}
+                  onClick={() => setSelectedIds(allFilteredSelected ? new Set() : new Set(filteredSessions.map((session) => session.id)))}
                   className="rounded-md px-2 py-1 hover:bg-background/40"
                 >
-                  {filteredSessions.length > 0 && filteredSessions.every((session) => selectedIds.has(session.id)) ? '取消全选' : '全选'}
+                  {allFilteredSelected ? t('sidebar.deselectAll') : t('sidebar.selectAll')}
                 </button>
                 <div className="flex-1" />
                 <button
@@ -815,7 +807,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                   className="flex items-center gap-1 rounded-md bg-destructive px-2 py-1 text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Trash2 className="size-3.5" />
-                  <span>删除</span>
+                  <span>{t('common.delete')}</span>
                 </button>
               </div>
             )}
@@ -831,7 +823,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 >
                   <span className="flex items-center gap-2">
                     <Pin size={15} />
-                    <span>置顶会话</span>
+                    <span>{t('sidebar.pinned')}</span>
                     <EntityMetadataChip>{pinnedSessions.length}</EntityMetadataChip>
                   </span>
                   {pinnedSessions.length > 0 && (
@@ -852,7 +844,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 {regularGroups.map((group) => (
                   <div key={group.label}>
                     <WorkspaceEntityGroupHeader>
-                      <span>{group.label}</span>
+                      <span>{t(`sidebar.${group.label}`)}</span>
                       <span>{group.items.length}</span>
                     </WorkspaceEntityGroupHeader>
                     <WorkspaceEntityList>
@@ -862,7 +854,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
                 ))}
                 {filteredSessions.length === 0 && (
                   <div className="rounded-lg border border-dashed border-border/70 px-4 py-8 text-center text-xs leading-5 text-muted-foreground">
-                    当前筛选下没有会话。
+                    {t('sidebar.emptyFiltered')}
                   </div>
                 )}
               </div>
@@ -879,8 +871,8 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
               className="titlebar-no-drag flex h-10 w-full items-center gap-2 rounded-lg px-3 text-[13px] font-medium text-foreground/55 transition-colors hover:bg-muted/50 hover:text-foreground/78"
             >
               <Settings size={16} />
-              <span>设置</span>
-              {(hasUpdate || hasEnvironmentIssues) && (
+              <span>{t('sidebar.settings')}</span>
+              {hasUpdate && (
                 <span className="ml-auto h-2 w-2 rounded-full bg-status-danger" />
               )}
             </button>
@@ -919,9 +911,9 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>批量删除会话</AlertDialogTitle>
+            <AlertDialogTitle>{t('sidebar.confirmBatchDelete')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确认删除选中的 {selectedIds.size} 个会话？此操作不可恢复。
+              {t('sidebar.batchDeleteWarning', { count: selectedIds.size })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -934,7 +926,7 @@ export function LeftSidebar({ width, isResizing }: LeftSidebarProps): React.Reac
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteSubmitting}
             >
-              {deleteSubmitting ? t('sidebar.deleting') : `删除 ${selectedIds.size} 个`}
+              {deleteSubmitting ? t('sidebar.deleting') : t('sidebar.deleteCount', { count: selectedIds.size })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

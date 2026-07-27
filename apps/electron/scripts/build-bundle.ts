@@ -14,9 +14,6 @@ const bundleConfigs: Record<BundleTarget, { entry: string, outfile: string, exte
     outfile: resolve(projectDir, 'dist/main.cjs'),
     external: [
       'electron',
-      'ai',
-      '@ai-sdk/provider',
-      '@agentclientprotocol/sdk',
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',
       '@earendil-works/pi-ai/*',

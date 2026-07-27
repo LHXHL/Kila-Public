@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { TooltipProvider } from './components/ui/tooltip'
-import type { AppShellContextType } from './contexts/AppShellContext'
 
 const AppShell = React.lazy(() => import('./components/app-shell/AppShell').then((module) => ({ default: module.AppShell })))
 const SettingsWindowApp = React.lazy(() => import('./components/settings/SettingsWindowApp').then((module) => ({ default: module.SettingsWindowApp })))
@@ -12,9 +11,6 @@ function AppRouteFallback(): React.ReactElement {
 
 export default function App(): React.ReactElement {
   const windowMode = window.electronAPI.getWindowMode()
-
-  // Placeholder context value
-  const contextValue: AppShellContextType = {}
 
   if (windowMode === 'quick-task') {
     return (
@@ -40,7 +36,7 @@ export default function App(): React.ReactElement {
   return (
     <TooltipProvider delayDuration={200}>
       <React.Suspense fallback={<AppRouteFallback />}>
-        <AppShell contextValue={contextValue} />
+        <AppShell />
       </React.Suspense>
     </TooltipProvider>
   )

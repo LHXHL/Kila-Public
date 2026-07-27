@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { AlertCircle, Code, ExternalLink, Eye, FileImage, FileText, Loader2 } from 'lucide-react'
@@ -21,6 +22,7 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
   viewMode = 'preview',
   onViewModeChange,
 }: FilePreviewPanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const [preview, setPreview] = React.useState<InlineFilePreview | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [reloadVersion, setReloadVersion] = React.useState(0)
@@ -50,7 +52,7 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
           extension: '',
           size: 0,
           kind: 'error',
-          errorMessage: error instanceof Error ? error.message : '预览加载失败',
+          errorMessage: error instanceof Error ? error.message : t('fileBrowser.preview.loadFailed'),
         })
       })
       .finally(() => {
@@ -62,14 +64,14 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
         requestGenerationRef.current += 1
       }
     }
-  }, [filePath, reloadVersion])
+  }, [filePath, reloadVersion, t])
 
   if (!filePath) {
     return (
       <EmptyState
         icon={<FileText className="size-8" />}
-        title="选择一个文件"
-        description="在文件标签中点击任意文件，这里会显示内联预览。"
+        title={t('fileBrowser.preview.selectTitle')}
+        description={t('fileBrowser.preview.selectDescription')}
       />
     )
   }
@@ -79,7 +81,7 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
       <div className="flex h-full items-center justify-center">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          正在加载预览...
+          {t('fileBrowser.preview.loading')}
         </div>
       </div>
     )
@@ -89,11 +91,11 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
     return (
       <EmptyState
         icon={<AlertCircle className="size-8" />}
-        title="预览不可用"
-        description="当前文件尚未加载到预览面板。"
+        title={t('fileBrowser.preview.unavailableTitle')}
+        description={t('fileBrowser.preview.unavailableDescription')}
         action={(
           <Button type="button" variant="outline" size="sm" onClick={() => setReloadVersion((value) => value + 1)}>
-            重试
+            {t('fileBrowser.preview.retry')}
           </Button>
         )}
       />
@@ -104,11 +106,11 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
     return (
       <EmptyState
         icon={<AlertCircle className="size-8" />}
-        title="预览失败"
-        description={preview.errorMessage ?? '读取文件预览时发生错误。'}
+        title={t('fileBrowser.preview.failedTitle')}
+        description={preview.errorMessage ?? t('fileBrowser.preview.failedDescription')}
         action={(
           <Button type="button" variant="outline" size="sm" onClick={() => setReloadVersion((value) => value + 1)}>
-            重试
+            {t('fileBrowser.preview.retry')}
           </Button>
         )}
       />
@@ -143,8 +145,8 @@ export const FilePreviewPanel = React.memo(function FilePreviewPanel({
           size="icon"
           className="h-7 w-7"
           onClick={() => window.electronAPI.previewFile(preview.filePath).catch(console.error)}
-          aria-label={`在独立窗口打开 ${preview.filename}`}
-          title="在独立窗口打开"
+          aria-label={t('fileBrowser.preview.openFileInWindow', { name: preview.filename })}
+          title={t('fileBrowser.preview.openInWindow')}
         >
           <ExternalLink className="size-3.5" />
         </Button>
@@ -199,8 +201,10 @@ const PreviewBody = React.memo(function PreviewBody({
   preview: InlineFilePreview
   viewMode: SessionWorkbenchViewMode
 }): React.ReactElement {
+  const { t } = useTranslation()
+
   if (viewMode === 'code' && (preview.kind === 'markdown' || preview.kind === 'code' || preview.kind === 'text')) {
-    return renderCodePreview(preview.filePath, preview.extension, preview.textContent)
+    return renderCodePreview(preview, t('fileBrowser.preview.codeContent', { path: preview.filePath }))
   }
 
   if (preview.kind === 'image' && preview.dataUrl) {
@@ -241,15 +245,15 @@ const PreviewBody = React.memo(function PreviewBody({
   }
 
   if (preview.kind === 'code' || preview.kind === 'text') {
-    return renderCodePreview(preview.filePath, preview.extension, preview.textContent)
+    return renderCodePreview(preview, t('fileBrowser.preview.codeContent', { path: preview.filePath }))
   }
 
   if (preview.kind === 'too_large') {
     return (
       <EmptyState
         icon={<FileImage className="size-8" />}
-        title="文件过大"
-        description={preview.errorMessage ?? '当前文件超过了内联预览大小限制。'}
+        title={t('fileBrowser.preview.tooLargeTitle')}
+        description={preview.errorMessage ?? t('fileBrowser.preview.tooLargeDescription')}
       />
     )
   }
@@ -258,8 +262,8 @@ const PreviewBody = React.memo(function PreviewBody({
     return (
       <EmptyState
         icon={<FileText className="size-8" />}
-        title="暂不支持内联预览"
-        description="可以点击右上角按钮，在独立窗口中继续查看。"
+        title={t('fileBrowser.preview.unsupportedTitle')}
+        description={t('fileBrowser.preview.unsupportedDescription')}
       />
     )
   }
@@ -267,19 +271,19 @@ const PreviewBody = React.memo(function PreviewBody({
   return (
     <EmptyState
       icon={<AlertCircle className="size-8" />}
-      title="预览失败"
-      description={preview.errorMessage ?? '读取文件预览时发生错误。'}
+      title={t('fileBrowser.preview.failedTitle')}
+      description={preview.errorMessage ?? t('fileBrowser.preview.failedDescription')}
     />
   )
 })
 
-function renderCodePreview(filePath: string, extension: string, textContent: string | undefined): React.ReactElement {
+function renderCodePreview(preview: InlineFilePreview, ariaLabel: string): React.ReactElement {
   return (
     <div className="min-h-0 flex-1 overflow-hidden">
       <CodeViewer
-        code={textContent ?? ''}
-        language={resolveCodeLanguage(filePath, extension)}
-        ariaLabel={`${filePath} 代码内容`}
+        code={preview.textContent ?? ''}
+        language={resolveCodeLanguage(preview.filePath, preview.extension)}
+        ariaLabel={ariaLabel}
       />
     </div>
   )

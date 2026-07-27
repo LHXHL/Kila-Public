@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   RotateCcw,
   FolderOpen,
@@ -35,15 +37,12 @@ interface PersonalityDocumentMeta {
   description: string
 }
 
-const PERSONALITY_DOC_META: Record<PersonalityDocKind, PersonalityDocumentMeta> = {
-  soul: {
-    title: '[SOUL] 助手人格',
-    description: '定义 Kila 的身份、语气、工作方式与边界。',
-  },
-  user: {
-    title: '[USER] 用户画像',
-    description: '记录用户长期稳定的偏好、习惯与工作方式。',
-  },
+/** 人格文档标题/描述在渲染时翻译，避免模块级硬编码文案 */
+function getPersonalityDocMeta(kind: PersonalityDocKind, t: TFunction): PersonalityDocumentMeta {
+  return {
+    title: t(`settings.personality.doc.${kind}.title`),
+    description: t(`settings.personality.doc.${kind}.description`),
+  }
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -56,6 +55,7 @@ function formatDateTime(timestamp?: number): string {
 // ===== 自定义 System Prompt 管理区 =====
 
 function SystemPromptManager(): React.ReactElement {
+  const { t } = useTranslation()
   const [state, setState] = useAtom(systemPromptStateAtom)
   const [loading, setLoading] = React.useState(true)
   const [editingId, setEditingId] = React.useState<string | null>(null)
@@ -73,7 +73,7 @@ function SystemPromptManager(): React.ReactElement {
       setState(next)
     } catch (error) {
       console.error('[Prompt 管理] 加载失败:', error)
-      toast.error('加载自定义提示词失败')
+      toast.error(t('settings.personality.loadPromptsFailed'))
     } finally {
       setLoading(false)
     }
@@ -111,7 +111,7 @@ function SystemPromptManager(): React.ReactElement {
 
   const handleSave = React.useCallback(async () => {
     if (!formName.trim()) {
-      toast.error('请输入提示词名称')
+      toast.error(t('settings.personality.namRequired'))
       return
     }
 
@@ -125,7 +125,7 @@ function SystemPromptManager(): React.ReactElement {
         // 新建后自动激活
         const newState = await window.electronAPI.setActiveSystemPrompt(created.id)
         setState(newState)
-        toast.success(`已创建并激活「${created.name}」`)
+        toast.success(t('settings.personality.createdAndActivated', { name: created.name }))
       } else if (editingId) {
         const updated = await window.electronAPI.updateSystemPrompt({
           id: editingId,
@@ -136,12 +136,12 @@ function SystemPromptManager(): React.ReactElement {
           ...prev,
           prompts: prev.prompts.map((p) => (p.id === updated.id ? updated : p)),
         }))
-        toast.success(`已更新「${updated.name}」`)
+        toast.success(t('settings.personality.updated', { name: updated.name }))
       }
       handleCancelForm()
     } catch (error) {
       console.error('[Prompt 管理] 保存失败:', error)
-      toast.error('保存失败')
+      toast.error(t('settings.personality.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -151,7 +151,7 @@ function SystemPromptManager(): React.ReactElement {
     async (id: string) => {
       const prompt = state.prompts.find((p) => p.id === id)
       if (!prompt) return
-      if (!confirm(`确定删除「${prompt.name}」吗？`)) return
+      if (!confirm(t('settings.personality.deleteConfirm', { name: prompt.name }))) return
 
       try {
         await window.electronAPI.deleteSystemPrompt(id)
@@ -160,10 +160,10 @@ function SystemPromptManager(): React.ReactElement {
           activePromptId: prev.activePromptId === id ? null : prev.activePromptId,
         }))
         if (editingId === id) handleCancelForm()
-        toast.success(`已删除「${prompt.name}」`)
+        toast.success(t('settings.personality.deleted', { name: prompt.name }))
       } catch (error) {
         console.error('[Prompt 管理] 删除失败:', error)
-        toast.error('删除失败')
+        toast.error(t('settings.personality.deleteFailed'))
       }
     },
     [state.prompts, editingId, handleCancelForm, setState],
@@ -175,10 +175,10 @@ function SystemPromptManager(): React.ReactElement {
         const newState = await window.electronAPI.setActiveSystemPrompt(id)
         setState(newState)
         const prompt = newState.prompts.find((p) => p.id === id)
-        toast.success(`已激活「${prompt?.name ?? id}」`)
+        toast.success(t('settings.personality.activated', { name: prompt?.name ?? id }))
       } catch (error) {
         console.error('[Prompt 管理] 激活失败:', error)
-        toast.error('激活失败')
+        toast.error(t('settings.personality.activateFailed'))
       }
     },
     [setState],
@@ -188,10 +188,10 @@ function SystemPromptManager(): React.ReactElement {
     try {
       const newState = await window.electronAPI.clearActiveSystemPrompt()
       setState(newState)
-      toast.success('已切换回默认模式')
+      toast.success(t('settings.personality.revertedToDefault'))
     } catch (error) {
       console.error('[Prompt 管理] 取消激活失败:', error)
-      toast.error('取消激活失败')
+      toast.error(t('settings.personality.deactivateFailed'))
     }
   }, [setState])
 
@@ -200,7 +200,7 @@ function SystemPromptManager(): React.ReactElement {
   if (loading) {
     return (
       <SettingsCard divided={false} className="p-6 text-sm text-muted-foreground">
-        正在加载提示词配置...
+        {t('settings.personality.loadingPrompts')}
       </SettingsCard>
     )
   }
@@ -211,26 +211,26 @@ function SystemPromptManager(): React.ReactElement {
       <SettingsCard divided={false} className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">当前模式：</span>
+            <span className="text-muted-foreground">{t('settings.personality.currentMode')}</span>
             {activePrompt ? (
               <Badge variant="secondary" className="font-medium">
                 {activePrompt.name}
               </Badge>
             ) : (
-              <Badge variant="outline">默认</Badge>
+              <Badge variant="outline">{t('settings.personality.defaultMode')}</Badge>
             )}
           </div>
           {activePrompt && (
             <Button variant="outline" size="sm" onClick={() => void handleClearActive()}>
               <X className="mr-1 size-3.5" />
-              <span>切回默认</span>
+              <span>{t('settings.personality.backToDefault')}</span>
             </Button>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
           {activePrompt
-            ? '自定义提示词已激活。SOUL.md 和 USER.md 仍会生效，默认的「输出与执行约束」被替换为你自定义的内容。'
-            : '使用 Kila 默认的输出与行为约束。你可以创建自定义提示词来替代。'}
+            ? t('settings.personality.customActiveHint')
+            : t('settings.personality.defaultActiveHint')}
         </p>
       </SettingsCard>
 
@@ -254,7 +254,7 @@ function SystemPromptManager(): React.ReactElement {
                   )}
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                  {prompt.content.slice(0, 100) || '（空）'}
+                  {prompt.content.slice(0, 100) || t('settings.personality.emptyContent')}
                 </div>
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -263,7 +263,7 @@ function SystemPromptManager(): React.ReactElement {
                     variant="ghost"
                     size="icon"
                     className="size-7"
-                    title="激活此提示词"
+                    title={t('settings.personality.activatePrompt')}
                     onClick={() => void handleSetActive(prompt.id)}
                   >
                     <Check className="size-3.5" />
@@ -273,7 +273,7 @@ function SystemPromptManager(): React.ReactElement {
                   variant="ghost"
                   size="icon"
                   className="size-7"
-                  title="编辑"
+                  title={t('settings.appearance.edit')}
                   onClick={() => handleStartEdit(prompt)}
                 >
                   <Pencil className="size-3.5" />
@@ -282,7 +282,7 @@ function SystemPromptManager(): React.ReactElement {
                   variant="ghost"
                   size="icon"
                   className="size-7 text-destructive hover:text-destructive"
-                  title="删除"
+                  title={t('common.delete')}
                   onClick={() => void handleDelete(prompt.id)}
                 >
                   <Trash2 className="size-3.5" />
@@ -302,7 +302,7 @@ function SystemPromptManager(): React.ReactElement {
           onClick={handleStartCreate}
         >
           <Plus className="mr-1 size-4" />
-          <span>新建提示词</span>
+          <span>{t('settings.personality.newPrompt')}</span>
         </Button>
       )}
 
@@ -310,33 +310,33 @@ function SystemPromptManager(): React.ReactElement {
       {isFormOpen && (
         <SettingsCard divided={false} className="p-4 space-y-3">
           <div className="text-sm font-medium">
-            {isCreating ? '新建提示词' : '编辑提示词'}
+            {isCreating ? t('settings.personality.newPrompt') : t('settings.personality.editPrompt')}
           </div>
           <div className="space-y-2">
             <Input
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
-              placeholder="提示词名称"
+              placeholder={t('settings.personality.namePlaceholder')}
               className="text-sm"
             />
           </div>
           <Textarea
             value={formContent}
             onChange={(e) => setFormContent(e.target.value)}
-            placeholder="输入自定义提示词内容。激活后将替代默认的输出与执行约束，SOUL.md 和 USER.md 仍然生效。"
+            placeholder={t('settings.personality.contentPlaceholder')}
             className="min-h-[200px] resize-y font-mono text-[13px] leading-6"
             spellCheck={false}
           />
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={handleCancelForm}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               size="sm"
               disabled={saving || !formName.trim()}
               onClick={() => void handleSave()}
             >
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('settings.personality.saving') : t('common.save')}
             </Button>
           </div>
         </SettingsCard>
@@ -400,6 +400,7 @@ function PersonalityDocumentEditor({
   meta,
   onDocumentSaved,
 }: PersonalityDocumentEditorProps): React.ReactElement {
+  const { t } = useTranslation()
   const [draft, setDraft] = React.useState(document.content)
   const [saveState, setSaveState] = React.useState<SaveState>('idle')
 
@@ -437,15 +438,15 @@ function PersonalityDocumentEditor({
       }).catch((error) => {
         console.error(`[个性设置] 保存 ${document.kind} 失败:`, error)
         setSaveState('error')
-        toast.error(`保存 ${meta.title} 失败`)
+        toast.error(t('settings.personality.docSaveFailed', { name: meta.title }))
       })
     }, SAVE_DEBOUNCE_MS)
 
     return () => window.clearTimeout(timer)
-  }, [document.content, document.kind, draft, meta.title, onDocumentSaved])
+  }, [document.content, document.kind, draft, meta.title, onDocumentSaved, t])
 
   const handleReset = React.useCallback(async () => {
-    if (!confirm(`确定恢复 ${meta.title} 的默认模板吗？当前内容会被覆盖。`)) {
+    if (!confirm(t('settings.personality.docResetConfirm', { name: meta.title }))) {
       return
     }
 
@@ -454,22 +455,22 @@ function PersonalityDocumentEditor({
       onDocumentSaved(updated)
       setDraft(updated.content)
       setSaveState('saved')
-      toast.success(`${meta.title} 已恢复默认`)
+      toast.success(t('settings.personality.docReset', { name: meta.title }))
     } catch (error) {
       console.error(`[个性设置] 重置 ${document.kind} 失败:`, error)
       setSaveState('error')
-      toast.error(`重置 ${meta.title} 失败`)
+      toast.error(t('settings.personality.docResetFailed', { name: meta.title }))
     }
-  }, [document.kind, meta.title, onDocumentSaved])
+  }, [document.kind, meta.title, onDocumentSaved, t])
 
   const handleOpenPath = React.useCallback(async () => {
     try {
       await window.electronAPI.openPersonalityPath(document.kind)
     } catch (error) {
       console.error(`[个性设置] 打开 ${document.kind} 路径失败:`, error)
-      toast.error(`打开 ${meta.title} 路径失败`)
+      toast.error(t('settings.personality.docOpenFailed', { name: meta.title }))
     }
-  }, [document.kind, meta.title])
+  }, [document.kind, meta.title, t])
 
   return (
     <SettingsSection
@@ -479,18 +480,18 @@ function PersonalityDocumentEditor({
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleOpenPath}>
             <FolderOpen className="mr-1 size-4" />
-            <span>在 Finder 中打开</span>
+            <span>{t('settings.personality.openInFinder')}</span>
           </Button>
           <Button variant="outline" size="sm" onClick={handleReset}>
             <RotateCcw className="mr-1 size-4" />
-            <span>恢复默认</span>
+            <span>{t('settings.personality.restoreDefault')}</span>
           </Button>
         </div>
       }
     >
       <SettingsCard divided={false} className="p-4 space-y-3">
         <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2">
-          <div className="text-xs font-medium text-muted-foreground">路径</div>
+          <div className="text-xs font-medium text-muted-foreground">{t('settings.personality.path')}</div>
           <div className="mt-1 break-all font-mono text-[12px] leading-5 text-foreground/80">
             {document.path}
           </div>
@@ -504,11 +505,11 @@ function PersonalityDocumentEditor({
         />
 
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">修改后下一条消息生效</span>
+          <span className="text-muted-foreground">{t('settings.personality.appliesNextMessage')}</span>
           <span className={saveState === 'error' ? 'text-destructive' : 'text-muted-foreground'}>
-            {saveState === 'saving' && '正在保存...'}
-            {saveState === 'saved' && '已保存'}
-            {saveState === 'error' && '保存失败'}
+            {saveState === 'saving' && t('settings.personality.savingState')}
+            {saveState === 'saved' && t('settings.personality.savedState')}
+            {saveState === 'error' && t('settings.personality.saveFailed')}
           </span>
         </div>
       </SettingsCard>
@@ -519,6 +520,7 @@ function PersonalityDocumentEditor({
 // ===== 主组件 =====
 
 export function PersonalitySettings(): React.ReactElement {
+  const { t } = useTranslation()
   const [state, setState] = React.useState<PersonalityState | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [impression, setImpression] = React.useState<{ content?: string; updatedAt?: number } | null>(null)
@@ -532,7 +534,7 @@ export function PersonalitySettings(): React.ReactElement {
       setState(next)
     } catch (error) {
       console.error('[个性设置] 加载失败:', error)
-      toast.error('加载个性配置失败')
+      toast.error(t('settings.personality.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -585,10 +587,10 @@ export function PersonalitySettings(): React.ReactElement {
         content: nextContent,
       })
       handleDocumentSaved(updated)
-      toast.success('已把记忆画像写入 [USER] 用户画像')
+      toast.success(t('settings.personality.impressionApplied'))
     } catch (error) {
       console.error('[个性设置] 写入记忆画像失败:', error)
-      toast.error('写入 [USER] 用户画像失败')
+      toast.error(t('settings.personality.impressionApplyFailed'))
     } finally {
       setApplyingImpression(false)
     }
@@ -598,11 +600,11 @@ export function PersonalitySettings(): React.ReactElement {
     return (
       <div className="space-y-6">
         <SettingsSection
-          title="个性"
-          description="全局 personality 文件会在下一条消息进入 Agent static system prompt。"
+          title={t('settings.personality.title')}
+          description={t('settings.personality.description')}
         >
           <SettingsCard divided={false} className="p-6 text-sm text-muted-foreground">
-            正在加载个性文件...
+            {t('settings.personality.loadingDocs')}
           </SettingsCard>
         </SettingsSection>
       </div>
@@ -612,9 +614,9 @@ export function PersonalitySettings(): React.ReactElement {
   if (!state) {
     return (
       <div className="space-y-6">
-        <SettingsSection title="个性" description="当前无法加载全局 personality 文件。">
+        <SettingsSection title={t('settings.personality.title')} description={t('settings.personality.loadErrorDescription')}>
           <SettingsCard divided={false} className="p-6 text-sm text-muted-foreground">
-            请稍后重试。
+            {t('settings.tokenUsage.retryLater')}
           </SettingsCard>
         </SettingsSection>
       </div>
@@ -625,8 +627,8 @@ export function PersonalitySettings(): React.ReactElement {
     <div className="space-y-8">
       {/* 自定义 System Prompt 管理 */}
       <SettingsSection
-        title="自定义提示词"
-        description="创建和管理自定义系统提示词。全局激活后替代默认的「输出与执行约束」，也可在对话工具栏中为单个会话覆盖。SOUL.md 和 USER.md 仍然生效。"
+        title={t('settings.personality.customPromptsTitle')}
+        description={t('settings.personality.customPromptsDescription')}
         action={
           <Button
             variant="outline"
@@ -634,7 +636,7 @@ export function PersonalitySettings(): React.ReactElement {
             onClick={() => void loadState()}
           >
             <RotateCcw className="mr-1 size-4" />
-            <span>刷新</span>
+            <span>{t('settings.about.refresh')}</span>
           </Button>
         }
       >
@@ -643,14 +645,14 @@ export function PersonalitySettings(): React.ReactElement {
 
       {/* 人格说明 */}
       <SettingsSection
-        title="人格文件"
-        description="全局 personality 文件会在下一条消息进入 Agent static system prompt。"
+        title={t('settings.personality.docsTitle')}
+        description={t('settings.personality.description')}
       >
         <SettingsCard divided={false} className="p-4 space-y-2 text-sm text-muted-foreground">
-          <p>- personality 为全局设置，不区分会话或项目</p>
-          <p>- 文件系统是唯一真相源，Renderer 不再持久化 prompt 内容</p>
+          <p>- {t('settings.personality.docsNote1')}</p>
+          <p>- {t('settings.personality.docsNote2')}</p>
           {state.legacyPromptArchivePath && (
-            <p> - 旧 Prompt 配置已归档：{state.legacyPromptArchivePath}</p>
+            <p> - {t('settings.personality.legacyArchived', { path: state.legacyPromptArchivePath })}</p>
           )}
         </SettingsCard>
       </SettingsSection>
@@ -658,19 +660,19 @@ export function PersonalitySettings(): React.ReactElement {
       {/* SOUL.md 编辑器 */}
       <PersonalityDocumentEditor
         document={state.soul}
-        meta={PERSONALITY_DOC_META.soul}
+        meta={getPersonalityDocMeta('soul', t)}
         onDocumentSaved={handleDocumentSaved}
       />
 
       {/* 记忆画像建议 */}
       <SettingsSection
-        title="记忆画像建议"
-        description="这里显示记忆系统沉淀出的全局用户画像摘要。需要时可一键写入 `[USER] 用户画像`。"
+        title={t('settings.personality.impressionTitle')}
+        description={t('settings.personality.impressionDescription')}
         action={(
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void loadImpression()} disabled={impressionLoading}>
               <Brain className="mr-1 size-4" />
-              <span>{impressionLoading ? '刷新中…' : '刷新画像'}</span>
+              <span>{impressionLoading ? t('settings.personality.impressionRefreshing') : t('settings.personality.impressionRefresh')}</span>
             </Button>
             <Button
               size="sm"
@@ -678,14 +680,14 @@ export function PersonalitySettings(): React.ReactElement {
               disabled={applyingImpression || !impression?.content?.trim()}
             >
               <Sparkles className="mr-1 size-4" />
-              <span>{applyingImpression ? '写入中…' : '写入 [USER]'}</span>
+              <span>{applyingImpression ? t('settings.personality.impressionApplying') : t('settings.personality.impressionApply')}</span>
             </Button>
           </div>
         )}
       >
         <SettingsCard divided={false} className="p-4 space-y-3">
           <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2">
-            <div className="text-xs font-medium text-muted-foreground">最近更新时间</div>
+            <div className="text-xs font-medium text-muted-foreground">{t('settings.personality.impressionUpdatedAt')}</div>
             <div className="mt-1 text-sm text-foreground/80">
               {formatDateTime(impression?.updatedAt)}
             </div>
@@ -694,7 +696,7 @@ export function PersonalitySettings(): React.ReactElement {
           <div className="rounded-xl border border-border/60 bg-background px-4 py-3">
             {impressionLoading
               ? (
-                <div className="text-sm text-muted-foreground">正在加载记忆画像...</div>
+                <div className="text-sm text-muted-foreground">{t('settings.personality.impressionLoading')}</div>
               )
               : impression?.content?.trim()
                 ? (
@@ -704,7 +706,7 @@ export function PersonalitySettings(): React.ReactElement {
                 )
                 : (
                   <div className="text-sm text-muted-foreground">
-                    当前还没有可用的记忆画像摘要。先让记忆系统运行一段时间再回来查看。
+                    {t('settings.personality.impressionEmpty')}
                   </div>
                 )}
           </div>
@@ -714,7 +716,7 @@ export function PersonalitySettings(): React.ReactElement {
       {/* USER.md 编辑器 */}
       <PersonalityDocumentEditor
         document={state.user}
-        meta={PERSONALITY_DOC_META.user}
+        meta={getPersonalityDocMeta('user', t)}
         onDocumentSaved={handleDocumentSaved}
       />
     </div>

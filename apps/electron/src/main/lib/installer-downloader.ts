@@ -10,10 +10,13 @@ import { get as httpsGet } from 'node:https'
 import { get as httpGet } from 'node:http'
 import path from 'node:path'
 import { URL } from 'node:url'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, type BrowserWindow, shell } from 'electron'
 import type { InstallerDownloadResult, InstallerProgressPayload, InstallerSource } from '@kila/shared'
 import { INSTALLER_IPC_CHANNELS } from '@kila/shared'
 
+import { createLogger } from './logger'
+
+const log = createLogger('安装器')
 const activeDownloads = new Map<string, () => void>()
 
 function getInstallerDir(): string {
@@ -124,13 +127,13 @@ export async function downloadInstaller(
         throw new Error(`sha256 校验失败：期望 ${source.sha256}，实际 ${sha256}`)
       }
       if (!source.sha256) {
-        console.warn(`[Installer] ${source.filename} 清单未提供 sha256，跳过校验`)
+        log.warn(`[Installer] ${source.filename} 清单未提供 sha256，跳过校验`)
       }
       return { filePath, sha256 }
     } catch (error) {
       lastError = error
       if (error instanceof Error && error.message === 'cancelled') throw error
-      console.warn(`[Installer] 从 ${url} 下载失败:`, error)
+      log.warn(`[Installer] 从 ${url} 下载失败:`, error)
       if (existsSync(filePath)) await fsp.unlink(filePath).catch(() => {})
     }
   }

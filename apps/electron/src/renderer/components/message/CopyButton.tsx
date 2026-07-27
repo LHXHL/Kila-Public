@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CopyIcon, CheckIcon, MoreHorizontal } from 'lucide-react'
 import { MessageAction } from '@/components/ai-elements/message'
 import { Button } from '@/components/ui/button'
@@ -91,6 +92,7 @@ interface CopyButtonProps {
 
 /** 复制按钮：默认复制 Markdown（富文本） */
 export function CopyButton({ content }: CopyButtonProps): React.ReactElement {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {
@@ -103,7 +105,7 @@ export function CopyButton({ content }: CopyButtonProps): React.ReactElement {
   }, [content])
 
   return (
-    <MessageAction tooltip={copied ? '已复制' : '复制'} onClick={handleCopy}>
+    <MessageAction tooltip={copied ? t('common.copied') : t('common.copy')} onClick={handleCopy}>
       {copied ? (
         <CheckIcon className="size-4" />
       ) : (
@@ -120,6 +122,7 @@ interface CopyMenuButtonProps {
 
 /** 三点复制菜单：复制 Markdown / 复制纯文本，放在操作栏最右 */
 export function CopyMenuButton({ content }: CopyMenuButtonProps): React.ReactElement {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const flash = useCallback(() => {
@@ -147,7 +150,7 @@ export function CopyMenuButton({ content }: CopyMenuButtonProps): React.ReactEle
           variant="ghost"
           size="icon-sm"
           className="ml-auto titlebar-no-drag"
-          aria-label="更多复制选项"
+          aria-label={t('agent.message.moreCopyOptions')}
         >
           {copied ? <CheckIcon className="size-4" /> : <MoreHorizontal className="size-4" />}
         </Button>
@@ -156,11 +159,11 @@ export function CopyMenuButton({ content }: CopyMenuButtonProps): React.ReactEle
       <DropdownMenuContent align="end" className="z-[100]">
         <DropdownMenuItem onSelect={handleMarkdown}>
           <CopyIcon className="size-4" />
-          复制 Markdown
+          {t('agent.message.copyMarkdown')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handlePlainText}>
           <CopyIcon className="size-4" />
-          复制纯文本
+          {t('agent.message.copyPlainText')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

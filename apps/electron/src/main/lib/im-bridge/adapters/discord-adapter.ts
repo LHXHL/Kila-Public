@@ -1,4 +1,5 @@
 import type {
+  BridgeAdapterCapabilities,
   BridgeRuntimeState,
   DiscordBridgeConfig,
   DiscordBridgeRuntimeState,
@@ -8,14 +9,18 @@ import type { BridgeTestResult } from '@kila/shared'
 import { BaseImAdapter } from './base-adapter'
 import type { BridgeAttachmentReference, BridgeOutboundMessage, BridgePermissionPromptMessage } from './base-adapter'
 import { downloadDiscordAttachments } from './discord-files'
+import { DISCORD_CAPABILITIES } from './adapter-capabilities'
+import type {
+  BridgeWebSocket,
+  DiscordDispatchData,
+  DiscordGatewayPayload,
+  DiscordHelloData,
+} from './discord-gateway-types'
+import { createLogger } from '../../logger'
+
+const log = createLogger('IM Bridge')
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-
-interface BridgeWebSocket {
-  addEventListener: (type: string, listener: (event: any) => void) => void
-  close: (code?: number, reason?: string) => void
-  send: (data: string) => void
-}
 
 interface DiscordAdapterDeps {
   getConfig: () => DiscordBridgeConfig
@@ -65,9 +70,12 @@ async function assertDiscordResponseOk(response: Response, context: string): Pro
 
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 15_000
 const MAX_RECONNECT_DELAY_MS = 30_000
+/** lastSequence 落盘节流窗口：每条事件同步写盘会把主进程 IO 打满 */
+const SEQUENCE_FLUSH_INTERVAL_MS = 30_000
 
 export class DiscordAdapter extends BaseImAdapter {
   readonly channelType = 'discord' as const
+  readonly capabilities: BridgeAdapterCapabilities = DISCORD_CAPABILITIES
   private readonly fetchImpl: FetchLike
   private readonly webSocketFactory: (url: string) => BridgeWebSocket
   private readonly getRuntimeState: () => BridgeRuntimeState | undefined
@@ -90,6 +98,8 @@ export class DiscordAdapter extends BaseImAdapter {
   private lastHeartbeatSentAt = 0
   private lastHeartbeatAckAt = 0
   private awaitingHeartbeatAck = false
+  private pendingSequence: number | null = null
+  private lastSequenceFlushedAt = 0
 
   constructor(private readonly deps: DiscordAdapterDeps) {
     super('discord')
@@ -120,7 +130,27 @@ export class DiscordAdapter extends BaseImAdapter {
   }
 
   private readRuntimeState(): DiscordBridgeRuntimeState {
-    return this.readPersistedRuntime().discord ?? {}
+    const persisted = this.readPersistedRuntime().discord ?? {}
+    // 内存中的 sequence 更新，落盘则是节流的
+    return this.pendingSequence === null
+      ? persisted
+      : { ...persisted, lastSequence: this.pendingSequence }
+  }
+
+  /** 记录网关 sequence：内存即时更新，落盘按 30s 节流，避免每条事件同步写文件 */
+  private recordSequence(sequence: number): void {
+    this.pendingSequence = sequence
+    if ((this.now() - this.lastSequenceFlushedAt) < SEQUENCE_FLUSH_INTERVAL_MS) return
+    this.flushSequence()
+  }
+
+  /** 断线、重连、停止等关键节点强制落盘，保证 resume 不丢 sequence */
+  private flushSequence(): void {
+    if (this.pendingSequence === null) return
+    const sequence = this.pendingSequence
+    this.pendingSequence = null
+    this.lastSequenceFlushedAt = this.now()
+    this.patchRuntimeState({ lastSequence: sequence })
   }
 
   private writeRuntimeState(nextState: DiscordBridgeRuntimeState): void {
@@ -141,6 +171,7 @@ export class DiscordAdapter extends BaseImAdapter {
   }
 
   private clearResumeState(): DiscordBridgeRuntimeState {
+    this.pendingSequence = null
     const current = this.readRuntimeState()
     const nextState: DiscordBridgeRuntimeState = {
       ...current,
@@ -236,6 +267,7 @@ export class DiscordAdapter extends BaseImAdapter {
     this.reconnectTimer = null
     this.awaitingHeartbeatAck = false
     this.heartbeatIntervalMs = 0
+    this.flushSequence()
     this.socket?.close()
     this.socket = null
     this.updateStatus({
@@ -254,14 +286,20 @@ export class DiscordAdapter extends BaseImAdapter {
 
     this.socket = this.webSocketFactory(url)
     this.socket.addEventListener('message', (event) => {
-      const raw = typeof event.data === 'string' ? event.data : String(event.data)
-      this.handleGatewayPayload(JSON.parse(raw))
+      // 单帧异常不得在主进程抛未捕获异常，否则一条畸形帧就能拖垮整个 Electron 主进程
+      try {
+        const raw = typeof event.data === 'string' ? event.data : String(event.data)
+        this.handleGatewayPayload(JSON.parse(raw))
+      } catch (error) {
+        log.error('[IM Bridge][Discord] 网关帧解析失败，已跳过该帧', error)
+      }
     })
     this.socket.addEventListener('close', () => {
       if (this.heartbeatTimer) this.clearIntervalImpl(this.heartbeatTimer)
       this.heartbeatTimer = null
       this.awaitingHeartbeatAck = false
       this.socket = null
+      this.flushSequence()
 
       if (this.shouldReconnect) {
         this.scheduleReconnect()
@@ -369,14 +407,15 @@ export class DiscordAdapter extends BaseImAdapter {
     })
   }
 
-  private handleGatewayPayload(payload: { op: number; d?: any; s?: number | null; t?: string | null }): void {
+  private handleGatewayPayload(payload: DiscordGatewayPayload): void {
     if (typeof payload.s === 'number') {
-      this.patchRuntimeState({ lastSequence: payload.s })
+      this.recordSequence(payload.s)
     }
 
     switch (payload.op) {
       case 10: {
-        const intervalMs = Number(payload.d?.heartbeat_interval ?? 30_000)
+        const hello = payload.d as DiscordHelloData | undefined
+        const intervalMs = Number(hello?.heartbeat_interval ?? 30_000)
         this.startHeartbeatLoop(intervalMs)
         if (this.canResume()) {
           this.sendResume()
@@ -406,17 +445,18 @@ export class DiscordAdapter extends BaseImAdapter {
 
       case 0:
         if (payload.t) {
-          void this.handleDispatch(payload.t, payload.d)
+          void this.handleDispatch(payload.t, payload.d as DiscordDispatchData)
         }
         return
     }
   }
 
-  async handleDispatch(eventType: string, data: any): Promise<void> {
+  async handleDispatch(eventType: string, data: DiscordDispatchData): Promise<void> {
     if (eventType === 'READY') {
       const now = this.now()
       this.botUserId = String(data.user?.id ?? '')
       this.reconnectAttempts = 0
+      this.flushSequence()
       this.patchRuntimeState({
         sessionId: String(data.session_id ?? ''),
         resumeGatewayUrl: String(data.resume_gateway_url ?? '').trim() || undefined,
@@ -437,6 +477,7 @@ export class DiscordAdapter extends BaseImAdapter {
     if (eventType === 'RESUMED') {
       const now = this.now()
       this.reconnectAttempts = 0
+      this.flushSequence()
       this.patchRuntimeState({
         lastConnectedAt: now,
         lastError: undefined,
@@ -453,11 +494,9 @@ export class DiscordAdapter extends BaseImAdapter {
     if (eventType === 'MESSAGE_CREATE') {
       if (data.author?.bot) return
 
+      // 身份白名单已统一收敛到 BridgeManager 的 inbound-guard（默认拒绝 + 回提示 + 写审计）；
+      // 这里只保留服务器/频道/@提及等路由层过滤。
       const userId = String(data.author?.id ?? '')
-      if (this.config.allowedUserIds.length > 0 && !this.config.allowedUserIds.includes(userId)) {
-        return
-      }
-
       const channelId = String(data.channel_id ?? '')
       const guildId = typeof data.guild_id === 'string' ? data.guild_id : null
       if (guildId) {
@@ -475,7 +514,7 @@ export class DiscordAdapter extends BaseImAdapter {
       }
 
       const attachments: BridgeAttachmentReference[] = Array.isArray(data.attachments)
-        ? data.attachments.map((attachment: any) => ({
+        ? data.attachments.map((attachment) => ({
           remoteId: String(attachment.id ?? ''),
           filename: String(attachment.filename ?? 'discord-attachment'),
           mediaType: String(attachment.content_type ?? 'application/octet-stream'),
@@ -553,12 +592,7 @@ export class DiscordAdapter extends BaseImAdapter {
               label: '允许一次',
               custom_id: `imbridge|allow|${input.callbackToken}|once`,
             },
-            {
-              type: 2,
-              style: 1,
-              label: '总是允许',
-              custom_id: `imbridge|allow|${input.callbackToken}|always`,
-            },
+            // 不提供“总是允许”：公共频道里一次误点就会把危险工具永久写进白名单
             {
               type: 2,
               style: 4,
@@ -577,6 +611,7 @@ export class DiscordAdapter extends BaseImAdapter {
       fetchImpl: this.fetchImpl,
       attachments,
       sessionId,
+      maxBytes: this.config.maxInboundFileBytes,
     })
   }
 }

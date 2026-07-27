@@ -5,21 +5,25 @@
  * 存储在 ~/.kila/settings.json
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { getSettingsPath } from './config-paths'
 import { DEFAULT_THEME_ID, isBuiltinThemeId, isCustomThemeId } from '@kila/shared'
 import { resolveTheme } from './theme-service'
 import { DEFAULT_THEME_MODE, DEFAULT_LOCALE, DEFAULT_THEME_ID_SETTING } from '../../types'
 import type { AppSettings } from '../../types'
-
-/**
- * 获取应用设置
- *
- * 如果文件不存在，返回默认设置。
- */
+import { readJsonWithBackup, writeTextAtomicWithBackup } from './safe-json-file'
+import { createDegradedConfigRegistry, degradeCorruptConfig } from './config-file-guard'
 
 import { createLogger } from './logger'
 const log = createLogger('设置')
+
+/**
+ * 设置文件降级只读登记表。
+ *
+ * 一旦某个 settings.json 解析失败就永久标记为不可信：即使损坏文件已留档重建，
+ * 本进程内所有依赖「首装标志」的引导逻辑都必须跳过破坏性清理。
+ */
+const degradedSettings = createDegradedConfigRegistry()
 
 function normalizePositiveInt(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
@@ -61,73 +65,99 @@ function removeLegacyMemorySettings(data: Record<string, unknown>): void {
   delete data.memoryDigestMinIntervalMs
 }
 
-export function getSettings(): AppSettings {
+/** 设置读取结果；degraded=true 表示落回默认值，任何「首装判定」都不得信任它 */
+export interface SettingsReadResult {
+  settings: AppSettings
+  degraded: boolean
+}
+
+function buildDefaultSettings(): AppSettings {
+  return {
+    themeMode: DEFAULT_THEME_MODE,
+    themeId: DEFAULT_THEME_ID_SETTING,
+    onboardingCompleted: false,
+    environmentCheckSkipped: false,
+    notificationsEnabled: true,
+    locale: DEFAULT_LOCALE,
+    unifiedSessionsBootstrapped: false,
+    sessionProjectModelBootstrapped: false,
+    memoryNowledgeEnabled: false,
+    tokenMonthlyBudgetUsd: undefined,
+    tokenMonthlyBudgetTokens: undefined,
+    memoryNowledgeTimeoutMs: 8_000,
+    memorySessionContextEnabled: true,
+  }
+}
+
+function normalizeSettings(raw: string): AppSettings {
+  const data = JSON.parse(raw) as Partial<AppSettings> & Record<string, unknown>
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('设置文件不是合法的 JSON 对象')
+  }
+
+  removeLegacyBashRiskSettings(data)
+  removeLegacyMemorySettings(data)
+
+  return {
+    ...data,
+    themeMode: data.themeMode || DEFAULT_THEME_MODE,
+    themeId: normalizeThemeId(data.themeId),
+    onboardingCompleted: data.onboardingCompleted ?? false,
+    environmentCheckSkipped: data.environmentCheckSkipped ?? false,
+    notificationsEnabled: data.notificationsEnabled ?? true,
+    locale: data.locale ?? DEFAULT_LOCALE,
+    unifiedSessionsBootstrapped: data.unifiedSessionsBootstrapped ?? false,
+    sessionProjectModelBootstrapped: data.sessionProjectModelBootstrapped ?? false,
+    agentPermissionMode: normalizePermissionMode(data.agentPermissionMode),
+    memoryNowledgeEnabled: data.memoryNowledgeEnabled ?? false,
+    tokenMonthlyBudgetUsd: normalizePositiveNumber(data.tokenMonthlyBudgetUsd),
+    tokenMonthlyBudgetTokens: normalizePositiveInt(data.tokenMonthlyBudgetTokens),
+    memoryNowledgeBaseUrl: typeof data.memoryNowledgeBaseUrl === 'string'
+      ? (data.memoryNowledgeBaseUrl.trim() || undefined)
+      : undefined,
+    memoryNowledgeApiKey: typeof data.memoryNowledgeApiKey === 'string'
+      ? (data.memoryNowledgeApiKey.trim() || undefined)
+      : undefined,
+    memoryNowledgeTimeoutMs: normalizePositiveInt(data.memoryNowledgeTimeoutMs)
+      ?? 8_000,
+    memorySessionContextEnabled: data.memorySessionContextEnabled ?? true,
+  }
+}
+
+/**
+ * 读取应用设置并区分「可信首装」与「不可信降级」。
+ *
+ * - 文件不存在：可信首装，degraded=false，引导逻辑可以按首次运行处理；
+ * - 主备双双解析失败：不可信，留档损坏文件后返回默认值，degraded=true，
+ *   任何依赖 bootstrapped 标志的破坏性清理都必须跳过。
+ */
+export function readSettings(): SettingsReadResult {
   const filePath = getSettingsPath()
+
   if (!existsSync(filePath)) {
-    return {
-      themeMode: DEFAULT_THEME_MODE,
-      themeId: DEFAULT_THEME_ID_SETTING,
-      onboardingCompleted: false,
-      environmentCheckSkipped: false,
-      notificationsEnabled: true,
-      locale: DEFAULT_LOCALE,
-      unifiedSessionsBootstrapped: false,
-      sessionProjectModelBootstrapped: false,
-      memoryNowledgeEnabled: false,
-      tokenMonthlyBudgetUsd: undefined,
-      tokenMonthlyBudgetTokens: undefined,
-      memoryNowledgeTimeoutMs: 8_000,
-      memorySessionContextEnabled: true,
-    }
+    return { settings: buildDefaultSettings(), degraded: degradedSettings.isDegraded(filePath) }
   }
 
   try {
-    const raw = readFileSync(filePath, 'utf-8')
-    const data = JSON.parse(raw) as Partial<AppSettings> & Record<string, unknown>
-    removeLegacyBashRiskSettings(data)
-    removeLegacyMemorySettings(data)
-    return {
-      ...data,
-      themeMode: data.themeMode || DEFAULT_THEME_MODE,
-      themeId: normalizeThemeId(data.themeId),
-      onboardingCompleted: data.onboardingCompleted ?? false,
-      environmentCheckSkipped: data.environmentCheckSkipped ?? false,
-      notificationsEnabled: data.notificationsEnabled ?? true,
-      locale: data.locale ?? DEFAULT_LOCALE,
-      unifiedSessionsBootstrapped: data.unifiedSessionsBootstrapped ?? false,
-      sessionProjectModelBootstrapped: data.sessionProjectModelBootstrapped ?? false,
-      agentPermissionMode: normalizePermissionMode(data.agentPermissionMode),
-      memoryNowledgeEnabled: data.memoryNowledgeEnabled ?? false,
-      tokenMonthlyBudgetUsd: normalizePositiveNumber(data.tokenMonthlyBudgetUsd),
-      tokenMonthlyBudgetTokens: normalizePositiveInt(data.tokenMonthlyBudgetTokens),
-      memoryNowledgeBaseUrl: typeof data.memoryNowledgeBaseUrl === 'string'
-        ? (data.memoryNowledgeBaseUrl.trim() || undefined)
-        : undefined,
-      memoryNowledgeApiKey: typeof data.memoryNowledgeApiKey === 'string'
-        ? (data.memoryNowledgeApiKey.trim() || undefined)
-        : undefined,
-      memoryNowledgeTimeoutMs: normalizePositiveInt(data.memoryNowledgeTimeoutMs)
-        ?? 8_000,
-      memorySessionContextEnabled: data.memorySessionContextEnabled ?? true,
-    }
+    const settings = readJsonWithBackup(filePath, (raw) => normalizeSettings(raw))
+    return { settings, degraded: degradedSettings.isDegraded(filePath) }
   } catch (error) {
-    log.error('[设置] 读取失败:', error)
-    return {
-      themeMode: DEFAULT_THEME_MODE,
-      themeId: DEFAULT_THEME_ID_SETTING,
-      onboardingCompleted: false,
-      environmentCheckSkipped: false,
-      notificationsEnabled: true,
-      locale: DEFAULT_LOCALE,
-      unifiedSessionsBootstrapped: false,
-      sessionProjectModelBootstrapped: false,
-      memoryNowledgeEnabled: false,
-      tokenMonthlyBudgetUsd: undefined,
-      tokenMonthlyBudgetTokens: undefined,
-      memoryNowledgeTimeoutMs: 8_000,
-      memorySessionContextEnabled: true,
-    }
+    degradeCorruptConfig(degradedSettings, { filePath, label: '应用设置', error })
+    return { settings: buildDefaultSettings(), degraded: true }
   }
+}
+
+/**
+ * 判断应用设置是否处于降级（不可信）状态。
+ *
+ * 只做状态查询，不触发读取；调用方通常先 getSettings() 再判断。
+ */
+export function isSettingsDegraded(): boolean {
+  return degradedSettings.isDegraded(getSettingsPath())
+}
+
+export function getSettings(): AppSettings {
+  return readSettings().settings
 }
 
 /**
@@ -140,12 +170,16 @@ export function repairStoredThemeId(): AppSettings | null {
   if (!existsSync(filePath)) return null
 
   try {
-    const data = JSON.parse(readFileSync(filePath, 'utf-8')) as Partial<AppSettings>
-    const normalizedThemeId = normalizeThemeId(data.themeId)
-    if (data.themeId === normalizedThemeId) return null
+    // 这里必须比对「磁盘上的原始值」而不是归一化后的值，否则永远判定为无需修复。
+    const storedThemeId = readJsonWithBackup(filePath, (raw) => {
+      const data = JSON.parse(raw) as Partial<AppSettings>
+      return data.themeId
+    })
+    const normalizedThemeId = normalizeThemeId(storedThemeId)
+    if (storedThemeId === normalizedThemeId) return null
     return updateSettings({ themeId: normalizedThemeId })
   } catch {
-    // 设置文件本身损坏时沿用 getSettings() 的完整降级逻辑，不在主题监听中覆盖其他字段。
+    // 设置文件本身损坏时沿用 readSettings() 的降级逻辑，不在主题监听中覆盖其他字段。
     return null
   }
 }
@@ -181,7 +215,8 @@ export function updateSettings(updates: Partial<AppSettings>): AppSettings {
   const filePath = getSettingsPath()
 
   try {
-    writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf-8')
+    // 原子写 + 备份：崩溃或掉电只会留下完整的旧版本或完整的新版本，不会出现半截文件
+    writeTextAtomicWithBackup(filePath, JSON.stringify(updated, null, 2))
     log.info(`[设置] 已更新 ${Object.keys(updates).length} 个字段`)
   } catch (error) {
     log.error('[设置] 写入失败:', error)

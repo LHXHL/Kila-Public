@@ -2,7 +2,6 @@ import type { MemoryRecallTraceItem } from '@kila/shared'
 import type {
   MemorySearchResult,
   MemoryThreadSearchResult,
-  NotebookEntry,
 } from './types'
 
 const TRACE_CONTENT_LIMIT = 1_600
@@ -27,11 +26,13 @@ function resolveMemoryProvider(uri: string): MemoryRecallTraceItem['provider'] {
 /**
  * 把本轮真正参与上下文构建的召回结果转成可持久化的受限摘要。
  * 内容有单项长度上限，避免 memory_trace 让 JSONL 消息无限膨胀。
+ *
+ * 注意：`MemoryRecallTraceItem` 仍保留 `kind: 'notebook'` 与 `provider: 'local'`，
+ * 那是为了解析历史 JSONL；本地笔记随本地存储移除后，这里不再构造它们。
  */
 export function buildMemoryRecallTraceItems(input: {
   memoryResults: MemorySearchResult[]
   relatedThreads: MemoryThreadSearchResult[]
-  notebookEntries: NotebookEntry[]
 }): MemoryRecallTraceItem[] {
   const memoryItems = input.memoryResults.map((result): MemoryRecallTraceItem => {
     const limited = limitTraceContent(result.entry.content)
@@ -63,18 +64,5 @@ export function buildMemoryRecallTraceItems(input: {
     }
   })
 
-  const notebookItems = input.notebookEntries.map((entry): MemoryRecallTraceItem => {
-    const limited = limitTraceContent(entry.content)
-    return {
-      kind: 'notebook',
-      id: entry.uri,
-      title: entry.title?.trim() || '未命名笔记',
-      content: limited.content,
-      truncated: limited.truncated || undefined,
-      provider: 'local',
-      tags: entry.tags.length > 0 ? entry.tags : undefined,
-    }
-  })
-
-  return [...memoryItems, ...threadItems, ...notebookItems]
+  return [...memoryItems, ...threadItems]
 }

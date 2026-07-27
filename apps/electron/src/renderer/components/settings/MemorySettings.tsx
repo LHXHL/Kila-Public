@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   Brain,
   CheckCircle2,
@@ -52,17 +54,16 @@ const DEFAULT_NOWLEDGE_URL = 'http://127.0.0.1:14242'
 const RECENT_MEMORY_LIMIT = 12
 const ALL_MEMORY_PAGE_SIZE = 20
 
-const NOWLEDGE_SETUP_PROMPT = `请帮我完成 Kila 的 Nowledge Mem 本地配置：
+/** 拼装「配置提示词」，逐条走翻译，避免在源码里硬编码整段中文 */
+function buildNowledgeSetupPrompt(t: TFunction): string {
+  const steps = [1, 2, 3, 4, 5, 6]
+    .map((index) => `${index}. ${t(`settings.memory.setupPrompt.step${index}`)}`)
+    .join('\n')
+  return `${t('settings.memory.setupPrompt.intro')}\n\n${steps}`
+}
 
-1. 先确认操作系统，并检查 Nowledge Mem 是否已经安装和运行。
-2. 如果没有安装，引导我从 https://mem.nowledge.co 获取桌面客户端。不要替我下载或执行未知安装包。
-3. 启动后检查本地服务 http://127.0.0.1:14242/health；只配置 localhost，不使用远程服务。
-4. 如果 nmem CLI 可用，运行 nmem status 验证；不可用时不强制安装，Kila 可以直接访问本地 HTTP 服务。
-5. 回到 Kila「设置 → 记忆」，点击「自动检测并启用」。
-6. 最后说明：Kila 的记忆完全由 Nowledge 管理；未配置 Nowledge 时记忆功能保持关闭，不会在本地写入任何记忆文件。`
-
-function formatTime(value: number): string {
-  return new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+function formatTime(value: number, language: string): string {
+  return new Date(value).toLocaleString(language, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function isLocalUrl(value: string): boolean {
@@ -81,25 +82,27 @@ interface MemoryRowProps {
 }
 
 function MemoryRow({ item, onSelect, onDelete }: MemoryRowProps): React.ReactElement {
+  const { t, i18n } = useTranslation()
   return (
     <div className="flex gap-3 px-5 py-4 [&+&]:border-t [&+&]:border-border/30">
       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">{item.title || item.category}</span>
-          <span className="text-xs text-muted-foreground">{formatTime(item.updatedAt)}</span>
+          <span className="text-xs text-muted-foreground">{formatTime(item.updatedAt, i18n.language)}</span>
         </div>
         <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{item.content}</p>
         <Button variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => onSelect(item)}>
-          查看详情
+          {t('settings.memory.viewDetail')}
         </Button>
       </div>
-      {onDelete && <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label="删除记忆" onClick={() => onDelete(item.uri)}><Trash2 className="h-4 w-4" /></Button>}
+      {onDelete && <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label={t('settings.memory.deleteMemory')} onClick={() => onDelete(item.uri)}><Trash2 className="h-4 w-4" /></Button>}
     </div>
   )
 }
 
 export function MemorySettings(): React.ReactElement {
+  const { t, i18n } = useTranslation()
   const [loading, setLoading] = React.useState(true)
   const [detecting, setDetecting] = React.useState(false)
   const [settings, setSettings] = React.useState<AppSettings | null>(null)
@@ -134,7 +137,7 @@ export function MemorySettings(): React.ReactElement {
     void loadRuntime(RECENT_MEMORY_LIMIT)
       .catch((error) => {
         console.error('[MemorySettings] 加载失败:', error)
-        toast.error('无法加载记忆设置')
+        toast.error(t('settings.memory.loadSettingsFailed'))
       })
       .finally(() => setLoading(false))
   }, [loadRuntime])
@@ -154,7 +157,7 @@ export function MemorySettings(): React.ReactElement {
       setAllMemoriesHasNext(rows.length > ALL_MEMORY_PAGE_SIZE)
       return pageRows.length
     } catch (error) {
-      const message = error instanceof Error ? error.message : '无法加载全部长期记忆'
+      const message = error instanceof Error ? error.message : t('settings.memory.loadAllFailed')
       setAllMemoriesError(message)
       throw error
     } finally {
@@ -173,7 +176,7 @@ export function MemorySettings(): React.ReactElement {
     try {
       const result = await window.electronAPI.detectLocalNowledge()
       if (!result.found || !result.baseUrl || !isLocalUrl(result.baseUrl)) {
-        toast.error('未检测到本机 Nowledge，请确认桌面客户端正在运行')
+        toast.error(t('settings.memory.notDetected'))
         return
       }
       await persist({
@@ -181,9 +184,9 @@ export function MemorySettings(): React.ReactElement {
         memoryNowledgeBaseUrl: result.baseUrl,
         memoryNowledgeApiKey: result.apiKey,
       })
-      toast.success('Nowledge 长期记忆已启用')
+      toast.success(t('settings.memory.enabledToast'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Nowledge 检测失败')
+      toast.error(error instanceof Error ? error.message : t('settings.memory.detectFailed'))
     } finally {
       setDetecting(false)
     }
@@ -191,14 +194,14 @@ export function MemorySettings(): React.ReactElement {
 
   const handleUrlSave = React.useCallback(async (): Promise<void> => {
     if (!isLocalUrl(nowledgeUrl)) {
-      toast.error('Kila 仅允许连接本机 Nowledge（localhost / 127.0.0.1）')
+      toast.error(t('settings.memory.localOnly'))
       return
     }
     await persist({ memoryNowledgeBaseUrl: nowledgeUrl.trim() })
   }, [nowledgeUrl, persist])
 
   const handleDeleteMemory = React.useCallback(async (uri: string): Promise<void> => {
-    if (!window.confirm('确定删除这条长期记忆吗？')) return
+    if (!window.confirm(t('settings.memory.deleteConfirm'))) return
     try {
       await window.electronAPI.forgetMemory(uri)
       await loadRuntime(RECENT_MEMORY_LIMIT)
@@ -208,10 +211,10 @@ export function MemorySettings(): React.ReactElement {
           await loadAllMemoriesPage(allMemoriesPage - 1)
         }
       }
-      toast.success('长期记忆已删除')
+      toast.success(t('settings.memory.deleted'))
     } catch (error) {
       console.error('[MemorySettings] 删除长期记忆失败:', error)
-      toast.error(error instanceof Error ? error.message : '长期记忆删除失败')
+      toast.error(error instanceof Error ? error.message : t('settings.memory.deleteFailed'))
     }
   }, [allMemoriesOpen, allMemoriesPage, loadAllMemoriesPage, loadRuntime])
 
@@ -220,10 +223,10 @@ export function MemorySettings(): React.ReactElement {
     try {
       await loadRuntime(RECENT_MEMORY_LIMIT)
       if (allMemoriesOpen) await loadAllMemoriesPage(allMemoriesPage)
-      toast.success('长期记忆已刷新')
+      toast.success(t('settings.memory.refreshed'))
     } catch (error) {
       console.error('[MemorySettings] 刷新失败:', error)
-      toast.error(error instanceof Error ? error.message : '长期记忆刷新失败')
+      toast.error(error instanceof Error ? error.message : t('settings.memory.refreshFailed'))
     } finally {
       setRefreshing(false)
     }
@@ -237,7 +240,7 @@ export function MemorySettings(): React.ReactElement {
       await loadAllMemoriesPage(0)
     } catch (error) {
       console.error('[MemorySettings] 加载全部长期记忆失败:', error)
-      toast.error(error instanceof Error ? error.message : '无法加载全部长期记忆')
+      toast.error(error instanceof Error ? error.message : t('settings.memory.loadAllFailed'))
     }
   }, [loadAllMemoriesPage])
 
@@ -247,7 +250,7 @@ export function MemorySettings(): React.ReactElement {
       await loadAllMemoriesPage(page)
     } catch (error) {
       console.error('[MemorySettings] 切换长期记忆分页失败:', error)
-      toast.error(error instanceof Error ? error.message : '无法加载长期记忆分页')
+      toast.error(error instanceof Error ? error.message : t('settings.memory.loadPageFailed'))
     }
   }, [allMemoriesHasNext, allMemoriesLoading, allMemoriesPage, loadAllMemoriesPage])
 
@@ -257,12 +260,12 @@ export function MemorySettings(): React.ReactElement {
 
   const handleCopySetupPrompt = React.useCallback(async (): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(NOWLEDGE_SETUP_PROMPT)
-      toast.success('配置提示词已复制')
+      await navigator.clipboard.writeText(buildNowledgeSetupPrompt(t))
+      toast.success(t('settings.memory.promptCopied'))
     } catch {
-      toast.error('复制失败，请检查剪贴板权限')
+      toast.error(t('settings.memory.copyFailed'))
     }
-  }, [])
+  }, [t])
 
   if (loading || !settings) {
     return <div className="flex min-h-56 items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
@@ -273,17 +276,17 @@ export function MemorySettings(): React.ReactElement {
       <header>
         <div className="flex items-center gap-2">
           <Brain className="h-5 w-5 text-kila-accent" />
-          <h2 className="text-base font-semibold text-foreground">记忆</h2>
+          <h2 className="text-base font-semibold text-foreground">{t('settings.memory.title')}</h2>
         </div>
         <p className="mt-1 max-w-[65ch] text-sm text-muted-foreground">
-          Kila 的长期记忆完全由本机 Nowledge 管理。未配置 Nowledge 时记忆功能保持关闭，不会在本地写入任何记忆文件。
+          {t('settings.memory.description')}
         </p>
       </header>
 
       <section className="space-y-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Nowledge 长期记忆</h3>
-          <p className="mt-1 text-sm text-muted-foreground">启用并连接本机 Nowledge 后，记忆的召回与写入才会开启。</p>
+          <h3 className="text-sm font-semibold text-foreground">{t('settings.memory.nowledgeTitle')}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t('settings.memory.nowledgeDescription')}</p>
         </div>
         <SettingsCard>
           <div className="flex items-center justify-between gap-4 px-5 py-4">
@@ -292,19 +295,19 @@ export function MemorySettings(): React.ReactElement {
                 {status?.nowledgeHealthy ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
               </span>
               <div>
-                <div className="text-sm font-medium text-foreground">{status?.nowledgeHealthy ? '本地服务已连接，记忆已启用' : settings.memoryNowledgeEnabled ? '服务不可用，记忆已禁用' : '尚未启用，记忆已禁用'}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">{status?.detail ?? '安装 Nowledge Mem 后可启用长期记忆'}</div>
+                <div className="text-sm font-medium text-foreground">{status?.nowledgeHealthy ? t('settings.memory.stateConnected') : settings.memoryNowledgeEnabled ? t('settings.memory.stateUnavailable') : t('settings.memory.stateDisabled')}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{status?.detail ?? t('settings.memory.stateHint')}</div>
               </div>
             </div>
             <Switch
               checked={settings.memoryNowledgeEnabled ?? false}
               onCheckedChange={(checked) => void persist({ memoryNowledgeEnabled: checked })}
-              aria-label="启用 Nowledge 长期记忆"
+              aria-label={t('settings.memory.enableAria')}
             />
           </div>
           <SettingsInput
-            label="本地服务地址"
-            description="仅允许 localhost；默认端口为 14242。"
+            label={t('settings.memory.serviceUrl')}
+            description={t('settings.memory.serviceUrlHint')}
             value={nowledgeUrl}
             onChange={setNowledgeUrl}
             onBlur={() => void handleUrlSave()}
@@ -313,50 +316,50 @@ export function MemorySettings(): React.ReactElement {
           />
           <div className="flex flex-wrap justify-end gap-2 px-5 py-4">
             <Button variant="outline" size="sm" onClick={() => void window.electronAPI.openExternal('https://mem.nowledge.co')}>
-              <ExternalLink className="h-4 w-4" />获取 Nowledge
+              <ExternalLink className="h-4 w-4" />{t('settings.memory.getNowledge')}
             </Button>
             <Button variant="outline" size="sm" onClick={() => void handleCopySetupPrompt()}>
-              <Clipboard className="h-4 w-4" />复制配置提示词
+              <Clipboard className="h-4 w-4" />{t('settings.memory.copyPrompt')}
             </Button>
             <Button size="sm" disabled={detecting} onClick={() => void handleDetect()}>
-              {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}自动检测并启用
+              {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{t('settings.memory.autoDetect')}
             </Button>
           </div>
         </SettingsCard>
 
         <SettingsCard>
           <SettingsToggle
-            label="自动注入相关记忆"
-            description="运行前从 Nowledge 检索相关长期记忆并注入上下文。需先启用 Nowledge。"
+            label={t('settings.memory.autoInject')}
+            description={t('settings.memory.autoInjectDescription')}
             checked={settings.memorySessionContextEnabled ?? true}
             onCheckedChange={(checked) => void persist({ memorySessionContextEnabled: checked })}
           />
         </SettingsCard>
 
         <div className="grid grid-cols-[28px_1fr] gap-x-3 gap-y-3 rounded-lg bg-muted/35 px-4 py-4 text-sm">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">1</span><div><div className="font-medium text-foreground">安装并启动桌面客户端</div><div className="mt-0.5 text-muted-foreground">无需登录即可使用本机服务；确保托盘或 Dock 中能看到运行图标。</div></div>
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">2</span><div><div className="font-medium text-foreground">在 Kila 中自动检测</div><div className="mt-0.5 text-muted-foreground">Kila 检查 127.0.0.1:14242，并保存本地连接配置。</div></div>
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">3</span><div><div className="font-medium text-foreground">新建会话验证召回</div><div className="mt-0.5 text-muted-foreground">写入一条长期记忆后，在此处刷新并确认它来自 Nowledge。</div></div>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">1</span><div><div className="font-medium text-foreground">{t('settings.memory.guide1Title')}</div><div className="mt-0.5 text-muted-foreground">{t('settings.memory.guide1Body')}</div></div>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">2</span><div><div className="font-medium text-foreground">{t('settings.memory.guide2Title')}</div><div className="mt-0.5 text-muted-foreground">{t('settings.memory.guide2Body')}</div></div>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">3</span><div><div className="font-medium text-foreground">{t('settings.memory.guide3Title')}</div><div className="mt-0.5 text-muted-foreground">{t('settings.memory.guide3Body')}</div></div>
         </div>
       </section>
 
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
-          <div><h3 className="text-sm font-semibold text-foreground">长期记忆</h3><p className="mt-1 text-sm text-muted-foreground">展示 Nowledge 中的最近记忆条目。</p></div>
+          <div><h3 className="text-sm font-semibold text-foreground">{t('settings.memory.listTitle')}</h3><p className="mt-1 text-sm text-muted-foreground">{t('settings.memory.listDescription')}</p></div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" disabled={refreshing || !memoryEnabled} onClick={() => void handleShowAllMemories()}>
-              查看全部
+              {t('settings.memory.viewAll')}
             </Button>
             <Button variant="ghost" size="sm" disabled={refreshing} onClick={() => void handleRefresh()}>
-              <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />刷新
+              <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{t('settings.about.refresh')}
             </Button>
           </div>
         </div>
         <SettingsCard divided={false}>
           {!memoryEnabled ? (
-            <div className="px-5 py-8 text-center text-sm text-muted-foreground">记忆功能未启用。请先在上方配置并启用本机 Nowledge。</div>
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t('settings.memory.notEnabled')}</div>
           ) : memories.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-muted-foreground">还没有长期记忆。明确告诉 Agent“请记住……”即可创建第一条。</div>
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t('settings.memory.emptyHint')}</div>
           ) : memories.map((item) => <MemoryRow key={item.uri} item={item} onSelect={setSelectedMemory} onDelete={(uri) => void handleDeleteMemory(uri)} />)}
         </SettingsCard>
       </section>
@@ -364,8 +367,8 @@ export function MemorySettings(): React.ReactElement {
       <Dialog open={allMemoriesOpen} onOpenChange={setAllMemoriesOpen}>
         <DialogContent className="flex max-h-[85vh] w-[calc(100vw-32px)] max-w-3xl flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>全部长期记忆</DialogTitle>
-            <DialogDescription>按更新时间从新到旧排列，每页 {ALL_MEMORY_PAGE_SIZE} 条。点击条目可查看完整内容。</DialogDescription>
+            <DialogTitle>{t('settings.memory.allTitle')}</DialogTitle>
+            <DialogDescription>{t('settings.memory.allDescription', { size: ALL_MEMORY_PAGE_SIZE })}</DialogDescription>
           </DialogHeader>
           <div
             ref={allMemoriesScrollRef}
@@ -377,10 +380,10 @@ export function MemorySettings(): React.ReactElement {
             ) : allMemories.length === 0 && allMemoriesError ? (
               <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-5 text-center text-sm text-muted-foreground">
                 <p>{allMemoriesError}</p>
-                <Button variant="outline" size="sm" onClick={() => void handleAllMemoriesPageChange(allMemoriesPage)}>重试</Button>
+                <Button variant="outline" size="sm" onClick={() => void handleAllMemoriesPageChange(allMemoriesPage)}>{t('settings.memory.retry')}</Button>
               </div>
             ) : allMemories.length === 0 ? (
-              <div className="flex min-h-56 items-center justify-center px-5 text-center text-sm text-muted-foreground">还没有长期记忆。</div>
+              <div className="flex min-h-56 items-center justify-center px-5 text-center text-sm text-muted-foreground">{t('settings.memory.empty')}</div>
             ) : (
               allMemories.map((item) => <MemoryRow key={item.uri} item={item} onSelect={setSelectedMemory} onDelete={(uri) => void handleDeleteMemory(uri)} />)
             )}
@@ -388,7 +391,7 @@ export function MemorySettings(): React.ReactElement {
           <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-3">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               {allMemoriesLoading && allMemories.length > 0 && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              第 {allMemoriesPage + 1} 页 · 本页 {allMemories.length} 条
+              {t('settings.memory.pageInfo', { page: allMemoriesPage + 1, count: allMemories.length })}
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -397,7 +400,7 @@ export function MemorySettings(): React.ReactElement {
                 disabled={allMemoriesLoading || allMemoriesPage === 0}
                 onClick={() => void handleAllMemoriesPageChange(allMemoriesPage - 1)}
               >
-                <ChevronLeft className="h-4 w-4" />上一页
+                <ChevronLeft className="h-4 w-4" />{t('settings.memory.prevPage')}
               </Button>
               <Button
                 variant="outline"
@@ -405,7 +408,7 @@ export function MemorySettings(): React.ReactElement {
                 disabled={allMemoriesLoading || !allMemoriesHasNext}
                 onClick={() => void handleAllMemoriesPageChange(allMemoriesPage + 1)}
               >
-                下一页<ChevronRight className="h-4 w-4" />
+                {t('settings.memory.nextPage')}<ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -415,9 +418,9 @@ export function MemorySettings(): React.ReactElement {
       <Dialog open={selectedMemory !== null} onOpenChange={(open) => { if (!open) setSelectedMemory(null) }}>
         <DialogContent className="flex max-h-[85vh] w-[calc(100vw-32px)] max-w-2xl flex-col overflow-hidden">
           <DialogHeader className="shrink-0">
-            <DialogTitle>{selectedMemory?.title || selectedMemory?.category || '长期记忆详情'}</DialogTitle>
+            <DialogTitle>{selectedMemory?.title || selectedMemory?.category || t('settings.memory.detailTitle')}</DialogTitle>
             <DialogDescription>
-              {selectedMemory && `${formatTime(selectedMemory.updatedAt)} · ${selectedMemory.category}${selectedMemory.projectPath ? ` · ${selectedMemory.projectPath}` : ' · 全局'}`}
+              {selectedMemory && `${formatTime(selectedMemory.updatedAt, i18n.language)} · ${selectedMemory.category}${selectedMemory.projectPath ? ` · ${selectedMemory.projectPath}` : ` · ${t('settings.memory.globalScope')}`}`}
             </DialogDescription>
           </DialogHeader>
           {selectedMemory && (

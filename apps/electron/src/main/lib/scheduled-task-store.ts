@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { KilaPermissionMode, ScheduledTask, ScheduledTaskResultVerifier, ScheduledTaskRunRecord } from '@kila/shared'
 import { getScheduledTaskRunPath, getScheduledTaskRunsDir, getScheduledTasksIndexPath } from './config-paths'
 import { buildDelivery } from './scheduled-task-helpers'
+import { appendTextDurably, writeTextAtomic } from './safe-json-file'
 
 
 import { createLogger } from './logger'
@@ -18,6 +19,7 @@ interface ScheduledTaskStoreDeps {
   getRunsDir?: () => string
   readFile?: (filePath: string) => string
   writeFile?: (filePath: string, content: string) => void
+  appendFile?: (filePath: string, content: string) => void
   renameFile?: (fromPath: string, toPath: string) => void
   unlinkFile?: (filePath: string) => void
   exists?: (filePath: string) => boolean
@@ -148,7 +150,12 @@ function defaultReadFile(filePath: string): string {
 }
 
 function defaultWriteFile(filePath: string, content: string): void {
-  writeFileSync(filePath, content, 'utf-8')
+  // 原子写：写入中断只会保留完整旧版本，不会产生半截 JSON / JSONL
+  writeTextAtomic(filePath, content)
+}
+
+function defaultAppendFile(filePath: string, content: string): void {
+  appendTextDurably(filePath, content)
 }
 
 function defaultRenameFile(fromPath: string, toPath: string): void {
@@ -178,6 +185,7 @@ export class ScheduledTaskStore {
   private readonly getRunsDir: () => string
   private readonly readFile: (filePath: string) => string
   private readonly writeFile: (filePath: string, content: string) => void
+  private readonly appendFile: (filePath: string, content: string) => void
   private readonly renameFile: (fromPath: string, toPath: string) => void
   private readonly unlinkFile: (filePath: string) => void
   private readonly exists: (filePath: string) => boolean
@@ -188,6 +196,7 @@ export class ScheduledTaskStore {
     this.getRunsDir = deps?.getRunsDir ?? getScheduledTaskRunsDir
     this.readFile = deps?.readFile ?? defaultReadFile
     this.writeFile = deps?.writeFile ?? defaultWriteFile
+    this.appendFile = deps?.appendFile ?? defaultAppendFile
     this.renameFile = deps?.renameFile ?? defaultRenameFile
     this.unlinkFile = deps?.unlinkFile ?? defaultUnlinkFile
     this.exists = deps?.exists ?? defaultExists
@@ -256,13 +265,25 @@ export class ScheduledTaskStore {
     return runs.slice(-limit)
   }
 
+  /**
+   * 追加一条执行记录。
+   *
+   * 真正的 append：不再「读全量 + 覆盖整个文件」，否则任何一次写入中断都会
+   * 把该任务的全部历史记录一起截断。超出上限后才触发一次原子重写做裁剪。
+   */
   appendRun(taskId: string, record: ScheduledTaskRunRecord): void {
     const runPath = this.getRunPath(taskId)
     ensureParentDir(runPath, this.mkdir)
+    this.appendFile(runPath, `${JSON.stringify(normalizeRunRecord(record))}\n`)
+    this.trimRunsIfNeeded(runPath, taskId)
+  }
 
-    const existing = this.listRuns(taskId, MAX_RUN_RECORDS)
-    const nextRuns = [...existing, normalizeRunRecord(record)].slice(-MAX_RUN_RECORDS)
-    const content = nextRuns.map((item) => JSON.stringify(item)).join('\n')
+  /** 记录数超过上限时，用原子写重建为最近 MAX_RUN_RECORDS 条 */
+  private trimRunsIfNeeded(runPath: string, taskId: string): void {
+    const runs = this.listRuns(taskId, Number.MAX_SAFE_INTEGER)
+    if (runs.length <= MAX_RUN_RECORDS) return
+
+    const content = runs.slice(-MAX_RUN_RECORDS).map((item) => JSON.stringify(item)).join('\n')
     this.writeFile(runPath, content ? `${content}\n` : '')
   }
 

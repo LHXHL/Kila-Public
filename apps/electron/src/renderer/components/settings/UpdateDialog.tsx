@@ -7,6 +7,7 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { ExternalLink } from 'lucide-react'
 import type { GitHubRelease } from '@kila/shared'
 import {
@@ -25,6 +26,7 @@ import { ReleaseNotesViewer } from './ReleaseNotesViewer'
 const GITHUB_RELEASES_URL = 'https://github.com/LHXHL/Kila-Public/releases'
 
 export function UpdateDialog(): React.ReactElement | null {
+  const { t } = useTranslation()
   const updateStatus = useAtomValue(updateStatusAtom)
   const [open, setOpen] = React.useState(false)
   const [release, setRelease] = React.useState<GitHubRelease | null>(null)
@@ -70,9 +72,9 @@ export function UpdateDialog(): React.ReactElement | null {
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>发现新版本</AlertDialogTitle>
+          <AlertDialogTitle>{t('settings.update.title')}</AlertDialogTitle>
           <AlertDialogDescription>
-            v{dialogVersion} 已发布，请前往下载页面获取最新版本覆盖安装。
+            {t('settings.update.description', { version: dialogVersion })}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -85,11 +87,11 @@ export function UpdateDialog(): React.ReactElement | null {
 
         <AlertDialogFooter>
           <AlertDialogCancel>
-            稍后再说
+            {t('settings.update.later')}
           </AlertDialogCancel>
           <AlertDialogAction onClick={handleGoToDownload}>
             <ExternalLink className="h-4 w-4 mr-1.5" />
-            前往下载
+            {t('settings.about.download')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { CircleAlert, MessageSquareText, ShieldAlert } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -36,7 +38,9 @@ function buildPendingGroups(params: {
   sessions: SessionMeta[]
   permissionMap: Map<string, readonly PermissionRequest[]>
   askUserMap: Map<string, readonly AskUserRequest[]>
+  t: TFunction
 }): PendingDisplayGroup[] {
+  const { t } = params
   const titleMap = new Map(params.sessions.map((session) => [session.id, session.title]))
   const groups = new Map<string, PendingDisplayGroup>()
 
@@ -45,7 +49,7 @@ function buildPendingGroups(params: {
     if (existing) return existing
     const group: PendingDisplayGroup = {
       sessionId,
-      title: titleMap.get(sessionId) ?? `会话 ${sessionId.slice(0, 8)}`,
+      title: titleMap.get(sessionId) ?? t('agent.pending.sessionFallback', { id: sessionId.slice(0, 8) }),
       items: [],
     }
     groups.set(sessionId, group)
@@ -58,7 +62,9 @@ function buildPendingGroups(params: {
       group.items.push({
         requestId: request.requestId,
         kind: 'permission',
-        label: request.toolName ? `权限 · ${request.toolName}` : '权限请求',
+        label: request.toolName
+          ? t('agent.pending.permissionWithTool', { tool: request.toolName })
+          : t('agent.pending.permission'),
       })
     }
   }
@@ -69,9 +75,11 @@ function buildPendingGroups(params: {
       group.items.push({
         requestId: request.requestId,
         kind: 'ask_user',
-        label: request.questions[0]?.header
-          ? `提问 · ${request.questions[0].header}`
-          : `提问 · ${request.questions[0]?.question ?? '需要输入'}`,
+        label: t('agent.pending.askUser', {
+          topic: request.questions[0]?.header
+            ?? request.questions[0]?.question
+            ?? t('agent.pending.askUserFallback'),
+        }),
       })
     }
   }
@@ -82,6 +90,7 @@ function buildPendingGroups(params: {
 export function GlobalPendingRequestsButton({
   collapsed = false,
 }: GlobalPendingRequestsButtonProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const total = useAtomValue(totalPendingRequestsAtom)
   const sessions = useAtomValue(sessionsAtom)
   const permissionMap = useAtomValue(allPendingPermissionRequestsAtom)
@@ -95,7 +104,8 @@ export function GlobalPendingRequestsButton({
     sessions,
     permissionMap,
     askUserMap,
-  }), [askUserMap, permissionMap, sessions])
+    t,
+  }), [askUserMap, permissionMap, sessions, t])
 
   if (total <= 0 || groups.length === 0) return null
 
@@ -122,7 +132,7 @@ export function GlobalPendingRequestsButton({
               ? 'relative rounded-lg p-2 text-foreground/70 hover:bg-background hover:text-foreground'
               : 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-foreground/70 hover:bg-background hover:text-foreground',
           )}
-          aria-label={`待处理请求 ${total}`}
+          aria-label={t('agent.pending.ariaLabel', { count: total })}
         >
           <div className="relative">
             <CircleAlert size={collapsed ? 18 : 16} />
@@ -135,7 +145,7 @@ export function GlobalPendingRequestsButton({
           </div>
           {!collapsed && (
             <>
-              <span>待处理请求</span>
+              <span>{t('agent.pending.title')}</span>
               <span className="ml-auto text-xs text-muted-foreground">({total})</span>
             </>
           )}
@@ -150,8 +160,8 @@ export function GlobalPendingRequestsButton({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium">待处理请求</div>
-              <div className="text-xs text-muted-foreground">点击可跳转到对应会话</div>
+              <div className="text-sm font-medium">{t('agent.pending.title')}</div>
+              <div className="text-xs text-muted-foreground">{t('agent.pending.subtitle')}</div>
             </div>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
               {total}

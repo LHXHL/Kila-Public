@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import {
   Check,
   ChevronDown,
@@ -32,12 +33,13 @@ interface GitStatusPanelProps {
   sessionId: string
 }
 
-function statusLabel(file: GitChangedFile): string {
-  if (file.conflicted) return '冲突'
-  if (file.untracked) return '新增'
-  if (file.indexStatus === 'D' || file.worktreeStatus === 'D') return '删除'
-  if (file.indexStatus === 'R' || file.worktreeStatus === 'R') return '重命名'
-  return '修改'
+/** 文件状态对应的文案 key（Git 状态码本身不翻译，只翻译展示标签） */
+function statusLabelKey(file: GitChangedFile): string {
+  if (file.conflicted) return 'session.git.status.conflicted'
+  if (file.untracked) return 'session.git.status.untracked'
+  if (file.indexStatus === 'D' || file.worktreeStatus === 'D') return 'session.git.status.deleted'
+  if (file.indexStatus === 'R' || file.worktreeStatus === 'R') return 'session.git.status.renamed'
+  return 'session.git.status.modified'
 }
 
 function FileRow({
@@ -57,25 +59,27 @@ function FileRow({
   onUnstage: () => void
   onDiscard: () => void
 }): React.ReactElement {
+  const { t } = useTranslation()
+
   return (
     <div className={cn('group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors', selected ? 'bg-accent shadow-sm' : 'hover:bg-muted/55')}>
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onSelect}>
         {selected ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
         <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={file.path}>{file.path}</span>
-        <span className="shrink-0 text-[10px] text-muted-foreground">{statusLabel(file)}</span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">{t(statusLabelKey(file))}</span>
       </button>
       <div className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         {file.staged ? (
-          <Button variant="ghost" size="icon-sm" title="取消暂存" disabled={busy} onClick={onUnstage}>
+          <Button variant="ghost" size="icon-sm" title={t('session.git.file.unstage')} disabled={busy} onClick={onUnstage}>
             <Undo2 className="size-3.5" />
           </Button>
         ) : (
-          <Button variant="ghost" size="icon-sm" title="暂存" disabled={busy} onClick={onStage}>
+          <Button variant="ghost" size="icon-sm" title={t('session.git.file.stage')} disabled={busy} onClick={onStage}>
             <Check className="size-3.5" />
           </Button>
         )}
         {(file.unstaged || file.untracked) && (
-          <Button variant="ghost" size="icon-sm" title="丢弃工作区变更" disabled={busy} onClick={onDiscard}>
+          <Button variant="ghost" size="icon-sm" title={t('session.git.file.discard')} disabled={busy} onClick={onDiscard}>
             <RotateCcw className="size-3.5 text-destructive" />
           </Button>
         )}
@@ -85,6 +89,7 @@ function FileRow({
 }
 
 export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const sessions = useAtomValue(sessionsAtom)
   const setDraftsMap = useSetAtom(agentSessionDraftsAtom)
   const session = sessions.find((candidate) => candidate.id === sessionId) ?? null
@@ -129,16 +134,16 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
         setWorktrees(await window.electronAPI.listGitWorktrees(projectPath))
       } catch (caught) {
         setWorktrees([])
-        setError(formatGitPanelError(caught))
+        setError(formatGitPanelError(caught, t))
       }
     } catch (caught) {
       setSnapshot(null)
       setWorktrees([])
-      setError(formatGitPanelError(caught))
+      setError(formatGitPanelError(caught, t))
     } finally {
       setLoading(false)
     }
-  }, [projectPath, sessionId])
+  }, [projectPath, sessionId, t])
 
   React.useEffect(() => { void refresh() }, [refresh])
 
@@ -151,11 +156,11 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
       setSnapshot(next)
       setWorktrees(await window.electronAPI.listGitWorktrees(projectPath))
     } catch (caught) {
-      setError(formatGitPanelError(caught))
+      setError(formatGitPanelError(caught, t))
     } finally {
       setBusyPath(null)
     }
-  }, [projectPath])
+  }, [projectPath, t])
 
   const insertPathIntoComposer = React.useCallback((path: string) => {
     setDraftsMap((previous) => {
@@ -171,9 +176,9 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
     const paths = runChanges?.changedPaths ?? []
     if (paths.length === 0) return
     const reviewPrompt = [
-      '请审查本次 Agent 运行产生的修改，重点检查正确性、回归风险和缺失测试：',
+      t('session.git.reviewPromptHeader'),
       ...paths.map((path) => `- @${path}`),
-      '审查后给出可执行的修复项，并说明验证结果。',
+      t('session.git.reviewPromptFooter'),
     ].join('\n')
     setDraftsMap((previous) => {
       const current = previous.get(sessionId)?.trim() ?? ''
@@ -181,7 +186,7 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
       next.set(sessionId, current ? `${current}\n\n${reviewPrompt}` : reviewPrompt)
       return next
     })
-  }, [runChanges?.changedPaths, sessionId, setDraftsMap])
+  }, [runChanges?.changedPaths, sessionId, setDraftsMap, t])
 
   const runPaths = new Set(runChanges?.changedPaths ?? [])
 
@@ -205,7 +210,7 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
     window.electronAPI.getGitDiff({ projectPath, filePath: selectedFile.path, staged: diffSource === 'staged' })
       .then((result) => { if (!cancelled) setDiff(result) })
       .catch((caught) => {
-        if (!cancelled) setDiffError(formatGitPanelError(caught))
+        if (!cancelled) setDiffError(formatGitPanelError(caught, t))
       })
       .finally(() => { if (!cancelled) setDiffLoading(false) })
     return () => { cancelled = true }
@@ -216,7 +221,7 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
     filePaths: string[],
   ) => {
     if (!projectPath) return
-    if (action === 'discard' && !window.confirm(`确认丢弃 ${filePaths.length} 个文件的工作区变更？此操作不可撤销。`)) return
+    if (action === 'discard' && !window.confirm(t('session.git.confirmDiscardFiles', { count: filePaths.length }))) return
     setBusyPath(filePaths.length === 1 ? filePaths[0]! : '*')
     setError(null)
     try {
@@ -229,15 +234,15 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
       setSnapshot(next)
       if (selectedPath && !next.files.some((file) => file.path === selectedPath)) setSelectedPath(null)
     } catch (caught) {
-      setError(formatGitPanelError(caught))
+      setError(formatGitPanelError(caught, t))
     } finally {
       setBusyPath(null)
     }
-  }, [projectPath, selectedPath])
+  }, [projectPath, selectedPath, t])
 
   const mutateHunk = React.useCallback(async (hunkIndex: number, action: 'stage' | 'unstage' | 'discard') => {
     if (!projectPath || !selectedFile) return
-    if (action === 'discard' && !window.confirm('确认丢弃这个 Hunk？此操作不可撤销。')) return
+    if (action === 'discard' && !window.confirm(t('session.git.confirmDiscardHunk'))) return
     setBusyPath(selectedFile.path)
     setError(null)
     try {
@@ -251,11 +256,11 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
       setSnapshot(next)
       if (!next.files.some((file) => file.path === selectedFile.path)) setSelectedPath(null)
     } catch (caught) {
-      setError(formatGitPanelError(caught))
+      setError(formatGitPanelError(caught, t))
     } finally {
       setBusyPath(null)
     }
-  }, [diffSource, projectPath, selectedFile])
+  }, [diffSource, projectPath, selectedFile, t])
 
   const createWorktree = React.useCallback(async () => {
     if (!projectPath || !worktreePath.trim() || !worktreeBranch.trim()) return
@@ -273,24 +278,24 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
       setWorktreeBranch('')
       setWorktreeOpen(false)
     } catch (caught) {
-      setError(formatGitPanelError(caught))
+      setError(formatGitPanelError(caught, t))
     } finally {
       setBusyPath(null)
     }
-  }, [projectPath, worktreeBranch, worktreePath])
+  }, [projectPath, worktreeBranch, worktreePath, t])
 
   const removeWorktree = React.useCallback(async (path: string) => {
-    if (!projectPath || !window.confirm(`确认移除 Worktree？\n${path}`)) return
+    if (!projectPath || !window.confirm(t('session.git.worktreeConfirmRemove', { path }))) return
     setBusyPath('*')
     setError(null)
     try {
       setWorktrees(await window.electronAPI.removeGitWorktree({ projectPath, worktreePath: path }))
     } catch (caught) {
-      setError(formatGitPanelError(caught))
+      setError(formatGitPanelError(caught, t))
     } finally {
       setBusyPath(null)
     }
-  }, [projectPath])
+  }, [projectPath, t])
 
   const handleCommit = React.useCallback(async () => {
     if (!projectPath || !commitMessage.trim()) return
@@ -301,24 +306,24 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
       setCommitMessage('')
       await refresh()
     } catch (caught) {
-      setError(formatGitPanelError(caught))
+      setError(formatGitPanelError(caught, t))
     } finally {
       setBusyPath(null)
     }
-  }, [commitMessage, projectPath, refresh])
+  }, [commitMessage, projectPath, refresh, t])
 
-  if (!projectPath) return <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">当前会话没有项目目录。</div>
+  if (!projectPath) return <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">{t('session.git.noProject')}</div>
   if (loading && !snapshot) {
-    return <div role="status" className="flex h-full items-center justify-center gap-2 px-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取 Git 状态…</div>
+    return <div role="status" className="flex h-full items-center justify-center gap-2 px-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t('session.git.loading')}</div>
   }
   if (!loading && !snapshot) {
     return (
       <div className="flex h-full items-center justify-center px-6 py-8">
         <div role="alert" className="flex w-full max-w-md flex-col items-center gap-3 px-6 py-7 text-center">
           <div className="flex size-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive"><GitBranch className="size-6" /></div>
-          <div className="text-sm font-medium text-foreground">无法读取 Git 状态</div>
-          <div className="text-xs leading-5 text-muted-foreground">{error || '读取 Git 状态失败，请稍后重试。'}</div>
-          <Button variant="outline" size="sm" onClick={() => void refresh()}><RefreshCw className="mr-1.5 size-3.5" />重试</Button>
+          <div className="text-sm font-medium text-foreground">{t('session.git.loadFailedTitle')}</div>
+          <div className="text-xs leading-5 text-muted-foreground">{error || t('session.git.error.readFailed')}</div>
+          <Button variant="outline" size="sm" onClick={() => void refresh()}><RefreshCw className="mr-1.5 size-3.5" />{t('session.git.retry')}</Button>
         </div>
       </div>
     )
@@ -328,16 +333,16 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
       <div className="flex h-full min-h-0 flex-col px-4 py-5 text-sm">
         <div className="px-1 py-6 text-center">
           <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-muted/45 text-muted-foreground"><FolderGit2 className="size-6" /></div>
-          <div className="mt-3 font-medium text-foreground">此目录尚未启用 Git</div>
-          <div className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">你仍可正常对话和编辑文件。初始化 Git 仓库后，这里将展示 Diff、暂存区、提交和 Worktree。</div>
+          <div className="mt-3 font-medium text-foreground">{t('session.git.notRepoTitle')}</div>
+          <div className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{t('session.git.notRepoDescription')}</div>
           <div className="mx-auto mt-3 max-w-sm truncate rounded-md bg-muted/40 px-3 py-2 font-mono text-[10px] text-muted-foreground" title={projectPath}>{projectPath}</div>
           <div className="mt-4 flex justify-center gap-2">
             <Button size="sm" onClick={() => void initializeRepository()} disabled={busyPath !== null}>
               {busyPath === '*' ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <GitBranch className="mr-1.5 size-3.5" />}
-              初始化 Git 仓库
+              {t('session.git.init')}
             </Button>
             <Button variant="secondary" size="sm" onClick={() => void refresh()} disabled={loading || busyPath !== null}>
-              <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} />重新检测
+              <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} />{t('session.git.recheck')}
             </Button>
           </div>
           {error && <div role="alert" className="mx-auto mt-3 max-w-sm rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>}
@@ -345,17 +350,17 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
         {runChanges?.mode === 'filesystem' && (
           <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border border-border/55 p-2 text-left">
             <div className="flex items-center justify-between px-2 py-1 text-xs">
-              <span className="font-medium text-foreground">本次 Agent 修改</span>
-              <EntityMetadataChip tone="neutral">文件快照 · {runChanges.changedPaths.length}</EntityMetadataChip>
+              <span className="font-medium text-foreground">{t('session.git.runChangesTitle')}</span>
+              <EntityMetadataChip tone="neutral">{t('session.git.runChangesChip', { count: runChanges.changedPaths.length })}</EntityMetadataChip>
             </div>
             {runChanges.changedPaths.length > 0 ? runChanges.changedPaths.map((path) => (
               <div key={path} className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/45">
                 <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={path}>{path}</span>
-                <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" title="插入到输入框" aria-label={`插入 ${path} 到输入框`} onClick={() => insertPathIntoComposer(path)}>
+                <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" title={t('session.git.insertIntoComposer')} aria-label={t('session.git.insertPathIntoComposer', { path })} onClick={() => insertPathIntoComposer(path)}>
                   <Clipboard className="size-3.5" />
                 </Button>
               </div>
-            )) : <div className="px-2 py-4 text-center text-xs text-muted-foreground">本次运行未检测到文件变化。</div>}
+            )) : <div className="px-2 py-4 text-center text-xs text-muted-foreground">{t('session.git.runChangesEmpty')}</div>}
           </div>
         )}
       </div>
@@ -386,7 +391,7 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
                 aria-pressed={onlyRunChanges}
                 onClick={() => setOnlyRunChanges((value) => !value)}
               >
-                本次修改 {runChanges.changedPaths.length}
+                {t('session.git.runChangesFilter', { count: runChanges.changedPaths.length })}
               </Button>
               <Button
                 variant="ghost"
@@ -395,11 +400,11 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
                 disabled={runChanges.changedPaths.length === 0}
                 onClick={prepareRunReview}
               >
-                生成审查任务
+                {t('session.git.generateReview')}
               </Button>
             </>
           )}
-          <Button variant="ghost" size="icon-sm" onClick={() => void refresh()} disabled={loading} title="刷新">
+          <Button variant="ghost" size="icon-sm" onClick={() => void refresh()} disabled={loading} title={t('session.git.refresh')}>
             <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
           </Button>
         </div>
@@ -412,29 +417,29 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
           <div className="mb-2 px-2 py-2 text-[11px] text-muted-foreground">
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5"><GitFork className="size-3.5" />Worktrees · {worktrees.length}</span>
-              <Button variant="ghost" size="icon-sm" title="创建 Worktree" onClick={() => setWorktreeOpen((open) => !open)}><Plus className="size-3.5" /></Button>
+              <Button variant="ghost" size="icon-sm" title={t('session.git.worktreeCreate')} onClick={() => setWorktreeOpen((open) => !open)}><Plus className="size-3.5" /></Button>
             </div>
             {worktreeOpen && (
               <div className="mt-2 space-y-1.5">
-                <Input value={worktreePath} onChange={(event) => setWorktreePath(event.target.value)} placeholder="绝对目录路径" className="h-7 text-[11px]" />
+                <Input value={worktreePath} onChange={(event) => setWorktreePath(event.target.value)} placeholder={t('session.git.worktreePathPlaceholder')} className="h-7 text-[11px]" />
                 <div className="flex gap-1.5">
-                  <Input value={worktreeBranch} onChange={(event) => setWorktreeBranch(event.target.value)} placeholder="新分支名称" className="h-7 text-[11px]" />
-                  <Button size="sm" className="h-7" disabled={!worktreePath.trim() || !worktreeBranch.trim() || busyPath !== null} onClick={() => void createWorktree()}>创建</Button>
+                  <Input value={worktreeBranch} onChange={(event) => setWorktreeBranch(event.target.value)} placeholder={t('session.git.worktreeBranchPlaceholder')} className="h-7 text-[11px]" />
+                  <Button size="sm" className="h-7" disabled={!worktreePath.trim() || !worktreeBranch.trim() || busyPath !== null} onClick={() => void createWorktree()}>{t('session.git.create')}</Button>
                 </div>
               </div>
             )}
             {worktrees.length > 1 && <div className="mt-1.5 space-y-1">{worktrees.map((entry, index) => (
               <div key={entry.path} className="flex items-center gap-1 rounded-md px-2 py-1">
                 <span className="min-w-0 flex-1 truncate" title={entry.path}>{entry.branch || 'detached'} · {entry.path}</span>
-                {index > 0 && <Button variant="ghost" size="icon-sm" title="移除 Worktree" disabled={busyPath !== null || entry.locked} onClick={() => void removeWorktree(entry.path)}><Trash2 className="size-3" /></Button>}
+                {index > 0 && <Button variant="ghost" size="icon-sm" title={t('session.git.worktreeRemove')} disabled={busyPath !== null || entry.locked} onClick={() => void removeWorktree(entry.path)}><Trash2 className="size-3" /></Button>}
               </div>
             ))}</div>}
           </div>
           {staged.length > 0 && (
             <section className="mb-3">
               <div className="mb-1 flex items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
-                <span>已暂存 · {staged.length}</span>
-                <button type="button" onClick={() => void mutateFiles('unstage', staged.map((file) => file.path))}>全部取消</button>
+                <span>{t('session.git.staged', { count: staged.length })}</span>
+                <button type="button" onClick={() => void mutateFiles('unstage', staged.map((file) => file.path))}>{t('session.git.unstageAll')}</button>
               </div>
               {staged.map((file) => <FileRow key={`staged:${file.path}`} file={file} selected={selectedPath === file.path} busy={busyPath !== null} onSelect={() => selectFile(file, 'staged')} onStage={() => {} } onUnstage={() => void mutateFiles('unstage', [file.path])} onDiscard={() => void mutateFiles('discard', [file.path])} />)}
             </section>
@@ -442,14 +447,14 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
           {unstaged.length > 0 && (
             <section>
               <div className="mb-1 flex items-center justify-between px-2 text-[11px] font-medium text-muted-foreground">
-                <span>更改 · {unstaged.length}</span>
-                <button type="button" onClick={() => void mutateFiles('stage', unstaged.map((file) => file.path))}>全部暂存</button>
+                <span>{t('session.git.changes', { count: unstaged.length })}</span>
+                <button type="button" onClick={() => void mutateFiles('stage', unstaged.map((file) => file.path))}>{t('session.git.stageAll')}</button>
               </div>
               {unstaged.map((file) => <FileRow key={`unstaged:${file.path}`} file={file} selected={selectedPath === file.path} busy={busyPath !== null} onSelect={() => selectFile(file, 'unstaged')} onStage={() => void mutateFiles('stage', [file.path])} onUnstage={() => void mutateFiles('unstage', [file.path])} onDiscard={() => void mutateFiles('discard', [file.path])} />)}
             </section>
           )}
           {!loading && snapshot && snapshot.files.length === 0 && (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground"><Check className="size-6 text-emerald-500" />工作区干净</div>
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground"><Check className="size-6 text-emerald-500" />{t('session.git.clean')}</div>
           )}
         </div>
 
@@ -460,22 +465,22 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
                 <span className="min-w-0 flex-1 truncate font-medium">{selectedFile.path}</span>
                 {selectedFile.staged && (selectedFile.unstaged || selectedFile.untracked) && (
                   <div className="flex rounded-md bg-muted p-0.5 text-[10px]">
-                    <button type="button" className={cn('rounded px-2 py-1', diffSource === 'unstaged' && 'bg-background shadow-sm')} onClick={() => setDiffSource('unstaged')}>工作区</button>
-                    <button type="button" className={cn('rounded px-2 py-1', diffSource === 'staged' && 'bg-background shadow-sm')} onClick={() => setDiffSource('staged')}>暂存区</button>
+                    <button type="button" className={cn('rounded px-2 py-1', diffSource === 'unstaged' && 'bg-background shadow-sm')} onClick={() => setDiffSource('unstaged')}>{t('session.git.diffSourceWorktree')}</button>
+                    <button type="button" className={cn('rounded px-2 py-1', diffSource === 'staged' && 'bg-background shadow-sm')} onClick={() => setDiffSource('staged')}>{t('session.git.diffSourceStaged')}</button>
                   </div>
                 )}
-                <Button variant="ghost" size="icon-sm" title="插入到输入框" onClick={() => {
+                <Button variant="ghost" size="icon-sm" title={t('session.git.insertIntoComposer')} onClick={() => {
                   insertPathIntoComposer(selectedFile.path)
                 }}><Clipboard className="size-3.5" /></Button>
               </div>
               <div className="min-h-0 flex-1 overflow-auto">
                 {diffLoading ? (
-                  <div role="status" className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />正在加载 Diff…</div>
+                  <div role="status" className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />{t('session.git.diffLoading')}</div>
                 ) : diffError ? (
                   <div role="alert" className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-destructive">
                     <FileDiff className="size-5" />
                     <span>{diffError}</span>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setDiffRetryVersion((value) => value + 1)}>重试</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setDiffRetryVersion((value) => value + 1)}>{t('session.git.retry')}</Button>
                   </div>
                 ) : diff ? (
                   <GitDiffView
@@ -486,19 +491,19 @@ export function GitStatusPanel({ sessionId }: GitStatusPanelProps): React.ReactE
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
-                    此文件没有可显示的文本 Diff。
+                    {t('session.git.diffEmpty')}
                   </div>
                 )}
               </div>
             </>
           ) : (
-            <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-xs text-muted-foreground"><FileDiff className="size-4" />选择文件查看 Diff</div>
+            <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-xs text-muted-foreground"><FileDiff className="size-4" />{t('session.git.diffSelectFile')}</div>
           )}
           <div className="space-y-2 border-t border-border/55 p-3">
-            <Textarea value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="提交信息" className="min-h-[58px] resize-none text-xs" />
+            <Textarea value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder={t('session.git.commitPlaceholder')} className="min-h-[58px] resize-none text-xs" />
             <Button className="w-full" size="sm" disabled={!commitMessage.trim() || staged.length === 0 || busyPath !== null} onClick={() => void handleCommit()}>
               {busyPath === '*' ? <Loader2 className="animate-spin" /> : <GitCommitHorizontal />}
-              提交 {staged.length > 0 ? `${staged.length} 个文件` : ''}
+              {staged.length > 0 ? t('session.git.commitFiles', { count: staged.length }) : t('session.git.commit')}
             </Button>
           </div>
         </div>

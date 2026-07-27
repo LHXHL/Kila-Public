@@ -3,21 +3,17 @@
  *
  * 将 Kila 现有内建能力包装为 Pi AgentTool。
  * 覆盖：
- * - feishu group chat history tool
- * - global/custom MCP servers
+ * - 内置工具（web search、记忆、视觉、自定义 HTTP 工具、定时任务）
+ * - 全局与 session 级 MCP 服务器工具
+ *
+ * MCP 连接本身由 `mcp-server-manager.ts` 的长连接池负责，这里只做「工具定义映射」。
  */
 
-import { resolve } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client'
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { AgentTool } from '@earendil-works/pi-agent-core'
 import type { ImageContent, TextContent } from '@earendil-works/pi-ai'
 import type {
   AgentToolMeta,
   AgentToolsFileConfig,
-  McpServerEntry,
   WorkspaceMcpConfig,
 } from '@kila/shared'
 import { Type } from '@sinclair/typebox'
@@ -25,7 +21,19 @@ import { getAgentToolsConfig } from './agent-tool-config'
 import { getGlobalAgentMcpConfig } from './global-agent-config-manager'
 import { getScheduledTaskRunContext, requestScheduledTaskExit } from './scheduled-task-context'
 import { scheduledTaskManager } from './scheduled-task-singleton'
-import { mcpServerManager, McpServerClient } from './mcp-server-manager'
+import { mcpServerManager } from './mcp-server-manager'
+import type {
+  McpServerClient,
+  McpToolCallResult,
+  McpToolDescriptor,
+} from './mcp-server-manager'
+import { buildCustomMcpRegistryKey, normalizeCustomMcpServers } from './mcp-server-entry'
+import { validateMcpServer } from './mcp-validator'
+import {
+  ensureUniqueToolName,
+  normalizeToolNameKey,
+  type AnyAgentTool,
+} from './agent-tool-names'
 import { createMemoryTools } from './tools/memory-tools'
 import { createVisionTool } from './agent-tools/vision-tool'
 import { memoryProviderManager } from './memory/provider-manager'
@@ -41,11 +49,6 @@ import { executeHttpTool } from './agent-tools/http-tool-executor'
 import { createLogger } from './logger'
 const log = createLogger('Pi MCP')
 
-const FETCH_GROUP_CHAT_HISTORY_SCHEMA = Type.Object({
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, description: 'Number of messages to fetch (default 20)' })),
-  before_timestamp: Type.Optional(Type.Number({ description: 'Fetch messages before this timestamp in milliseconds' })),
-})
-
 interface BuiltinAgentToolOptions {
   sessionId: string
   cwd?: string
@@ -58,8 +61,8 @@ interface BuiltinAgentToolOptions {
 }
 
 interface BuiltinAgentToolDeps {
-  createWebSearchTool?: () => AgentTool<any> | undefined
-  createCustomHttpTools?: (options: CustomHttpToolOptions) => AgentTool<any>[]
+  createWebSearchTool?: () => AnyAgentTool | undefined
+  createCustomHttpTools?: (options: CustomHttpToolOptions) => AnyAgentTool[]
   getAgentToolsConfig?: () => AgentToolsFileConfig
 }
 
@@ -77,51 +80,18 @@ interface CustomHttpToolDeps {
   getAgentToolsConfig?: () => AgentToolsFileConfig
 }
 
-type McpTransport =
-  | InstanceType<typeof StdioClientTransport>
-  | InstanceType<typeof StreamableHTTPClientTransport>
-  | InstanceType<typeof SSEClientTransport>
-
-interface McpToolDescriptor {
-  name: string
-  title?: string
-  description?: string
-  inputSchema?: Record<string, unknown>
-}
-
-interface McpToolCallResult {
-  content?: Array<Record<string, unknown>>
-  structuredContent?: Record<string, unknown>
-  isError?: boolean
-  toolResult?: unknown
-  _meta?: Record<string, unknown>
-}
-
-interface McpClientLike {
-  listTools: (params?: { cursor?: string }) => Promise<{
-    tools: McpToolDescriptor[]
-    nextCursor?: string
-  }>
-  callTool: (params: {
-    name: string
-    arguments?: Record<string, unknown>
-  }) => Promise<McpToolCallResult>
-}
-
-interface McpServerConnection {
-  client: McpClientLike
-  close: () => Promise<void>
-}
-
-interface McpServerConnectOptions {
-  name: string
-  entry: McpServerEntry
-  baseDir?: string
-}
-
 export interface McpAgentToolOptions {
   cwd?: string
+  /** 当前会话 id，用于给 session 级自定义 MCP 连接生成注册键 */
+  sessionId?: string
   customMcpServers?: Record<string, unknown>
+  /**
+   * 已被内置工具占用的工具名。
+   *
+   * 调用方必须传入 Pi coding 工具 + Kila 内置工具的名字，
+   * 否则 MCP 服务器暴露的 read/write/edit/bash 会在工具合并阶段静默顶替真实工具。
+   */
+  reservedToolNames?: Iterable<string>
 }
 
 export interface McpAgentToolDeps {
@@ -129,28 +99,8 @@ export interface McpAgentToolDeps {
 }
 
 export interface McpAgentToolBundle {
-  tools: AgentTool<any>[]
+  tools: AnyAgentTool[]
   dispose: () => Promise<void>
-}
-
-
-interface FeishuChatMessage {
-  messageId: string
-  senderId: string
-  senderType: 'user' | 'app' | 'anonymous' | 'unknown'
-  senderName?: string
-  msgType: string
-  content: string
-  createTime: number
-}
-
-interface FeishuChatHistoryToolOptions {
-  chatId: string
-  fetchHistory: (
-    chatId: string,
-    options: { pageSize?: number; beforeTimestamp?: number },
-  ) => Promise<FeishuChatMessage[]>
-  formatHistory: (messages: FeishuChatMessage[]) => string
 }
 
 const EXIT_SCHEDULED_TASK_SCHEMA = Type.Object({
@@ -176,25 +126,6 @@ const SCHEDULED_TASK_MANAGE_SCHEMA = Type.Object({
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, description: 'Run history limit.' })),
 })
 
-function normalizeStringRecord(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== 'object') return undefined
-
-  const result: Record<string, string> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof item === 'string') {
-      result[key] = item
-    }
-  }
-
-  return Object.keys(result).length > 0 ? result : undefined
-}
-
-function normalizeStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined
-  const result = value.filter((item): item is string => typeof item === 'string')
-  return result.length > 0 ? result : undefined
-}
-
 function stringifyToolResult(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2)
@@ -203,232 +134,7 @@ function stringifyToolResult(value: unknown): string {
   }
 }
 
-export function normalizeMcpServerEntry(value: unknown): McpServerEntry | undefined {
-  if (!value || typeof value !== 'object') return undefined
-
-  const entry = value as Record<string, unknown>
-  const type = entry.type
-  if (type !== 'stdio' && type !== 'http' && type !== 'sse') return undefined
-
-  const normalized: McpServerEntry = {
-    type,
-    enabled: typeof entry.enabled === 'boolean' ? entry.enabled : true,
-  }
-
-  if (typeof entry.command === 'string') normalized.command = entry.command
-  if (typeof entry.url === 'string') normalized.url = entry.url
-
-  const args = normalizeStringArray(entry.args)
-  if (args) normalized.args = args
-
-  const env = normalizeStringRecord(entry.env)
-  if (env) normalized.env = env
-
-  const headers = normalizeStringRecord(entry.headers)
-  if (headers) normalized.headers = headers
-
-  if (typeof entry.timeout === 'number' && Number.isFinite(entry.timeout)) {
-    normalized.timeout = entry.timeout
-  }
-
-  return normalized
-}
-
-export function normalizeCustomMcpServers(
-  servers?: Record<string, unknown>,
-): Record<string, McpServerEntry> {
-  if (!servers) return {}
-
-  const result: Record<string, McpServerEntry> = {}
-  for (const [name, entry] of Object.entries(servers)) {
-    const normalized = normalizeMcpServerEntry(entry)
-    if (normalized) {
-      result[name] = normalized
-    } else {
-      log.warn(`[Pi MCP] 忽略无效的 session 级 MCP 配置: ${name}`)
-    }
-  }
-  return result
-}
-
-export function resolveConfiguredMcpServers(
-  options: {
-    customMcpServers?: Record<string, unknown>
-  } = {},
-): Record<string, McpServerEntry> {
-  return {
-    ...(getGlobalAgentMcpConfig().servers ?? {}),
-    ...normalizeCustomMcpServers(options.customMcpServers),
-  }
-}
-
-function resolveCommand(command: string, baseDir?: string): string {
-  if (!baseDir) return command
-  if (command.startsWith('.') || command.startsWith('/')) {
-    return resolve(baseDir, command)
-  }
-  return command
-}
-
-/**
- * 构建 stdio MCP 传输的环境变量
- * 参考 deepchat 做法：保留全部 process.env，自定义 env 追加而非覆盖
- */
-function buildStdioEnv(entry: McpServerEntry): Record<string, string> {
-  const env: Record<string, string> = { ...process.env } as Record<string, string>
-
-  if (entry.env) {
-    for (const [key, value] of Object.entries(entry.env)) {
-      if (value !== undefined) {
-        const stringValue = String(value ?? '')
-        // PATH 相关变量合并而不是覆盖
-        if (['PATH', 'Path', 'path'].includes(key)) {
-          const pathKey = process.platform === 'win32' ? 'Path' : 'PATH'
-          const separator = process.platform === 'win32' ? ';' : ':'
-          const existing = env[pathKey] ?? ''
-          env[pathKey] = existing
-            ? `${stringValue}${separator}${existing}`
-            : stringValue
-        } else {
-          env[key] = stringValue
-        }
-      }
-    }
-  }
-
-  return env
-}
-
-function mergeHeaders(
-  headers: HeadersInit | undefined,
-  extraHeaders: Record<string, string>,
-): Headers {
-  const merged = new Headers(headers)
-  for (const [key, value] of Object.entries(extraHeaders)) {
-    merged.set(key, value)
-  }
-  return merged
-}
-
-export function createMcpTransport(
-  entry: McpServerEntry,
-  options: { baseDir?: string } = {},
-): McpTransport {
-  const { baseDir } = options
-
-  if (entry.type === 'stdio') {
-    return new StdioClientTransport({
-      command: resolveCommand(entry.command ?? '', baseDir),
-      args: entry.args,
-      env: buildStdioEnv(entry),
-      cwd: baseDir,
-      stderr: 'inherit',
-    })
-  }
-
-  const headers = entry.headers
-  const requestInit = headers ? { headers } : undefined
-  const url = new URL(entry.url ?? '')
-
-  if (entry.type === 'http') {
-    return new StreamableHTTPClientTransport(url, {
-      requestInit,
-    })
-  }
-
-  return new SSEClientTransport(url, {
-    requestInit,
-    eventSourceInit: headers
-      ? {
-          fetch: (input, init) => globalThis.fetch(input, {
-            ...init,
-            headers: mergeHeaders(init?.headers, headers),
-          }),
-        }
-      : undefined,
-  })
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
-      }),
-    ])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
-}
-
-async function connectMcpServer(
-  options: McpServerConnectOptions,
-): Promise<McpServerConnection> {
-  const client = new Client({
-    name: 'Kila',
-    version: '0.1.0',
-  }) as unknown as McpClientLike & { close: () => Promise<void>; connect: (transport: McpTransport) => Promise<void> }
-
-  const transport = createMcpTransport(options.entry, {
-    baseDir: options.baseDir,
-  })
-  const timeoutMs = options.entry.type === 'stdio'
-    ? Math.max(1, options.entry.timeout ?? 30) * 1000
-    : 30000
-
-  await withTimeout(
-    client.connect(transport),
-    timeoutMs,
-    `连接 MCP 服务器超时: ${options.name}`,
-  )
-
-  return {
-    client,
-    close: async () => {
-      await client.close()
-    },
-  }
-}
-
-async function listAllMcpTools(client: McpClientLike): Promise<McpToolDescriptor[]> {
-  const tools: McpToolDescriptor[] = []
-  let cursor: string | undefined
-
-  do {
-    const page = await client.listTools(cursor ? { cursor } : undefined)
-    tools.push(...(page.tools ?? []))
-    cursor = page.nextCursor
-  } while (cursor)
-
-  return tools
-}
-
-function ensureUniqueToolName(
-  toolName: string,
-  serverName: string,
-  usedNames: Set<string>,
-): string {
-  if (!usedNames.has(toolName)) {
-    usedNames.add(toolName)
-    return toolName
-  }
-
-  let candidate = `${serverName}__${toolName}`
-  let counter = 2
-  while (usedNames.has(candidate)) {
-    candidate = `${serverName}__${toolName}_${counter}`
-    counter++
-  }
-  usedNames.add(candidate)
-  return candidate
-}
+// ===== MCP 工具结果归一化（全仓唯一实现） =====
 
 function createMcpTextResult(text: string): TextContent {
   return { type: 'text', text }
@@ -509,8 +215,15 @@ function createMcpAgentToolFromManager(
   tool: McpToolDescriptor,
   client: McpServerClient,
   usedNames: Set<string>,
-): AgentTool<any> {
+): AnyAgentTool {
   const visibleName = ensureUniqueToolName(tool.name, serverName, usedNames)
+  if (visibleName !== tool.name) {
+    log.warn(
+      `[Pi MCP] MCP 工具 ${tool.name}（服务器 ${serverName}）与已占用的工具名冲突，`
+      + `已降级为 ${visibleName}；原有工具保持不变`,
+    )
+  }
+
   const parameters = tool.inputSchema && tool.inputSchema.type === 'object'
     ? tool.inputSchema
     : { type: 'object' }
@@ -547,14 +260,35 @@ export async function getMcpAgentTools(
   deps: McpAgentToolDeps = {},
 ): Promise<McpAgentToolBundle> {
   const getGlobalAgentMcpConfigFn = deps.getGlobalAgentMcpConfig ?? getGlobalAgentMcpConfig
+
+  // 预置内置工具名：冲突的 MCP 工具会自动降级为 {服务器名}__{工具名}，
+  // 而不是在后续合并阶段顶替 Pi 的 read / bash / edit / write。
   const usedNames = new Set<string>()
-  const tools: AgentTool<any>[] = []
+  for (const reserved of options.reservedToolNames ?? []) {
+    usedNames.add(normalizeToolNameKey(reserved))
+  }
 
-  const globalServers = getGlobalAgentMcpConfigFn().servers ?? {}
-  const customServers = normalizeCustomMcpServers(options.customMcpServers)
+  const tools: AnyAgentTool[] = []
 
-  // 从全局服务器获取工具（使用长连接池中的客户端）
-  for (const [name, entry] of Object.entries(globalServers)) {
+  const collectServerTools = async (serverName: string, client: McpServerClient): Promise<void> => {
+    const serverTools = await client.listTools()
+    for (const tool of serverTools) {
+      tools.push(createMcpAgentToolFromManager(serverName, tool, client, usedNames))
+    }
+  }
+
+  // 按服务器名排序后再分配可见名。
+  // Object.entries 的键顺序跟着配置写入顺序走，直接依赖它会让同一个工具
+  // 在不同启动之间拿到不同的可见名，历史 transcript 的工具匹配随之失配。
+  // （残留限制：某台服务器掉线时它占用的名字会让给别人，恢复后仍可能换名，
+  //   那属于「可见工具集合本身变了」，无法只靠排序消除。）
+  const globalServers = Object.entries(getGlobalAgentMcpConfigFn().servers ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+  const customServers = Object.entries(normalizeCustomMcpServers(options.customMcpServers))
+    .sort(([a], [b]) => a.localeCompare(b))
+
+  // 全局服务器：直接复用长连接池里的客户端
+  for (const [name, entry] of globalServers) {
     if (!entry.enabled) continue
     const client = mcpServerManager.getClient(name)
     if (!client?.isRunning()) {
@@ -563,26 +297,35 @@ export async function getMcpAgentTools(
     }
 
     try {
-      const serverTools = await client.listTools()
-      tools.push(
-        ...serverTools.map((tool) => createMcpAgentToolFromManager(name, tool, client, usedNames)),
-      )
+      await collectServerTools(name, client)
     } catch (error) {
       log.warn(`[Pi MCP] 从全局服务器 ${name} 获取工具失败:`, error)
     }
   }
 
-  // 自定义服务器按需连接（也通过 manager 或独立连接）
-  for (const [name, entry] of Object.entries(customServers)) {
+  // session 级自定义服务器：先做安全校验，再按需连接并登记进连接池
+  for (const [name, entry] of customServers) {
     if (!entry.enabled) continue
 
-    let client = mcpServerManager.getClient(name)
-    if (!client || !client.isRunning()) {
-      // 自定义服务器未在 manager 中预连接，尝试创建并连接
-      const independentClient = new McpServerClient(name, entry, options.cwd)
+    const registryKey = buildCustomMcpRegistryKey(options.sessionId, name)
+    let client = mcpServerManager.getClient(registryKey) ?? mcpServerManager.getClient(name)
+
+    if (!client?.isRunning()) {
+      // 这条路径过去完全绕过 validateMcpServer：
+      // isSafeStdioCommand（拒绝 shell、拒绝含 ;&|`$<> 的命令）与 SSRF 防护对自定义服务器都不生效。
+      const validation = await validateMcpServer(name, entry)
+      if (!validation.valid) {
+        log.warn(`[Pi MCP] 自定义服务器 ${name} 未通过安全校验，已跳过: ${validation.reason ?? 'unknown'}`)
+        continue
+      }
+
       try {
-        await independentClient.connect()
-        client = independentClient
+        client = await mcpServerManager.ensureCustomServer({
+          registryKey,
+          serverName: name,
+          entry,
+          baseDir: options.cwd,
+        })
       } catch (error) {
         log.warn(`[Pi MCP] 自定义服务器 ${name} 连接失败，已跳过:`, error)
         continue
@@ -590,10 +333,7 @@ export async function getMcpAgentTools(
     }
 
     try {
-      const serverTools = await client!.listTools()
-      tools.push(
-        ...serverTools.map((tool) => createMcpAgentToolFromManager(name, tool, client!, usedNames)),
-      )
+      await collectServerTools(name, client)
     } catch (error) {
       log.warn(`[Pi MCP] 从自定义服务器 ${name} 获取工具失败:`, error)
     }
@@ -601,7 +341,8 @@ export async function getMcpAgentTools(
 
   return {
     tools,
-    // dispose 不再做任何事，连接由 McpServerManager 长期管理
+    // 全局与自定义连接都登记在 McpServerManager 里，跨轮复用、随 shutdown 统一关闭，
+    // 因此这里不做按轮销毁（旧实现的独立连接不受 manager 管理，才是真正的泄漏点）。
     dispose: async () => {},
   }
 }
@@ -643,7 +384,7 @@ function convertAgentToolMetaToParameters(meta: AgentToolMeta): Record<string, u
 
 export function createWebSearchTool(
   deps: WebSearchToolDeps = {},
-): AgentTool<any> | undefined {
+): AnyAgentTool | undefined {
   const executeWebSearchToolFn = deps.executeWebSearchTool ?? executeWebSearchTool
   const isWebSearchAvailableFn = deps.isWebSearchAvailable ?? isWebSearchAvailable
 
@@ -681,7 +422,7 @@ export function createWebSearchTool(
 function createCustomHttpAgentTool(
   meta: AgentToolMeta,
   executeHttpToolFn: typeof executeHttpTool,
-): AgentTool<any> {
+): AnyAgentTool {
   return {
     name: meta.id,
     label: meta.name,
@@ -711,7 +452,7 @@ function createCustomHttpAgentTool(
 export function createCustomHttpTools(
   options: CustomHttpToolOptions = {},
   deps: CustomHttpToolDeps = {},
-): AgentTool<any>[] {
+): AnyAgentTool[] {
   const config = (deps.getAgentToolsConfig ?? getAgentToolsConfig)()
   const executeHttpToolFn = deps.executeHttpTool ?? executeHttpTool
 
@@ -724,13 +465,13 @@ export function createCustomHttpTools(
 export async function getBuiltinAgentTools(
   options: BuiltinAgentToolOptions,
   deps: BuiltinAgentToolDeps = {},
-): Promise<AgentTool<any>[]> {
+): Promise<AnyAgentTool[]> {
   const createWebSearchToolFn = deps.createWebSearchTool ?? (() => createWebSearchTool())
   const createCustomHttpToolsFn = deps.createCustomHttpTools ?? ((customOptions) => createCustomHttpTools(customOptions))
   const getAgentToolsConfigFn = deps.getAgentToolsConfig ?? getAgentToolsConfig
   const config = getAgentToolsConfigFn()
 
-  const tools: AgentTool<any>[] = []
+  const tools: AnyAgentTool[] = []
 
   if (isToolEnabled('web-search', config, options.enabledToolIds)) {
     const webSearchTool = createWebSearchToolFn()
@@ -845,7 +586,7 @@ export function createScheduledTaskManageTool(): AgentTool<typeof SCHEDULED_TASK
 
 export function createScheduledTaskRuntimeTools(options: {
   sessionId: string
-}): AgentTool<any>[] {
+}): AnyAgentTool[] {
   const context = getScheduledTaskRunContext(options.sessionId)
   if (!context?.aiCanExit) {
     return []
@@ -871,45 +612,6 @@ export function createScheduledTaskRuntimeTools(options: {
   return [exitTool]
 }
 
-export function createFeishuChatHistoryTools(
-  options: FeishuChatHistoryToolOptions,
-): AgentTool<any>[] {
-  const fetchHistoryTool: AgentTool<typeof FETCH_GROUP_CHAT_HISTORY_SCHEMA> = {
-      name: 'fetch_group_chat_history',
-      label: 'Fetch Group Chat History',
-      description: 'Fetch more Feishu group chat history when the current context is not enough.',
-      parameters: FETCH_GROUP_CHAT_HISTORY_SCHEMA,
-      execute: async (_toolCallId, params) => {
-        const messages = await options.fetchHistory(options.chatId, {
-          pageSize: params.limit,
-          beforeTimestamp: params.before_timestamp,
-        })
-
-        if (messages.length === 0) {
-          return {
-            content: [{ type: 'text', text: '没有更多历史消息。' }],
-            details: { count: 0 },
-          }
-        }
-
-        const oldestTimestamp = messages[0]?.createTime ?? 0
-        return {
-          content: [{
-            type: 'text',
-            text: `${options.formatHistory(messages)}\n\n（如需更早的消息，使用 before_timestamp: ${oldestTimestamp}）`,
-          }],
-          details: {
-            count: messages.length,
-            oldestTimestamp,
-          },
-        }
-      },
-    }
-
-  return [fetchHistoryTool]
-}
-
 export type {
   BuiltinAgentToolOptions,
-  FeishuChatHistoryToolOptions,
 }

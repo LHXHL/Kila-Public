@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
+// 组件已接入 i18n，测试里需要真实实例，否则 useTranslation 只会回吐 key
+import '@/lib/i18n'
 import { MessageResponse, UserMessageContent } from './message'
 
 describe('UserMessageContent', () => {

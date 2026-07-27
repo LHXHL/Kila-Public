@@ -1,0 +1,273 @@
+{
+  "settingsTasks": {
+    "title": "Scheduled Tasks",
+    "description": "Manage background scheduling, target sessions, remote delivery and run results.",
+    "actions": {
+      "createFromSession": "Create from current session",
+      "create": "New task",
+      "recoverOverdue": "Recover missed runs",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…"
+    },
+    "naturalLanguage": {
+      "label": "Draft a task in plain language",
+      "hint": "This only produces a draft for you to review — nothing is created or started yet.",
+      "placeholder": "e.g. summarize project progress every day at 9am",
+      "parse": "Parse draft",
+      "review": "Review and refine",
+      "errors": {
+        "empty": "Describe the task first",
+        "intervalRange": "The interval has to be between 1 minute and 1 year",
+        "missingPrompt": "Add what the task should actually do",
+        "dailyNeedsTime": "A daily task needs a time, for example \"every day at 9am\"",
+        "onceNeedsTime": "A one-off task needs a time, for example \"tomorrow at 3pm\"",
+        "unsupported": "Supported phrasings right now are \"every 30 minutes\", \"every day at 9am\" and \"tomorrow at 3pm\""
+      },
+      "scheduleLabel": {
+        "everyMinutes_one": "Every minute",
+        "everyMinutes_other": "Every {{count}} minutes",
+        "dailyAt": "Daily at {{time}}",
+        "relativeDayAt": "{{day}} at {{time}}"
+      },
+      "relativeDay": {
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "dayAfterTomorrow": "The day after tomorrow"
+      }
+    },
+    "overview": {
+      "totalTasks": "All tasks",
+      "runningCount": "{{count}} running",
+      "needsAttention": "Needs attention",
+      "needsAttentionHelper": "Late, missed, or failed on the last run",
+      "scheduler": "Scheduler",
+      "schedulerWaiting": "Waiting for a scheduler heartbeat",
+      "lastScan": "Last scan",
+      "activeRuns_one": "{{count}} active run",
+      "activeRuns_other": "{{count}} active runs"
+    },
+    "runtimeStatus": {
+      "loading": "Loading",
+      "stale": "Stale",
+      "idle": "Not started",
+      "healthy": "Healthy"
+    },
+    "status": {
+      "running": "Running",
+      "stopped": "Stopped",
+      "start": "Start",
+      "stop": "Stop"
+    },
+    "runMode": {
+      "singleSession": "Continuous session",
+      "newSession": "New session"
+    },
+    "schedule": {
+      "everyMinutes_one": "Every minute",
+      "everyMinutes_other": "Every {{count}} minutes",
+      "loop": "Continuous loop"
+    },
+    "delivery": {
+      "none": "No delivery",
+      "multipleTargets_one": "{{count}} remote channel target",
+      "multipleTargets_other": "{{count}} remote channel targets"
+    },
+    "health": {
+      "completed": "Done for now",
+      "healthy": "Healthy",
+      "dueSoon": "Due soon",
+      "late": "In the run window",
+      "missed": "Missed",
+      "failing": "Failed recently",
+      "paused": "Paused",
+      "recentlyCompleted": "Completed recently",
+      "neverRun": "Never run",
+      "reasonLastFailed": "The last run failed",
+      "reasonLastSucceeded": "The last run succeeded",
+      "reasonWaitingFirstRun": "Waiting for the first run"
+    },
+    "list": {
+      "title": "Tasks",
+      "summary": "{{total}} total, {{running}} running",
+      "create": "New",
+      "emptyTitle": "No scheduled tasks yet",
+      "emptyDescription": "Once you create a task, its schedule state and latest results show up here.",
+      "nextRun": "Next",
+      "health": "Health",
+      "executions": "Runs",
+      "executionSummary_one": "{{count}} run · {{reason}}",
+      "executionSummary_other": "{{count}} runs · {{reason}}"
+    },
+    "detail": {
+      "emptyTitle": "Pick a task to see its details",
+      "emptyDescription": "Task details cover the trigger time, health state, delivery settings and recent run history.",
+      "noPrompt": "This task has no prompt yet.",
+      "edit": "Edit",
+      "runNow": "Run now",
+      "delete": "Delete",
+      "nextRunLabel": "Next run",
+      "nextRunRunningHelper": "Triggered on wall-clock time",
+      "nextRunStoppedHelper": "Nothing triggers while the task is stopped",
+      "lastSuccessLabel": "Last success",
+      "noSuccessHelper": "No successful run yet",
+      "healthLabel": "Health",
+      "heartbeatLabel": "Last heartbeat",
+      "heartbeatLoopHelper": "Loop activity refreshes the heartbeat",
+      "heartbeatHelper": "Time of the most recent scheduling activity",
+      "deliveryLabel": "Result delivery",
+      "aiCanExitHelper": "The AI may end the loop task itself",
+      "aiCannotExitHelper": "The AI cannot end the task itself",
+      "verificationLabel": "Result verification",
+      "verifierCount_one": "{{count}} rule",
+      "verifierCount_other": "{{count}} rules",
+      "verifierDisabled": "Off",
+      "executionCountHelper_one": "{{count}} run so far",
+      "executionCountHelper_other": "{{count}} runs so far",
+      "statusPrefix": "Status: ",
+      "errorPrefix": "Error: ",
+      "openLastSession": "Open the latest session"
+    },
+    "runs": {
+      "title": "Recent runs",
+      "count_one": "{{count}} entry",
+      "count_other": "{{count}} entries",
+      "emptyTitle": "No run history yet",
+      "emptyDescription": "After the first run, results, errors and linked sessions appear here newest first.",
+      "outcome": {
+        "success": "Success",
+        "stoppedByAi": "Ended by AI",
+        "error": "Failed",
+        "skippedBusy": "Skipped, busy",
+        "skippedInvalidConfig": "Invalid config",
+        "skippedConcurrencyLimit": "Skipped, at concurrency limit"
+      },
+      "triggerManual": "Manual trigger",
+      "triggerSchedule": "Scheduled trigger",
+      "errorPrefix": "Error: ",
+      "verification": "Verification: {{summary}}",
+      "duration": "Took {{seconds}}s",
+      "session": "Session {{sessionId}}",
+      "retry": "Retry",
+      "openSession": "Open session"
+    },
+    "toast": {
+      "loadFailed": "Could not load the scheduled tasks",
+      "saveFailed": "Could not save the scheduled task",
+      "runStarted": "Task started",
+      "runFailed": "Could not run the task",
+      "retryStarted": "Failed task queued again",
+      "recoverDone": "Missed-run recovery scan finished",
+      "recoverFailed": "Could not recover the missed runs",
+      "toggleFailed": "Could not switch the scheduled task state",
+      "deleteFailed": "Delete failed"
+    },
+    "scheduleEditor": {
+      "title": "Trigger type",
+      "everyHint": "Repeat on a fixed interval in minutes",
+      "cronHint": "Precise timing with a cron expression",
+      "atHint": "Run once at a specific time",
+      "loopHint": "Continue automatically after each run — good for autonomous flows",
+      "intervalMinutesLabel": "Interval in minutes",
+      "startAtLabel": "Start time (optional)",
+      "cronExprLabel": "Cron expression",
+      "cronInvalid": "Invalid cron expression",
+      "timezoneLabel": "Time zone (optional)",
+      "runAtLabel": "Run at",
+      "loopNotice": "Loop mode keeps going after every run: 3 seconds after a success, and with a backoff delay after a failure. Best suited to long-running autonomous tasks."
+    },
+    "editor": {
+      "createTitle": "New scheduled task",
+      "editTitle": "Edit scheduled task",
+      "description": "Set the task content, trigger time, target session and result handling.",
+      "summaryHeading": "Task summary",
+      "untitledTask": "Untitled task",
+      "promptSummaryPlaceholder": "A summary of the task prompt shows up here so you can check the whole task at a glance before saving.",
+      "sourceSession": "Source session",
+      "noModel": "No model selected",
+      "toolCount_one": "{{count}} tool",
+      "toolCount_other": "{{count}} tools",
+      "noTools": "No tools selected",
+      "noVerifier": "No verification",
+      "defaultName": "New scheduled task",
+      "defaultNameFromSession": "Scheduled task · {{title}}",
+      "selectModelError": "Pick a model first",
+      "footerNotice": "A scheduled task always runs with the permission mode you set here — it never inherits the approval state of the current foreground session.",
+      "cancel": "Cancel",
+      "save": "Save task",
+      "saving": "Saving…",
+      "summary": {
+        "schedule": "Trigger",
+        "runMode": "Session mode",
+        "model": "Model",
+        "delivery": "Delivery",
+        "tools": "Tools",
+        "verification": "Verification",
+        "everyMinutes_one": "Every minute",
+        "everyMinutes_other": "Every {{count}} minutes",
+        "singleShot": "Single shot",
+        "loop": "Loop"
+      },
+      "content": {
+        "title": "Task content",
+        "description": "The name and prompt define what this background flow is and what it should produce.",
+        "nameLabel": "Name",
+        "promptLabel": "Prompt",
+        "promptDescription": "This is sent to the agent on every trigger.",
+        "promptPlaceholder": "What should the agent receive when the task triggers?"
+      },
+      "schedule": {
+        "title": "Trigger time",
+        "description": "Pick a fixed interval, a cron expression, a one-off trigger, or a continuous loop."
+      },
+      "target": {
+        "title": "Target session and delivery",
+        "description": "A new session suits recurring reports; a continuous session suits context that builds up over time.",
+        "newSession": "New session",
+        "newSessionHint": "Create a fresh session on every run",
+        "singleSession": "Continuous session",
+        "singleSessionHint": "Keep appending messages to the same session",
+        "projectPathLabel": "Project directory",
+        "projectPathDescription": "New sessions use this directory as their project root.",
+        "chooseFolder": "Choose directory",
+        "sessionLabel": "Target session",
+        "sessionPlaceholder": "Pick a session"
+      },
+      "runtime": {
+        "title": "Runtime and results",
+        "description": "Runtime context, enabled tools and result handling all live in this column.",
+        "modelLabel": "Model",
+        "thinkingLabel": "Thinking",
+        "historyTurnsLabel": "History turns",
+        "additionalDirectoriesLabel": "Additional directories",
+        "additionalDirectoriesDescription": "One directory per line, added to this task's context scope.",
+        "additionalDirectoriesPlaceholder": "One directory per line",
+        "enabledToolsLabel": "Enabled tools",
+        "enabledToolsDescription": "Enabling only the tools this task really needs keeps its behavior predictable.",
+        "permissionModeLabel": "Permission mode",
+        "permissionModeDescription": "Background tasks follow this mode strictly and never depend on the approval state of the current foreground session.",
+        "permissionModeHint": "`auto` suits fully automated tasks; `smart` is the default interactive policy and suits background flows where sensitive operations should be approved."
+      },
+      "result": {
+        "title": "Result handling",
+        "deliveryLabel": "Result delivery",
+        "deliveryDescription": "Deliver to several remote channel bindings at once. By default every delivery has to succeed for the remote delivery check to pass.",
+        "deliveryNone": "No delivery",
+        "deliveryNoneDescription": "Keep the result in the local session only.",
+        "noBindings": "No remote channel bindings yet. Send a message from Telegram, Discord, Lark or WeChat to create one.",
+        "verificationLabel": "Result verification",
+        "verificationDescription": "Judges \"the task ran\" and \"the output is good\" separately — useful for daily reports, journals and backups.",
+        "replyNonEmptyLabel": "Reply is not empty",
+        "replyNonEmptyDescription": "Recommended for journal, report and summary tasks, so a run cannot succeed with an empty body.",
+        "bridgeDeliveryLabel": "Remote channel delivery succeeded",
+        "bridgeDeliveryDescription": "If the task depends on a remote channel to deliver the final result, make delivery part of the success condition.",
+        "fileExistsLabel": "Output file exists",
+        "fileExistsDescription": "Good for backups, logs and file-writing tasks. Relative paths resolve against the current project root.",
+        "fileExistsPlaceholder": "e.g. diary/today.md",
+        "notifyMissedRunLabel": "Missed-run alert",
+        "notifyMissedRunDescription": "When a task misses its deadline, append a local system message — and send an alert too if a remote channel is configured.",
+        "aiCanExitLabel": "AI may end the task",
+        "aiCanExitDescription": "Best kept for loop mode: it lets the model call the exit tool once the task is done."
+      }
+    }
+  }
+}

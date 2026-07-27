@@ -2,6 +2,9 @@ import { globalShortcut } from 'electron'
 import { createSession } from './session-manager'
 import { openSessionInMainWindow } from './settings-window-manager'
 
+import { createLogger } from './logger'
+
+const log = createLogger('全局快捷键')
 type ShortcutAction = () => void | Promise<void>
 
 const registeredAccelerators: string[] = []
@@ -10,13 +13,13 @@ function registerShortcut(accelerator: string, action: ShortcutAction): void {
   if (globalShortcut.isRegistered(accelerator)) return
   const ok = globalShortcut.register(accelerator, () => {
     Promise.resolve(action()).catch((error) => {
-      console.error(`[GlobalShortcut] 快捷键执行失败 ${accelerator}:`, error)
+      log.error(`[GlobalShortcut] 快捷键执行失败 ${accelerator}:`, error)
     })
   })
   if (ok) {
     registeredAccelerators.push(accelerator)
   } else {
-    console.warn(`[GlobalShortcut] 注册失败: ${accelerator}`)
+    log.warn(`[GlobalShortcut] 注册失败: ${accelerator}`)
   }
 }
 

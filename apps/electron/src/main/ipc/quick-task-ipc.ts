@@ -11,6 +11,9 @@ import { normalizeQuickTaskInput } from '../lib/quick-task-input'
 import { submitQuickTask } from '../lib/quick-task-service'
 import { unwatchSessionProject, watchSessionProject } from '../lib/workspace-watcher'
 
+import { createLogger } from '../lib/logger'
+
+const log = createLogger('QuickTask IPC')
 export function registerQuickTaskHandlers(): void {
 
   handleUntyped<[], FileDialogResult>('quick-task:pick-files', async () => {
@@ -45,7 +48,7 @@ export function registerQuickTaskHandlers(): void {
       hideWindow: hideQuickTaskWindow,
       sendMessage: sendSessionMessage,
       onBackgroundError: (error, sessionId) => {
-        console.error(`[QuickTask] 后台任务执行失败 (${sessionId}):`, error)
+        log.error(`[QuickTask] 后台任务执行失败 (${sessionId}):`, error)
       },
     })
   })

@@ -7,6 +7,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
 import { useStickToBottomContext } from 'use-stick-to-bottom'
 import { UserAvatar } from '@/components/message/UserAvatar'
@@ -33,6 +34,7 @@ const MIN_ITEMS = 4
 const MAX_BARS = 20
 
 export function ScrollMinimap({ items }: ScrollMinimapProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const { scrollRef } = useStickToBottomContext()
   const [hovered, setHovered] = React.useState(false)
   const outlineId = React.useId()
@@ -126,7 +128,7 @@ export function ScrollMinimap({ items }: ScrollMinimapProps): React.ReactElement
     >
       {/* 悬浮弹出面板 */}
       {hovered && (
-        <nav id={outlineId} aria-label="会话大纲" className="mr-2 w-[260px] rounded-lg border bg-popover animate-in fade-in-0 zoom-in-95 duration-150">
+        <nav id={outlineId} aria-label={t('shell.minimap.outline')} className="mr-2 w-[260px] rounded-lg border bg-popover animate-in fade-in-0 zoom-in-95 duration-150">
           <div className="max-h-[30vh] overflow-y-auto scrollbar-none p-2 space-y-0.5">
             {items.map((item) => (
               <button
@@ -140,7 +142,7 @@ export function ScrollMinimap({ items }: ScrollMinimapProps): React.ReactElement
               >
                 <ItemIcon item={item} />
                 <span className="text-xs text-popover-foreground/80 line-clamp-2 flex-1 min-w-0">
-                  {item.preview || '(空消息)'}
+                  {item.preview || t('shell.minimap.emptyMessage')}
                 </span>
               </button>
             ))}
@@ -152,7 +154,7 @@ export function ScrollMinimap({ items }: ScrollMinimapProps): React.ReactElement
       <button
         type="button"
         data-minimap-trigger
-        aria-label="打开会话大纲"
+        aria-label={t('shell.minimap.openOutline')}
         aria-expanded={hovered}
         aria-controls={outlineId}
         className="relative flex-shrink-0 rounded-l-md outline-none focus-visible:ring-2 focus-visible:ring-primary/45"

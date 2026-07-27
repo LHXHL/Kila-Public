@@ -1,4 +1,5 @@
 import { normalizeAgentToolName } from '@kila/shared'
+import i18n from '@/lib/i18n'
 import {
   type ActivityGroup,
   type ActivityStatus,
@@ -73,7 +74,7 @@ export function getInputSummary(toolName: string, input: Record<string, unknown>
   if (normalizedToolName === 'TaskList') {
     const reason = input.reason
     if (typeof reason === 'string') return reason.length > 80 ? `${reason.slice(0, 80)}…` : reason
-    return '任务列表'
+    return i18n.t('agent.tool.taskList')
   }
   if (normalizedToolName === 'Read') {
     const filePath = input.file_path ?? input.filePath
@@ -98,7 +99,7 @@ export function getInputSummary(toolName: string, input: Record<string, unknown>
   }
   if (normalizedToolName === 'TodoWrite') {
     const todos = input.todos
-    if (Array.isArray(todos)) return `${todos.length} 项任务`
+    if (Array.isArray(todos)) return i18n.t('agent.tool.todoCount', { count: todos.length })
   }
   if (normalizedToolName === 'TeamCreate') {
     const name = input.team_name
@@ -144,8 +145,7 @@ export function getRenderedToolResult(result: string, expanded: boolean): { text
   const limit = expanded ? TOOL_RESULT_EXPANDED_CHARS : TOOL_RESULT_PREVIEW_CHARS
   if (result.length <= limit) return { text: result, truncated: false }
   return {
-    text: `${result.slice(0, limit)}
-… [界面预览已截断，复制可获取完整结果]`,
+    text: `${result.slice(0, limit)}\n… ${i18n.t('agent.tool.resultTruncated')}`,
     truncated: true,
   }
 }

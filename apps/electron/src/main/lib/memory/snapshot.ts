@@ -1,11 +1,10 @@
-import { memoryProviderManager } from './provider-manager'
-import { memoryStateStore } from './state-store'
+import { memoryProviderManager, type MemoryProviderManager } from './provider-manager'
+import { memoryStateStore, type MemoryStateStore } from './state-store'
 import type { MemoryRecallTraceItem, MemoryRunTrace } from '@kila/shared'
 import type {
   MemoryEntry,
   MemorySnapshotCacheEntry,
   MemoryThreadSearchResult,
-  NotebookEntry,
   WorkingMemory,
 } from './types'
 import { buildMemoryRecallTraceItems } from './recall-trace'
@@ -28,6 +27,18 @@ export interface MemoryPromptContextResult {
   trace: MemoryRunTrace
 }
 
+/** 快照构建只依赖 Provider Manager 的读接口与状态存储的缓存接口 */
+export interface MemorySnapshotManagerDeps {
+  providerManager: Pick<MemoryProviderManager, 'getStatus' | 'getWorkingMemory' | 'search' | 'searchThreads' | 'list'>
+  stateStore: Pick<MemoryStateStore, 'getSnapshotCache' | 'upsertSnapshotCache' | 'appendRuntimeEvent'>
+}
+
+/**
+ * 历史快照缓存的来源摘要。
+ *
+ * 读取侧要兼容旧版本写入的字段（indexContext / notebookCount / projectWorkingMemory），
+ * 但写入侧已经不再产生这些字段——对应能力随本地存储一起移除。
+ */
 interface SnapshotSourceSummary {
   indexContext?: boolean
   globalWorkingMemory?: boolean
@@ -97,29 +108,14 @@ function renderThreadLines(threads: MemoryThreadSearchResult[]): string[] {
   })
 }
 
-function renderNotebookLines(entries: NotebookEntry[]): string[] {
-  return entries.map((entry, index) => {
-    const title = entry.title ? ` title="${escapeXml(entry.title)}"` : ''
-    return `    <note index="${index + 1}" uri="${escapeXml(entry.uri)}"${title}>${escapeXml(entry.content)}</note>`
-  })
-}
-
 function renderSnapshotXml(input: {
-  indexContext: string
   globalWorkingMemory: WorkingMemory | null
-  projectWorkingMemory: WorkingMemory | null
   recalledMemories: MemoryEntry[]
   relatedThreads: MemoryThreadSearchResult[]
-  notebookEntries: NotebookEntry[]
 }): string {
   const lines: string[] = ['<memory_context>']
-  if (input.indexContext.trim()) {
-    lines.push(`  <local_memory_index>${escapeXml(input.indexContext.slice(0, 4_000))}</local_memory_index>`)
-  }
   const globalLine = buildWorkingMemoryLine('global_working_memory', input.globalWorkingMemory)
   if (globalLine) lines.push(globalLine)
-  const projectLine = buildWorkingMemoryLine('project_working_memory', input.projectWorkingMemory)
-  if (projectLine) lines.push(projectLine)
 
   if (input.recalledMemories.length > 0) {
     lines.push('  <recalled_memories>')
@@ -131,12 +127,6 @@ function renderSnapshotXml(input: {
     lines.push('  <related_threads>')
     lines.push(...renderThreadLines(input.relatedThreads))
     lines.push('  </related_threads>')
-  }
-
-  if (input.notebookEntries.length > 0) {
-    lines.push('  <notebook_supplement>')
-    lines.push(...renderNotebookLines(input.notebookEntries))
-    lines.push('  </notebook_supplement>')
   }
 
   lines.push('</memory_context>')
@@ -152,11 +142,16 @@ function toScopeKey(scopeType: MemorySnapshotCacheEntry['scopeType'], input: { s
 }
 
 export class MemorySnapshotManager {
+  constructor(private readonly deps: MemorySnapshotManagerDeps = {
+    providerManager: memoryProviderManager,
+    stateStore: memoryStateStore,
+  }) {}
+
   async buildPromptContext(input: BuildPromptContextInput): Promise<MemoryPromptContextResult> {
-    const providerStatus = await memoryProviderManager.getStatus()
+    const providerStatus = await this.deps.providerManager.getStatus()
     const query = buildRecallQuery(input)
     if (!query) {
-      const cached = memoryStateStore.getSnapshotCache('session', input.sessionId)
+      const cached = this.deps.stateStore.getSnapshotCache('session', input.sessionId)
       const source = readSnapshotSourceSummary(cached?.snapshotSourceJson)
       return {
         text: cached?.snapshotText ? `${cached.snapshotText}\n\n` : '',
@@ -175,54 +170,47 @@ export class MemorySnapshotManager {
       }
     }
 
-    const indexContext = ''
-    const [globalWorkingMemory, projectWorkingMemory, recalledMemoryResults, relatedThreads, notebookEntries] = await Promise.all([
-      memoryProviderManager.getWorkingMemory({ scope: 'global' }),
-      // 项目级 working memory / 笔记（notebook）/ 本地索引均随本地存储移除，恒为空。
-      Promise.resolve<WorkingMemory | null>(null),
-      memoryProviderManager.search({ query, limit: 4, projectPath: input.projectPath, sessionId: input.sessionId }),
-      memoryProviderManager.searchThreads({ query, limit: 3 }),
-      Promise.resolve<NotebookEntry[]>([]),
+    const [globalWorkingMemory, recalledMemoryResults, relatedThreads] = await Promise.all([
+      this.deps.providerManager.getWorkingMemory({ scope: 'global' }),
+      this.deps.providerManager.search({ query, limit: 4, projectPath: input.projectPath, sessionId: input.sessionId }),
+      this.deps.providerManager.searchThreads({ query, limit: 3 }),
     ])
     const recalledMemories = recalledMemoryResults.map((item) => item.entry)
     const recallItems = buildMemoryRecallTraceItems({
       memoryResults: recalledMemoryResults,
       relatedThreads,
-      notebookEntries,
     })
 
     const snapshotText = renderSnapshotXml({
-      indexContext,
       globalWorkingMemory,
-      projectWorkingMemory,
       recalledMemories,
       relatedThreads,
-      notebookEntries,
     })
 
-    memoryStateStore.upsertSnapshotCache({
-      scopeType: 'session',
-      scopeKey: input.sessionId,
-      snapshotText,
-      snapshotSourceJson: JSON.stringify({
-        query,
-        indexContext: Boolean(indexContext.trim()),
-        globalWorkingMemory: Boolean(globalWorkingMemory?.content?.trim()),
-        projectWorkingMemory: Boolean(projectWorkingMemory?.content?.trim()),
-        recalledMemoryCount: recalledMemories.length,
-        relatedThreadCount: relatedThreads.length,
-        notebookCount: notebookEntries.length,
-        recallItems,
-      }),
-      updatedAt: Date.now(),
-    })
-    memoryStateStore.appendRuntimeEvent({
-      sessionId: input.sessionId,
-      threadId: input.sessionId,
-      eventType: 'snapshot_built',
-      status: 'success',
-      detail: `prompt snapshot built with query: ${query.slice(0, 120)}`,
-    })
+    // 隐身会话只允许「召回」，不允许留痕：快照缓存与 runtime event 都会落到
+    // memory-state.json，写进去等于把隐身会话的用户消息原文持久化到磁盘。
+    if (input.incognito !== true) {
+      this.deps.stateStore.upsertSnapshotCache({
+        scopeType: 'session',
+        scopeKey: input.sessionId,
+        snapshotText,
+        snapshotSourceJson: JSON.stringify({
+          globalWorkingMemory: Boolean(globalWorkingMemory?.content?.trim()),
+          recalledMemoryCount: recalledMemories.length,
+          relatedThreadCount: relatedThreads.length,
+          recallItems,
+        }),
+        updatedAt: Date.now(),
+      })
+      this.deps.stateStore.appendRuntimeEvent({
+        sessionId: input.sessionId,
+        threadId: input.sessionId,
+        eventType: 'snapshot_built',
+        status: 'success',
+        // 诊断只需要规模信息；查询原文来自用户消息，禁止写进日志与状态文件。
+        detail: `prompt snapshot built (queryLength=${query.length}, memories=${recalledMemories.length}, threads=${relatedThreads.length})`,
+      })
+    }
 
     return {
       text: snapshotText ? `${snapshotText}\n\n` : '',
@@ -231,10 +219,10 @@ export class MemorySnapshotManager {
         provider: providerStatus.activeProvider,
         recalledMemoryCount: recalledMemories.length,
         relatedThreadCount: relatedThreads.length,
-        notebookCount: notebookEntries.length,
+        notebookCount: 0,
         recallItems,
         usedGlobalWorkingMemory: Boolean(globalWorkingMemory?.content?.trim()),
-        usedProjectWorkingMemory: Boolean(projectWorkingMemory?.content?.trim()),
+        usedProjectWorkingMemory: false,
         incognito: input.incognito === true,
         recallStatus: 'success',
       },
@@ -246,50 +234,40 @@ export class MemorySnapshotManager {
     projectPath?: string
     messages?: MemorySourceMessage[]
   } = {}): Promise<string> {
-    const indexContext = ''
-    const [globalWorkingMemory, projectWorkingMemory, memories, notebookEntries] = await Promise.all([
-      memoryProviderManager.getWorkingMemory({ scope: 'global' }),
-      Promise.resolve<WorkingMemory | null>(null),
-      memoryProviderManager.list(input.projectPath ? { limit: 6, projectPath: input.projectPath } : { limit: 6 }),
-      Promise.resolve<NotebookEntry[]>([]),
+    const [globalWorkingMemory, memories] = await Promise.all([
+      this.deps.providerManager.getWorkingMemory({ scope: 'global' }),
+      this.deps.providerManager.list(input.projectPath ? { limit: 6, projectPath: input.projectPath } : { limit: 6 }),
     ])
     const recallItems = buildMemoryRecallTraceItems({
       memoryResults: memories.map((entry) => ({ entry, score: 0 })),
       relatedThreads: [],
-      notebookEntries,
     })
 
     const snapshotText = renderSnapshotXml({
-      indexContext,
       globalWorkingMemory,
-      projectWorkingMemory,
       recalledMemories: memories,
       relatedThreads: [],
-      notebookEntries,
     })
 
-    memoryStateStore.upsertSnapshotCache({
+    this.deps.stateStore.upsertSnapshotCache({
       scopeType: 'global',
       scopeKey: toScopeKey('global', input),
       snapshotText,
       snapshotSourceJson: JSON.stringify({
         globalWorkingMemory: Boolean(globalWorkingMemory?.content?.trim()),
         recalledMemoryCount: memories.length,
-        notebookCount: notebookEntries.length,
         recallItems,
       }),
       updatedAt: Date.now(),
     })
 
     if (input.projectPath) {
-      memoryStateStore.upsertSnapshotCache({
+      this.deps.stateStore.upsertSnapshotCache({
         scopeType: 'project',
         scopeKey: toScopeKey('project', input),
         snapshotText,
         snapshotSourceJson: JSON.stringify({
-          projectWorkingMemory: Boolean(projectWorkingMemory?.content?.trim()),
           recalledMemoryCount: memories.length,
-          notebookCount: notebookEntries.length,
           recallItems,
         }),
         updatedAt: Date.now(),
@@ -297,21 +275,20 @@ export class MemorySnapshotManager {
     }
 
     if (input.sessionId) {
-      memoryStateStore.upsertSnapshotCache({
+      this.deps.stateStore.upsertSnapshotCache({
         scopeType: 'session',
         scopeKey: toScopeKey('session', input),
         snapshotText,
         snapshotSourceJson: JSON.stringify({
           messageCount: input.messages?.length ?? 0,
           recalledMemoryCount: memories.length,
-          notebookCount: notebookEntries.length,
           recallItems,
         }),
         updatedAt: Date.now(),
       })
     }
 
-    memoryStateStore.appendRuntimeEvent({
+    this.deps.stateStore.appendRuntimeEvent({
       sessionId: input.sessionId,
       threadId: input.sessionId,
       eventType: 'snapshot_rebuilt',
@@ -324,28 +301,28 @@ export class MemorySnapshotManager {
 
   getCachedSnapshot(input: { projectPath?: string; sessionId?: string } = {}): string {
     const sessionSnapshot = input.sessionId
-      ? memoryStateStore.getSnapshotCache('session', input.sessionId)
+      ? this.deps.stateStore.getSnapshotCache('session', input.sessionId)
       : null
     if (sessionSnapshot?.snapshotText) return sessionSnapshot.snapshotText
 
     const projectSnapshot = input.projectPath
-      ? memoryStateStore.getSnapshotCache('project', input.projectPath)
+      ? this.deps.stateStore.getSnapshotCache('project', input.projectPath)
       : null
     if (projectSnapshot?.snapshotText) return projectSnapshot.snapshotText
 
-    return memoryStateStore.getSnapshotCache('global', 'global')?.snapshotText ?? ''
+    return this.deps.stateStore.getSnapshotCache('global', 'global')?.snapshotText ?? ''
   }
 
   getCachedSnapshotEntry(input: { projectPath?: string; sessionId?: string } = {}): MemorySnapshotCacheEntry | null {
     if (input.sessionId) {
-      const sessionSnapshot = memoryStateStore.getSnapshotCache('session', input.sessionId)
+      const sessionSnapshot = this.deps.stateStore.getSnapshotCache('session', input.sessionId)
       if (sessionSnapshot) return sessionSnapshot
     }
     if (input.projectPath) {
-      const projectSnapshot = memoryStateStore.getSnapshotCache('project', input.projectPath)
+      const projectSnapshot = this.deps.stateStore.getSnapshotCache('project', input.projectPath)
       if (projectSnapshot) return projectSnapshot
     }
-    return memoryStateStore.getSnapshotCache('global', 'global')
+    return this.deps.stateStore.getSnapshotCache('global', 'global')
   }
 }
 

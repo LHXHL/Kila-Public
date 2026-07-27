@@ -8,6 +8,7 @@ import { resolveAttachmentPath } from '../config-paths'
 import { createLogger } from '../logger'
 const log = createLogger('Pi History')
 
+// biome-ignore lint/suspicious/noExplicitAny: Pi 的 Model<TConfig> 泛型参数在 provider 之间不统一，历史转换只读取与 config 无关的字段，unknown 会让 SDK 的内部字段访问全部报错
 type PiModel = Model<any>
 
 interface SplitPromptAttachmentsResult {

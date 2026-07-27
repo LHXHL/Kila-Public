@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { parseScheduledTaskNaturalLanguage } from './natural-language-draft'
+import {
+  parseScheduledTaskNaturalLanguage,
+  SCHEDULED_TASK_DRAFT_ERROR_KEYS,
+} from './natural-language-draft'
 
 describe('scheduled task natural language draft', () => {
   test('Given 每 30 分钟任务，When 解析，Then 生成 interval 草稿但不直接创建', () => {
@@ -8,6 +11,7 @@ describe('scheduled task natural language draft', () => {
     if (!result.ok) return
     expect(result.draft.schedule).toEqual({ kind: 'every', minutes: 30 })
     expect(result.draft.prompt).toBe('检查构建状态')
+    expect(result.draft.scheduleLabel).toEqual({ kind: 'everyMinutes', minutes: 30 })
   })
 
   test('Given 每天上午 9 点任务，When 解析，Then 生成本地 wall-clock cron', () => {
@@ -27,12 +31,38 @@ describe('scheduled task natural language draft', () => {
     expect(target.getDate()).toBe(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getDate())
     expect(target.getHours()).toBe(15)
     expect(result.draft.prompt).toBe('提醒我发布')
+    expect(result.draft.scheduleLabel).toEqual({ kind: 'relativeDayAt', day: 'tomorrow', time: '15:00' })
   })
 
-  test('Given 模糊描述，When 解析，Then 返回可操作提示', () => {
+  test('Given English interval 表达，When 解析，Then 同样生成 interval 草稿', () => {
+    const result = parseScheduledTaskNaturalLanguage('every 30 minutes check the build status')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.draft.schedule).toEqual({ kind: 'every', minutes: 30 })
+    expect(result.draft.prompt).toBe('check the build status')
+  })
+
+  test('Given English daily 表达，When 解析，Then 生成本地 wall-clock cron', () => {
+    const result = parseScheduledTaskNaturalLanguage('every day at 9am summarize project progress')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.draft.schedule).toEqual({ kind: 'cron', expr: '0 9 * * *' })
+    expect(result.draft.prompt).toBe('summarize project progress')
+  })
+
+  test('Given English tomorrow 表达，When 解析，Then 生成一次性绝对时间', () => {
+    const now = new Date('2026-07-11T02:00:00.000Z')
+    const result = parseScheduledTaskNaturalLanguage('tomorrow at 3pm remind me to publish', now)
+    expect(result.ok).toBe(true)
+    if (!result.ok || result.draft.schedule.kind !== 'at') return
+    expect(new Date(result.draft.schedule.at).getHours()).toBe(15)
+    expect(result.draft.prompt).toBe('remind me to publish')
+  })
+
+  test('Given 模糊描述，When 解析，Then 返回可操作提示 key', () => {
     const result = parseScheduledTaskNaturalLanguage('有空时帮我检查项目')
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.reason).toContain('暂支持')
+    expect(result.reasonKey).toBe(SCHEDULED_TASK_DRAFT_ERROR_KEYS.unsupported)
   })
 })

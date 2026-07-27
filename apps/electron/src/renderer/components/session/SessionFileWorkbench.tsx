@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Clock3, FolderOpen, FolderSearch, Loader2, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,6 +33,7 @@ interface SessionFileWorkbenchProps {
 }
 
 export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): React.ReactElement {
+  const { t } = useTranslation()
   const sessions = useAtomValue(sessionsAtom)
   const setSessions = useSetAtom(sessionsAtom)
   const stateMap = useAtomValue(sessionFileWorkbenchStateMapAtom)
@@ -173,7 +175,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
 
   const handleSelectProjectFolder = React.useCallback(async (): Promise<void> => {
     if (projectLocked) {
-      toast.info('首条消息发送后项目文件夹已锁定')
+      toast.info(t('session.workbench.projectLocked'))
       return
     }
     if (isSelectingProjectFolder) return
@@ -192,14 +194,14 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
         map.delete(sessionId)
         return map
       })
-      toast.success(`工作台目录已切换: ${result.name}`)
+      toast.success(t('session.workbench.folderSwitched', { name: result.name }))
     } catch (error) {
       console.error('[SessionFileWorkbench] 更新项目目录失败:', error)
-      toast.error('工作台目录切换失败')
+      toast.error(t('session.workbench.folderSwitchFailed'))
     } finally {
       setIsSelectingProjectFolder(false)
     }
-  }, [isSelectingProjectFolder, projectLocked, sessionId, setSessions, setStateMap])
+  }, [isSelectingProjectFolder, projectLocked, sessionId, setSessions, setStateMap, t])
 
   return (
     <div className="flex h-full min-h-0 gap-0 bg-workspace">
@@ -218,7 +220,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
                 className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70"
                 title={projectPath ?? undefined}
               >
-                {projectPath ?? '还没有可浏览的项目目录'}
+                {projectPath ?? t('session.workbench.noProjectPath')}
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -230,10 +232,10 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
                 onClick={() => { void handleSelectProjectFolder() }}
                 disabled={projectLocked || isSelectingProjectFolder}
                 aria-busy={isSelectingProjectFolder}
-                title={projectLocked ? '首条消息发送后项目文件夹已锁定' : isSelectingProjectFolder ? '正在切换项目目录' : '选择当前会话的项目文件夹'}
+                title={projectLocked ? t('session.workbench.projectLocked') : isSelectingProjectFolder ? t('session.workbench.switchingFolder') : t('session.workbench.selectFolderHint')}
               >
                 {projectLocked ? <Lock className="size-3.5" /> : isSelectingProjectFolder ? <Loader2 className="size-3.5 animate-spin" /> : <FolderSearch className="size-3.5" />}
-                <span>选择目录</span>
+                <span>{t('session.workbench.selectFolder')}</span>
               </Button>
             </div>
           </div>
@@ -243,7 +245,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
               {recentFiles.length > 0 && (
                 <div className="border-b border-border/55 px-3 py-2">
                   <div className="mb-1 flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    <Clock3 className="size-3" />最近打开
+                    <Clock3 className="size-3" />{t('session.workbench.recentFiles')}
                   </div>
                   <div className="space-y-0.5">
                     {recentFiles.map((path) => (
@@ -288,7 +290,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
           ) : (
             <div className="flex flex-1 items-center justify-center px-6 text-center text-xs leading-5 text-muted-foreground">
               <div className="rounded-lg bg-muted/30 px-4 py-6">
-                请选择一个项目目录。
+                {t('session.workbench.emptyProject')}
               </div>
             </div>
           )}
@@ -298,7 +300,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="调整 Explorer 宽度"
+        aria-label={t('session.workbench.resizeExplorer')}
         aria-valuemin={180}
         aria-valuemax={420}
         aria-valuenow={Math.round(explorerWidth)}
@@ -307,7 +309,7 @@ export function SessionFileWorkbench({ sessionId }: SessionFileWorkbenchProps): 
         onPointerDown={handleResizeStart}
         onKeyDown={handleResizeKeyDown}
         onDoubleClick={handleResizeReset}
-        title="拖动调整 Explorer 宽度，双击恢复默认"
+        title={t('session.workbench.resizeExplorerHint')}
       >
         <div className="absolute inset-y-3 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/45" />
       </div>

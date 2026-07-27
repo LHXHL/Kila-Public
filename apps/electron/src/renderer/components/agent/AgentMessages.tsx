@@ -8,6 +8,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { Message, MessageContent, StreamingIndicator } from '@/components/ai-elements/message'
 import {
   Conversation,
@@ -71,7 +72,13 @@ interface AgentMessagesProps {
   onRetryLoad?: () => void
 }
 
-export function AgentMessages({
+/**
+ * 消息列表主体
+ *
+ * 包 memo：AgentView 因草稿、附件、会话列表等非消息状态重渲染时，
+ * 不再连带重跑整棵消息树；本会话流式更新仍通过 streamState 引用变化正常透传。
+ */
+export const AgentMessages = React.memo(function AgentMessages({
   sessionId,
   messages,
   streaming,
@@ -96,6 +103,7 @@ export function AgentMessages({
   loadError = null,
   onRetryLoad,
 }: AgentMessagesProps): React.ReactElement {
+  const { t } = useTranslation()
   const userProfile = useAtomValue(userProfileAtom)
   const hydratingSessions = useAtomValue(agentMessageHydratingAtom)
   const upsertPinnedWidget = useSetAtom(upsertSessionPinnedWidgetAtom)
@@ -248,7 +256,7 @@ export function AgentMessages({
           <div role="status" className="flex min-h-[280px] items-center justify-center px-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              正在加载会话记录…
+              {t('agent.message.loadingTranscript')}
             </div>
           </div>
         ) : messages.length === 0 && loadError ? (
@@ -256,12 +264,12 @@ export function AgentMessages({
             <div className="flex max-w-sm flex-col items-center gap-3 text-center">
               <AlertCircle className="size-8 text-destructive" />
               <div>
-                <div className="text-sm font-medium text-foreground">会话记录加载失败</div>
+                <div className="text-sm font-medium text-foreground">{t('agent.message.transcriptLoadFailed')}</div>
                 <div className="mt-1 text-xs leading-5 text-muted-foreground">{loadError}</div>
               </div>
               {onRetryLoad && (
                 <Button type="button" variant="outline" size="sm" onClick={onRetryLoad}>
-                  <RefreshCw className="mr-1.5 size-3.5" />重试
+                  <RefreshCw className="mr-1.5 size-3.5" />{t('common.retry')}
                 </Button>
               )}
             </div>
@@ -269,7 +277,7 @@ export function AgentMessages({
         ) : messages.length === 0 && !hasLiveAssistantTurn ? (
           <AgentWelcomeState sessionPath={sessionPath} onUsePrompt={onUseStarterPrompt} />
         ) : (
-          <div ref={setTranscriptElement} className="w-full px-4 md:px-8 xl:px-10" role="log" aria-live="polite" aria-label="消息列表">
+          <div ref={setTranscriptElement} className="w-full px-4 md:px-8 xl:px-10" role="log" aria-live="polite" aria-label={t('agent.message.listLabel')}>
             {hasEarlierMessages && onLoadEarlierMessages && (
               <div className="flex justify-center pb-4">
                 <Button
@@ -280,8 +288,8 @@ export function AgentMessages({
                   onClick={onLoadEarlierMessages}
                 >
                   {loadingEarlierMessages
-                    ? '正在加载更早消息…'
-                    : `加载更早消息（${loadedMessageCount}/${totalMessageCount}）`}
+                    ? t('agent.message.loadingEarlier')
+                    : t('agent.message.loadEarlier', { loaded: loadedMessageCount, total: totalMessageCount })}
                 </Button>
               </div>
             )}
@@ -346,4 +354,4 @@ export function AgentMessages({
       <ConversationScrollButton />
     </Conversation>
   )
-}
+})

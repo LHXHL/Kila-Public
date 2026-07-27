@@ -1,0 +1,309 @@
+{
+  "agent": {
+    "placeholderWithChannel": "Type a message... (Enter to send, Shift+Enter for new line, @ to reference files, / for Skills, # for MCP)",
+    "placeholderNoChannel": "Please configure and enable a provider first",
+    "configureChannel": "Please configure and enable a provider first",
+    "goToSettings": "Go to Settings",
+    "retryLater": "Please try again later or check if the current provider and model are available",
+    "regenerateFailed": "Regeneration failed",
+    "sendFailed": "Failed to send message",
+    "stopFirst": "Please stop the current task before sending new attachments",
+    "steerNotSupported": "Runtime steering not supported by current provider",
+    "waitComplete": "Please wait for the current task to complete, or stop it first",
+    "steerNoAttachment": "Attachments not supported during runtime steering",
+
+    "permission": {
+      "regionLabel": "Permission confirmation",
+      "title": "Confirmation needed",
+      "dangerousTitle": "Risky operation needs confirmation",
+      "autoDenyIn": "Denied automatically in {{time}}",
+      "expired": "Request expired, removing it",
+      "enterHint": "Focus the card and press Enter to allow",
+      "dangerousHint": "Risky operation — click a button to confirm",
+      "deny": "Deny",
+      "allow": "Allow",
+      "alwaysAllow": "Always allow in this session",
+      "submitFailed": "The action was not submitted. Please try again."
+    },
+
+    "askUser": {
+      "regionLabel": "Agent question",
+      "title": "Kila Agent needs your input",
+      "autoCancelIn": "Cancelled automatically in {{time}}",
+      "expired": "Request expired, removing it",
+      "tabListLabel": "Questions",
+      "questionFallback": "Question {{index}}",
+      "keyboardHint": "Focus the card, then ↑↓ to select · Enter to {{action}}",
+      "next": "next",
+      "other": "Other...",
+      "customPlaceholder": "Type a custom answer...",
+      "customLabel": "Custom answer",
+      "submitFailed": "The answer was not submitted. Please try again."
+    },
+
+    "composer": {
+      "placeholder": "Type a message...",
+      "send": "Send message",
+      "addToQueue": "Add to queue",
+      "stopGenerating": "Stop generating",
+      "attach": "Add attachment",
+      "queueTitle": "Queue",
+      "queued": "Added to the queue",
+      "queuedAttachment": "Attachment",
+      "incognitoOn": "Incognito mode on — this message won't be added to memory",
+      "incognitoOff": "Click to turn on incognito mode",
+      "dismissSuggestion": "Dismiss suggestion",
+      "dismissFolderNotice": "Dismiss folder attachment notice",
+      "editingTitle": "Editing a sent message",
+      "editingHint": "After resending, everything after this message is re-run from your new input.",
+      "editResendFailed": "Failed to resend the edited message",
+      "autoSendFailed": "Failed to auto-send the setup message",
+      "draftRestored": "The message is back in the composer. Please try again.",
+      "readAttachmentsFailed": "Failed to read the original message attachments"
+    },
+
+    "message": {
+      "listLabel": "Messages",
+      "loadingTranscript": "Loading session transcript…",
+      "transcriptLoadFailed": "Failed to load the session transcript",
+      "loadFailed": "Failed to load session messages",
+      "loadingEarlier": "Loading earlier messages…",
+      "loadEarlier": "Load earlier messages ({{loaded}}/{{total}})",
+      "loadEarlierFailed": "Failed to load earlier messages",
+      "sourceScheduledTask": "Scheduled task",
+      "sourceManual": "Manual",
+      "editAndResend": "Edit and resend",
+      "rewindToMessage": "Rewind to this message",
+      "regenerate": "Regenerate",
+      "branchSession": "Branch session",
+      "compactContext": "Compact context",
+      "retryInNewSession": "Retry in a new session",
+      "imageRetryTitle": "Click to retry loading the image",
+      "imageLoadFailedRetry": "Image failed to load — retry",
+      "copyMarkdown": "Copy Markdown",
+      "copyPlainText": "Copy plain text",
+      "moreCopyOptions": "More copy options",
+      "userAvatarAlt": "User avatar"
+    },
+
+    "retry": {
+      "runningTitle": "Retrying",
+      "failedTitle": "Retry failed",
+      "runningCount": "Retrying ({{current}}/{{max}})",
+      "failedCount": "Retry failed ({{current}}/{{max}})",
+      "countdown": "Retrying in {{seconds}}s ({{current}}/{{max}})",
+      "attemptHistory": "Attempt history",
+      "attemptLine": "Attempt {{attempt}} ({{time}}) - {{reason}}",
+      "attemptRunning": "Running attempt {{attempt}}...",
+      "waitingNext": "Waiting {{seconds}}s before attempt {{attempt}}",
+      "runtime": "Runtime: {{value}}",
+      "platform": "Platform: {{value}}",
+      "model": "Model: {{value}}",
+      "workspace": "Workspace: {{value}}",
+      "showStderr": "Show stderr output",
+      "showStack": "Show stack trace"
+    },
+
+    "tool": {
+      "input": "Input",
+      "result": "Result",
+      "details": "Tool details",
+      "resultError": "Execution failed",
+      "copyFull": "Copy full content",
+      "copiedToast": "Full tool content copied",
+      "copyFailedToast": "Failed to copy the full tool content. Please try again.",
+      "previewLimited": "Only a size-limited preview is shown — copy to get the full content",
+      "generatedImages": "Generated images",
+      "consecutiveCalls": "Consecutive tool calls",
+      "moreTargets_one": "{{count}} more",
+      "moreTargets_other": "{{count}} more",
+      "collapseActivities": "Collapse tool activity",
+      "expandActivities_one": "Expand {{count}} tool activity",
+      "expandActivities_other": "Expand all {{count}} tool activities",
+      "collapseLines": "Collapse preview",
+      "expandLines_one": "Expand {{count}} line",
+      "expandLines_other": "Expand {{count}} lines",
+      "copyFullOutput": "Copy full output",
+      "fullOutputCopied": "Full output copied",
+      "fullOutputCopiedLabel": "Full output copied",
+      "copyFullOutputFailed": "Failed to copy the full output. Please try again.",
+      "previewOmittedChars_one": "{{chars}} character omitted from the preview — copy to get the full output",
+      "previewOmittedChars_other": "{{chars}} characters omitted from the preview — copy to get the full output",
+      "resultTruncated": "[Preview truncated — copy to get the full result]",
+      "taskList": "Task list",
+      "todoCount_one": "{{count}} task",
+      "todoCount_other": "{{count}} tasks"
+    },
+
+    "thinking": {
+      "running": "Thinking…",
+      "runningWithPreview": "Thinking: {{preview}}…",
+      "thoughtFor": "Kila thought for {{duration}}",
+      "done": "Kila finished thinking",
+      "durationMinutes": "{{minutes}}m {{seconds}}s",
+      "durationSeconds": "{{seconds}}s",
+      "durationMilliseconds": "{{milliseconds}}ms",
+      "truncated_one": "Thinking detail is too long — {{chars}} character omitted",
+      "truncated_other": "Thinking detail is too long — {{chars}} characters omitted"
+    },
+
+    "workflow": {
+      "thinkingCount_one": "{{count}} thinking step",
+      "thinkingCount_other": "{{count}} thinking steps",
+      "expandDetails": "Show more process detail",
+      "collapseDetails": "Hide process detail"
+    },
+
+    "payload": {
+      "stringTruncated_one": "[String truncated by {{count}} character]",
+      "stringTruncated_other": "[String truncated by {{count}} characters]",
+      "tooDeep": "[Too deeply nested, omitted]",
+      "moreItems_one": "[{{count}} more item]",
+      "moreItems_other": "[{{count}} more items]",
+      "moreFields_one": "[More fields exist — the preview shows only the first {{count}}]",
+      "moreFields_other": "[More fields exist — the preview shows only the first {{count}}]",
+      "previewLimited": "[Structured preview is limited — copy to get the full content]",
+      "charsTruncated_one": "[Truncated {{count}} character]",
+      "charsTruncated_other": "[Truncated {{count}} characters]"
+    },
+
+    "attachment": {
+      "loading": "Loading {{filename}}",
+      "loadFailed": "Image failed to load: {{filename}}",
+      "saveAs": "Save as",
+      "saveImage": "Save image",
+      "addFailed": "Failed to add attachment: {{filename}}",
+      "openDialogFailed": "Failed to open the file picker",
+      "folderAttached_one": "Attached {{count}} folder",
+      "folderAttached_other": "Attached {{count}} folders",
+      "folderAttachFailed": "Failed to attach folder: {{message}}",
+      "dataUnavailable": "Attachment data unavailable",
+      "readdFiles": "Please add these again: {{files}}",
+      "saveFailed": "Failed to save attachments",
+      "keptInComposer": "The attachments are still in the composer. Please try again.",
+      "saveCountMismatch": "Expected to save {{expected}} attachments but saved {{actual}}"
+    },
+
+    "session": {
+      "rewindTitle": "Rewind to this message?",
+      "rewindDescription": "Everything after this message is deleted and the Agent runtime state is rebuilt. Consider branching the session first to keep the current path. Project files are not rolled back.",
+      "rewindConfirm": "Rewind",
+      "rewound": "Session rewound",
+      "rewoundDescription": "Later messages were removed. To keep an alternative path, use “Branch session” first.",
+      "rewindFailed": "Failed to rewind the session",
+      "branched": "Branch session created",
+      "branchedDescription": "{{title}} is open; project, model and capability settings were inherited",
+      "branchFailed": "Failed to create the branch session",
+      "retryNewSessionPrompt": "The previous session id is {{sessionId}}. You can refer to sessions in the same project directory to continue the work."
+    },
+
+    "pending": {
+      "title": "Pending requests",
+      "subtitle": "Click to jump to the matching session",
+      "ariaLabel_one": "{{count}} pending request",
+      "ariaLabel_other": "{{count}} pending requests",
+      "permission": "Permission request",
+      "permissionWithTool": "Permission · {{tool}}",
+      "askUser": "Question · {{topic}}",
+      "askUserFallback": "Input needed",
+      "sessionFallback": "Session {{id}}"
+    },
+
+    "memory": {
+      "longTerm": "Long-term memory",
+      "relatedSession": "Related session",
+      "notebook": "Notebook",
+      "providerLocalShort": "Local",
+      "providerUnknown": "Memory source",
+      "providerNowledge": "Nowledge + local",
+      "providerLocal": "Local memory",
+      "emptyContent": "No displayable content was returned",
+      "truncatedNote": "The content is long — only the first 1600 characters saved at recall time are shown.",
+      "recallTitle": "Memory recalled this turn",
+      "itemCount_one": "{{count}} item",
+      "itemCount_other": "{{count}} items",
+      "workingMemory": "Working memory",
+      "scopeGlobal": "Global",
+      "scopeProject": "Project",
+      "legacyNoDetails": "Older records did not save recall details.",
+      "emptyRecall": "Nothing was recalled this turn.",
+      "readOnly": "Read-only",
+      "writeFailed": "Write failed",
+      "written_one": "{{count}} new entry",
+      "written_other": "{{count}} new entries",
+      "recallError": "Recall failed, degraded",
+      "recallDisabled": "Memory disabled",
+      "recalled_one": "{{count}} item recalled",
+      "recalled_other": "{{count}} items recalled",
+      "badgeAria": "{{summary}}. Click to view recall details."
+    },
+
+    "widget": {
+      "renderFailed": "Widget failed to render",
+      "boundaryFallback": "Widget failed to render — safely fell back.",
+      "cannotRender": "Widget cannot be rendered",
+      "loadTimeout": "The widget runtime timed out while loading. Check the app resources or try again.",
+      "retryRender": "Retry render",
+      "openLinkFailed": "Cannot open the widget link",
+      "showCode": "View code",
+      "hideCode": "Hide code",
+      "pin": "Pin",
+      "pinning": "Pinning…",
+      "pinned": "Pinned to the Board",
+      "pinFailed": "Failed to pin the widget",
+      "unsupportedSchema": "This schema widget is not supported yet.",
+      "thisWidget": "this widget",
+      "draftTitle": "Follow-up draft generated from the widget",
+      "prompts": {
+        "analyzeLabel": "Analyze {{target}}",
+        "expandLabel": "Expand {{target}}",
+        "thisRow": "this row",
+        "stat": "Based on “{{widget}}”, explain further what the metric “{{metric}}” means, why it changed, and what to do next.",
+        "point": "Based on “{{widget}}”, explain why {{series}} = {{value}} at {{x}}, and suggest the next step of analysis.",
+        "row": "Based on “{{widget}}”, analyze this row in detail and explain how it differs from the other rows. Focus on {{row}}.",
+        "timeline": "Based on “{{widget}}”, explain in detail what the “{{stage}}” stage does, what it depends on, and where the risks are.",
+        "node": "Based on “{{widget}}”, explain what the node “{{node}}” does in the overall flow and how it connects upstream and downstream.",
+        "edge": "Based on “{{widget}}”, explain what the connection “{{from}} -> {{to}}” does in the overall flow and how it connects upstream and downstream."
+      }
+    },
+
+    "chart": {
+      "barAria": "Bar chart with {{groups}} groups and {{series}} series",
+      "barTitle": "Bar chart: {{series}}",
+      "lineAria": "Line chart with {{points}} data points and {{series}} series",
+      "lineTitle": "Line chart: {{series}}",
+      "truncatedBars": "Large dataset — only the first {{shown}} groups are shown, {{hidden}} groups are not plotted.",
+      "truncatedPoints": "Large dataset — only the first {{shown}} points are shown, {{hidden}} points are not plotted."
+    },
+
+    "mention": {
+      "emptySkill": "No matching command or Skill",
+      "emptyMcp": "No matching MCP server",
+      "compactDescription": "Compact the session history to save tokens"
+    },
+
+    "welcome": {
+      "greeting": "{{name}}, what would you like to do with Kila today?",
+      "fallbackName": "Hi there",
+      "description": "Describe the task you want done, or pick a common action.",
+      "descriptionWithProject": "Current project: {{project}}. Describe the task you want done, or pick a common action.",
+      "prompts": {
+        "plan": {
+          "title": "Plan what to move forward today",
+          "detail": "Goal, constraints, first step",
+          "prompt": "Help me plan the work for this session: confirm the goal, list the constraints, then give me an actionable first step."
+        },
+        "review": {
+          "title": "Review risks in the current project",
+          "detail": "Entry points, change points, verification path",
+          "prompt": "Starting from the current project, do a quick code review: find the entry points, the key data flows and the potential risks, and give me verification steps."
+        },
+        "breakdown": {
+          "title": "Break an idea into a plan",
+          "detail": "Scope, trade-offs, delivery order",
+          "prompt": "I have a rough idea. Break it into a clear plan: scope, non-goals, implementation order and how to verify it."
+        }
+      }
+    }
+  }
+}

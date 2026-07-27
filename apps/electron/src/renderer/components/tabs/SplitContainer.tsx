@@ -5,7 +5,7 @@
  * 根据 splitLayoutAtom.mode 自动切换布局。
  */
 
-import * as React from 'react'
+import type * as React from 'react'
 import { useAtomValue } from 'jotai'
 import { splitLayoutAtom } from '@/atoms/tab-atoms'
 import { SplitPanel } from './SplitPanel'

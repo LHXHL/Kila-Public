@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ExtraProps } from 'react-markdown'
 import {
   FileCode2,
@@ -85,6 +86,7 @@ export const RichLinkChip = React.memo(function RichLinkChip({
   node: _node,
   ...linkProps
 }: RichLinkChipProps): React.ReactElement {
+  const { t } = useTranslation()
   const {
     openExternal,
     openHtmlFileInSessionBrowser,
@@ -97,13 +99,14 @@ export const RichLinkChip = React.memo(function RichLinkChip({
   )
   const visual = LINK_VISUALS[presentation.kind]
   const Icon = visual.icon
+  const metaText = presentation.metaKey ? t(presentation.metaKey) : presentation.meta
   const content = (
     <>
       <Icon className={cn("size-[1.05em] shrink-0", visual.iconClassName)} aria-hidden />
       <span className="min-w-0 truncate">{presentation.label}</span>
-      {presentation.meta && presentation.kind !== 'github' && (
+      {metaText && presentation.kind !== 'github' && (
         <span className="hidden shrink-0 text-[0.78em] font-normal opacity-60 sm:inline">
-          {presentation.meta}
+          {metaText}
         </span>
       )}
     </>

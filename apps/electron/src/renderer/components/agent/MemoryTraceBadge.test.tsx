@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
+// 断言的是 zh-CN 译文，需要先初始化共享 i18n 实例
+import i18n from '@/lib/i18n'
 import { getMemoryWriteLabel, MemoryRecallDetails } from './MemoryTraceBadge'
 import type { MemoryRunTrace } from '@kila/shared'
+
+const t = i18n.t.bind(i18n)
 
 function trace(overrides: Partial<MemoryRunTrace> = {}): MemoryRunTrace {
   return {
@@ -60,14 +64,14 @@ describe('MemoryRecallDetails', () => {
 
 describe('getMemoryWriteLabel', () => {
   test('后台任务不展示容易误解为卡住的中间写入状态', () => {
-    expect(getMemoryWriteLabel(trace({ writeStatus: 'queued' }))).toBeNull()
+    expect(getMemoryWriteLabel(trace({ writeStatus: 'queued' }), t)).toBeNull()
   })
 
   test('仅展示有意义的最终结果或异常状态', () => {
-    expect(getMemoryWriteLabel(trace())).toBeNull()
-    expect(getMemoryWriteLabel(trace({ writeStatus: 'written', writtenMemoryCount: 0 }))).toBeNull()
-    expect(getMemoryWriteLabel(trace({ writeStatus: 'written', writtenMemoryCount: 2 }))).toBe('新增 2 条')
-    expect(getMemoryWriteLabel(trace({ writeStatus: 'failed' }))).toBe('整理失败')
-    expect(getMemoryWriteLabel(trace({ incognito: true }))).toBe('只读')
+    expect(getMemoryWriteLabel(trace(), t)).toBeNull()
+    expect(getMemoryWriteLabel(trace({ writeStatus: 'written', writtenMemoryCount: 0 }), t)).toBeNull()
+    expect(getMemoryWriteLabel(trace({ writeStatus: 'written', writtenMemoryCount: 2 }), t)).toBe('新增 2 条')
+    expect(getMemoryWriteLabel(trace({ writeStatus: 'failed' }), t)).toBe('整理失败')
+    expect(getMemoryWriteLabel(trace({ incognito: true }), t)).toBe('只读')
   })
 })

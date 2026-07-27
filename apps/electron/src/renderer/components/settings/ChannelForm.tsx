@@ -10,6 +10,8 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   Eye,
   EyeOff,
@@ -95,15 +97,8 @@ const PROVIDER_SELECT_OPTIONS = PROVIDER_OPTIONS.map((p) => ({
   label: PROVIDER_LABELS[p] ?? p,
 }))
 
-/** API 协议选项（合并供应商类型后唯一可见的字段） */
-const API_TYPE_OPTIONS: Array<{ value: ApiType; label: string; description: string }> = [
-  { value: 'anthropic', label: 'Anthropic Messages', description: 'Claude 系列 / Anthropic 兼容' },
-  { value: 'openai', label: 'OpenAI Chat Completions', description: 'OpenAI 兼容协议（最通用）' },
-  { value: 'openai-responses', label: 'OpenAI Responses', description: 'OpenAI Responses API 新协议' },
-  { value: 'google', label: 'Google Generative Language', description: 'Gemini 系列 / Google API' },
-  { value: 'ollama', label: 'Ollama', description: 'Ollama 本地 API' },
-  { value: 'custom', label: '自定义', description: '兜底：手动指定协议' },
-]
+/** API 协议顺序；label / description 在渲染时经 `settings.channelForm.apiTypes.*` 翻译 */
+const API_TYPE_VALUES: ApiType[] = ['anthropic', 'openai', 'openai-responses', 'google', 'ollama', 'custom']
 
 /** API 协议的 Chat 端点路径，用于 Base URL 预览 */
 const API_TYPE_CHAT_PATHS: Record<ApiType, string> = {
@@ -118,26 +113,22 @@ const API_TYPE_CHAT_PATHS: Record<ApiType, string> = {
 type AbilityKey = keyof ModelAbilities
 type PricingKey = keyof ModelPricing
 
-const ABILITY_ITEMS: Array<{ key: AbilityKey; label: string; icon: React.ElementType }> = [
-  { key: 'tools', label: '工具', icon: Wrench },
-  { key: 'vision', label: '视觉', icon: ImageIcon },
-  { key: 'video', label: '视频', icon: Video },
-  { key: 'reasoning', label: '推理', icon: BrainCircuit },
-  { key: 'fileInput', label: '文件', icon: FileText },
+/** 能力项；label 经 `settings.channelForm.ability.*` 翻译 */
+const ABILITY_ITEMS: Array<{ key: AbilityKey; icon: React.ElementType }> = [
+  { key: 'tools', icon: Wrench },
+  { key: 'vision', icon: ImageIcon },
+  { key: 'video', icon: Video },
+  { key: 'reasoning', icon: BrainCircuit },
+  { key: 'fileInput', icon: FileText },
 ]
 
-const PRICING_ITEMS: Array<{ key: PricingKey; label: string }> = [
-  { key: 'inputPerMillionUsd', label: '输入 $/1M' },
-  { key: 'outputPerMillionUsd', label: '输出 $/1M' },
-  { key: 'cacheReadPerMillionUsd', label: '缓存读 $/1M' },
-  { key: 'cacheWritePerMillionUsd', label: '缓存写 $/1M' },
+/** 价格项；label 经 `settings.channelForm.pricing.*` 翻译 */
+const PRICING_ITEMS: PricingKey[] = [
+  'inputPerMillionUsd',
+  'outputPerMillionUsd',
+  'cacheReadPerMillionUsd',
+  'cacheWritePerMillionUsd',
 ]
-
-const ABILITY_STATUS_LABELS: Record<AbilityStatus, string> = {
-  supported: '支持',
-  unsupported: '不支持',
-  unknown: '未知',
-}
 
 /**
  * 生成 API 端点预览 URL
@@ -183,17 +174,17 @@ function compactMetadataOverride(override: ModelMetadataOverride): ModelMetadata
   return Object.keys(next).length > 0 ? next : undefined
 }
 
-function formatTokenCount(value: number | undefined): string {
-  if (!value) return '未知'
+function formatTokenCount(value: number | undefined, t: TFunction): string {
+  if (!value) return t('settings.tokenUsage.unknown')
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   if (value >= 1_000) return `${Math.round(value / 1_000)}k`
   return String(value)
 }
 
-function formatModelPrice(pricing: ModelPricing | undefined): string {
+function formatModelPrice(pricing: ModelPricing | undefined, t: TFunction): string {
   const input = pricing?.inputPerMillionUsd ?? pricing?.inputPerMillion
   const output = pricing?.outputPerMillionUsd ?? pricing?.outputPerMillion
-  if (input === undefined && output === undefined) return '未配置价格'
+  if (input === undefined && output === undefined) return t('settings.channelForm.noPricing')
   const symbol = pricing?.currency === 'CNY' ? '¥' : '$'
   return `${symbol}${input ?? '-'} / ${symbol}${output ?? '-'}`
 }
@@ -229,6 +220,8 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
     () => buildInitialFormState(channel, preset ?? null),
     [channel, preset],
   )
+
+  const { t } = useTranslation()
 
   // 表单状态
   const [name, setName] = React.useState(initialFormState.name)
@@ -466,7 +459,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
         setModels(merged)
       }
     } catch (error) {
-      setFetchResult({ success: false, message: '拉取模型请求失败', models: [] })
+      setFetchResult({ success: false, message: t('settings.channelForm.fetchModelsFailed'), models: [] })
     } finally {
       setFetchingModels(false)
     }
@@ -493,7 +486,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
       })
       setTestResult(result)
     } catch (error) {
-      setTestResult({ success: false, message: '测试请求失败' })
+      setTestResult({ success: false, message: t('settings.channelForm.testRequestFailed') })
     } finally {
       setTesting(false)
     }
@@ -574,31 +567,30 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-6', embedded && 'space-y-4')}>
       {/* 基本信息卡片 */}
-      <SettingsSection title="基本信息">
+      <SettingsSection title={t('settings.mcpForm.basicInfo')}>
         <SettingsCard className={embeddedCardClass}>
           <SettingsInput
-            label="渠道名称"
+            label={t('settings.channelForm.name')}
             value={name}
             onChange={setName}
-            placeholder="例如: My Anthropic"
+            placeholder={t('settings.channelForm.namePlaceholder')}
             required
           />
           <SettingsSelect
-            label="API 协议"
+            label={t('settings.channelForm.apiProtocol')}
             value={apiType || (PROVIDER_OPTIONS.includes(provider) ? (provider as ApiType) : 'openai')}
             onValueChange={handleApiTypeChange}
-            options={API_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
-            placeholder="选择 API 协议"
-            description={(() => {
-              const opt = API_TYPE_OPTIONS.find((o) => o.value === (apiType || provider))
-              return opt?.description
-            })()}
+            options={API_TYPE_VALUES.map((value) => ({ value, label: t(`settings.channelForm.apiTypes.${value}.label`) }))}
+            placeholder={t('settings.channelForm.apiProtocolPlaceholder')}
+            description={API_TYPE_VALUES.includes((apiType || provider) as ApiType)
+              ? t(`settings.channelForm.apiTypes.${apiType || provider}.description`)
+              : undefined}
           />
           {capabilityProviderId && (
             <div className="px-4 py-1 text-xs text-muted-foreground">
-              能力画像 Provider ID：<span className="font-mono">{capabilityProviderId}</span>
+              {t('settings.channelForm.capabilityProviderId')}<span className="font-mono">{capabilityProviderId}</span>
               {capabilityProviderId !== provider && provider !== 'custom' && (
-                <span className="ml-2 text-muted-foreground/60">（供应商: {provider}）</span>
+                <span className="ml-2 text-muted-foreground/60">{t('settings.channelForm.providerSuffix', { provider })}</span>
               )}
             </div>
           )}
@@ -607,7 +599,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
             value={baseUrl}
             onChange={setBaseUrl}
             placeholder="https://api.example.com"
-            description={baseUrl.trim() ? `预览：${buildPreviewUrl(baseUrl, apiType || undefined, provider)}` : undefined}
+            description={baseUrl.trim() ? t('settings.channelForm.baseUrlPreview', { url: buildPreviewUrl(baseUrl, apiType || undefined, provider) }) : undefined}
           />
           {/* API Key + 测试连接同行 */}
           <div className="px-4 py-3 space-y-2">
@@ -626,7 +618,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                 ) : (
                   <Zap size={12} />
                 )}
-                <span>{testModel ? '测试真实推理' : '请先添加模型'}</span>
+                <span>{testModel ? t('settings.channelForm.testInference') : t('settings.channelForm.addModelFirst')}</span>
               </Button>
             </div>
             <div className="relative">
@@ -637,7 +629,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                   setApiKey(e.target.value)
                   setApiKeyDirty(true)
                 }}
-                placeholder={isEdit ? '留空则不更新' : '输入 API Key'}
+                placeholder={isEdit ? t('settings.channelForm.apiKeyKeep') : t('settings.channelForm.apiKeyPlaceholder')}
                 required={!isEdit}
                 className="pr-10"
               />
@@ -661,8 +653,8 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
             )}
           </div>
           <SettingsToggle
-            label="启用此渠道"
-            description="关闭后该渠道不会在模型选择中出现"
+            label={t('settings.channelForm.enableChannel')}
+            description={t('settings.channelForm.enableChannelHint')}
             checked={enabled}
             onCheckedChange={setEnabled}
           />
@@ -671,7 +663,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
 
       {/* 模型列表卡片 */}
       <SettingsSection
-        title="模型列表"
+        title={t('settings.channelForm.modelList')}
         action={
           <div className="flex items-center gap-2">
             <Button
@@ -681,10 +673,10 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
               onClick={handleToggleAllModels}
               disabled={models.length === 0}
               className="h-7 text-xs"
-              title={allFilteredEnabled ? '取消全选' : '全选'}
+              title={allFilteredEnabled ? t('settings.channelForm.deselectAll') : t('settings.channelForm.selectAll')}
             >
               {allFilteredEnabled ? <Square size={12} /> : <CheckSquare size={12} />}
-              <span>{allFilteredEnabled ? '取消全选' : '全选'}</span>
+              <span>{allFilteredEnabled ? t('settings.channelForm.deselectAll') : t('settings.channelForm.selectAll')}</span>
             </Button>
             <Button
               variant="outline"
@@ -699,7 +691,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
               ) : (
                 <Download size={12} />
               )}
-              <span>从供应商获取</span>
+              <span>{t('settings.channelForm.fetchFromProvider')}</span>
             </Button>
           </div>
         }
@@ -724,7 +716,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                 <Input
                   value={modelFilter}
                   onChange={(e) => setModelFilter(e.target.value)}
-                  placeholder="搜索模型..."
+                  placeholder={t('settings.channelForm.searchModels')}
                   className="h-8 text-sm pl-8"
                 />
               </div>
@@ -735,8 +727,8 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
           {models.length > 0 && (
             <div className="px-4 pt-2 pb-1 text-xs text-muted-foreground">
               {modelFilter.trim()
-                ? `${filteredModels.length} / ${models.length} 个模型`
-                : `${models.filter((m) => m.enabled).length} 个已启用，共 ${models.length} 个模型`}
+                ? t('settings.channelForm.filteredCount', { shown: filteredModels.length, total: models.length })
+                : t('settings.channelForm.enabledCount', { enabled: models.filter((m) => m.enabled).length, total: models.length })}
             </div>
           )}
 
@@ -776,7 +768,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                           <span className="truncate text-sm font-medium text-foreground">{model.name}</span>
                           {metadata.deprecated && (
                             <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                              已弃用
+                              {t('settings.channelForm.deprecated')}
                             </span>
                           )}
                         </div>
@@ -785,9 +777,9 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                            {formatTokenCount(metadata.contextWindowTokens)}
+                            {formatTokenCount(metadata.contextWindowTokens, t)}
                           </span>
-                          {ABILITY_ITEMS.map(({ key, label, icon: Icon }) => {
+                          {ABILITY_ITEMS.map(({ key, icon: Icon }) => {
                             const status = metadata.abilities[key]
                             return (
                               <span
@@ -802,13 +794,13 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                                 )}
                               >
                                 <Icon size={10} />
-                                {label}
+                                {t(`settings.channelForm.ability.${key}`)}
                               </span>
                             )
                           })}
                           <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                             <DollarSign size={10} />
-                            {formatModelPrice(metadata.pricing)}
+                            {formatModelPrice(metadata.pricing, t)}
                           </span>
                         </div>
                       </div>
@@ -834,35 +826,35 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                       <div className="mt-3 rounded-md bg-muted/35 p-3">
                         <div className="grid gap-2 sm:grid-cols-2">
                           <label className="space-y-1">
-                            <span className="text-[11px] text-muted-foreground">上下文窗口</span>
+                            <span className="text-[11px] text-muted-foreground">{t('settings.channelForm.contextWindow')}</span>
                             <Input
                               type="number"
                               min={1}
                               value={model.metadataOverride?.contextWindowTokens ?? ''}
                               onChange={(e) => handleSetNumberOverride(model.id, 'contextWindowTokens', e.target.value)}
-                              placeholder={metadata.contextWindowTokens ? String(metadata.contextWindowTokens) : '未知'}
+                              placeholder={metadata.contextWindowTokens ? String(metadata.contextWindowTokens) : t('settings.tokenUsage.unknown')}
                               className="h-8 text-xs"
                             />
                           </label>
                           <label className="space-y-1">
-                            <span className="text-[11px] text-muted-foreground">最大输出</span>
+                            <span className="text-[11px] text-muted-foreground">{t('settings.channelForm.maxOutput')}</span>
                             <Input
                               type="number"
                               min={1}
                               value={model.metadataOverride?.maxOutputTokens ?? ''}
                               onChange={(e) => handleSetNumberOverride(model.id, 'maxOutputTokens', e.target.value)}
-                              placeholder={metadata.maxOutputTokens ? String(metadata.maxOutputTokens) : '默认 32768'}
+                              placeholder={metadata.maxOutputTokens ? String(metadata.maxOutputTokens) : t('settings.channelForm.maxOutputDefault')}
                               className="h-8 text-xs"
                             />
                           </label>
                         </div>
 
                         <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                          {ABILITY_ITEMS.map(({ key, label, icon: Icon }) => (
+                          {ABILITY_ITEMS.map(({ key, icon: Icon }) => (
                             <label key={key} className="space-y-1">
                               <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                                 <Icon size={11} />
-                                {label}
+                                {t(`settings.channelForm.ability.${key}`)}
                               </span>
                               <select
                                 value={model.metadataOverride?.abilities?.[key] ?? metadata.abilities[key]}
@@ -870,7 +862,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
                               >
                                 {(['supported', 'unsupported', 'unknown'] as AbilityStatus[]).map((status) => (
-                                  <option key={status} value={status}>{ABILITY_STATUS_LABELS[status]}</option>
+                                  <option key={status} value={status}>{t(`settings.channelForm.abilityStatus.${status}`)}</option>
                                 ))}
                               </select>
                             </label>
@@ -878,9 +870,9 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                         </div>
 
                         <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                          {PRICING_ITEMS.map(({ key, label }) => (
+                          {PRICING_ITEMS.map((key) => (
                             <label key={key} className="space-y-1">
-                              <span className="text-[11px] text-muted-foreground">{label}</span>
+                              <span className="text-[11px] text-muted-foreground">{t(`settings.channelForm.pricing.${key}`)}</span>
                               <Input
                                 type="number"
                                 min={0}
@@ -902,7 +894,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
               {/* 搜索无结果提示 */}
               {modelFilter.trim() && filteredModels.length === 0 && (
                 <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  未找到匹配的模型
+                  {t('settings.channelForm.noModelMatches')}
                 </div>
               )}
             </div>
@@ -913,7 +905,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
             <Input
               value={newModelId}
               onChange={(e) => setNewModelId(e.target.value)}
-              placeholder="模型 ID（如 claude-opus-4-6）"
+              placeholder={t('settings.channelForm.modelIdPlaceholder')}
               className="flex-1 h-8 text-sm"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -925,7 +917,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
             <Input
               value={newModelName}
               onChange={(e) => setNewModelName(e.target.value)}
-              placeholder="显示名称（可选）"
+              placeholder={t('settings.channelForm.modelNamePlaceholder')}
               className="flex-1 h-8 text-sm"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -955,7 +947,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
           type="button"
           onClick={onCancel}
         >
-          取消
+          {t('common.cancel')}
         </Button>
         <Button
           size="sm"
@@ -963,7 +955,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
           disabled={saving || !canSave}
         >
           {saving && <Loader2 size={14} className="animate-spin" />}
-          <span>{isEdit ? '保存修改' : '创建供应商'}</span>
+          <span>{isEdit ? t('settings.mcpForm.saveChanges') : t('settings.channelForm.createProvider')}</span>
         </Button>
       </div>
     </form>

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Blocks, FolderOpen, RefreshCw, Trash2, Wand2 } from 'lucide-react'
 import type { GlobalSkillDetail, GlobalSkillEntryKind } from '@kila/shared'
 import { MessageResponse } from '@/components/ai-elements/message'
@@ -93,6 +94,7 @@ export function SkillDetailDialog({
   onDelete,
   onToggle,
 }: SkillDetailDialogProps): React.ReactElement {
+  const { t } = useTranslation()
   const canManage = detail?.managementMode === 'managed' && detail.kind === 'skill'
   const contentPreview = React.useMemo(() => formatContentPreview(detail), [detail])
   const detailLocation = React.useMemo(() => (
@@ -106,9 +108,9 @@ export function SkillDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[calc(100vh-32px)] w-[calc(100vw-32px)] max-w-5xl flex-col gap-0 overflow-hidden border-border/60 bg-background p-0 shadow-2xl">
         <DialogHeader className="shrink-0 border-b border-border/50 bg-card/82 px-5 py-4 pr-14 text-left sm:px-6 sm:py-5 sm:pr-14">
-          <DialogTitle className="sr-only">{detail?.name ?? '技能详情'}</DialogTitle>
+          <DialogTitle className="sr-only">{detail?.name ?? t('settings.skillDetail.title')}</DialogTitle>
           <DialogDescription className="sr-only">
-            查看技能或插件的元数据、原始内容和可用操作。
+            {t('settings.skillDetail.description')}
           </DialogDescription>
 
           {detail ? (
@@ -129,10 +131,10 @@ export function SkillDetailDialog({
                     <EntityMetadataChip tone="accent">{getEntryTypeLabel(detail.kind)}</EntityMetadataChip>
                     {canManage ? (
                       <EntityMetadataChip tone={detail.enabled ? 'accent' : 'neutral'}>
-                        {detail.enabled ? '已启用' : '已停用'}
+                        {detail.enabled ? t('common.enabled') : t('common.notEnabled')}
                       </EntityMetadataChip>
                     ) : (
-                      <EntityMetadataChip>只读</EntityMetadataChip>
+                      <EntityMetadataChip>{t('settings.skillDetail.readOnly')}</EntityMetadataChip>
                     )}
                   </div>
 
@@ -141,7 +143,7 @@ export function SkillDetailDialog({
                   </div>
 
                   <div className="mt-2 max-w-3xl break-words text-[13px] leading-5 text-muted-foreground">
-                    {detail.description ?? '该条目未提供简介，可在下方查看原始内容。'}
+                    {detail.description ?? t('settings.skillDetail.noDescription')}
                   </div>
                 </div>
               </div>
@@ -151,14 +153,14 @@ export function SkillDetailDialog({
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      aria-label="打开所在目录"
+                      aria-label={t('settings.skillDetail.openLocation')}
                       onClick={() => { void window.electronAPI.openGlobalAgentPath(detail.path) }}
                       className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-kila-accent-muted hover:text-foreground"
                     >
                       <FolderOpen className="size-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>打开所在目录</TooltipContent>
+                  <TooltipContent>{t('settings.skillDetail.openLocation')}</TooltipContent>
                 </Tooltip>
 
                 {canManage && (
@@ -167,7 +169,7 @@ export function SkillDetailDialog({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          aria-label="更新 Skill"
+                          aria-label={t('settings.skillDetail.updateSkill')}
                           onClick={() => onUpdate(detail)}
                           disabled={installing}
                           className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-primary/25 hover:bg-kila-accent-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -175,25 +177,25 @@ export function SkillDetailDialog({
                           <RefreshCw className={cn('size-4', installing && 'animate-spin')} />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent>根据来源锁更新 Skill</TooltipContent>
+                      <TooltipContent>{t('settings.skillDetail.updateSkillHint')}</TooltipContent>
                     </Tooltip>
 
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          aria-label="删除 Skill"
+                          aria-label={t('settings.skillDetail.deleteSkill')}
                           onClick={() => onDelete(detail)}
                           className="rounded-xl border border-border/60 bg-background/80 p-3 text-muted-foreground transition-colors hover:border-destructive/25 hover:bg-destructive/10 hover:text-destructive"
                         >
                           <Trash2 className="size-4" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent>删除 Skill</TooltipContent>
+                      <TooltipContent>{t('settings.skillDetail.deleteSkill')}</TooltipContent>
                     </Tooltip>
 
                     <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3 py-2">
-                      <span className="text-[12px] text-muted-foreground">启用</span>
+                      <span className="text-[12px] text-muted-foreground">{t('settings.skillDetail.enable')}</span>
                       <Switch
                         checked={detail.enabled}
                         onCheckedChange={(enabled) => onToggle(detail, enabled)}
@@ -210,26 +212,31 @@ export function SkillDetailDialog({
           <div className="min-w-0 space-y-6 p-4 sm:p-6">
             {loading ? (
               <div className="flex min-h-[360px] items-center justify-center text-sm text-muted-foreground">
-                正在加载详情...
+                {t('settings.skillDetail.loadingDetail')}
               </div>
             ) : detail ? (
               <>
                 <section className="space-y-3">
-                  <div className="px-1 text-[13px] font-semibold text-foreground">元数据</div>
+                  <div className="px-1 text-[13px] font-semibold text-foreground">{t('settings.skillDetail.metadata')}</div>
                   <div className="overflow-hidden rounded-[18px] border border-border/55 bg-card/65">
-                    <MetadataRow label="标识符" value={detail.id} mono />
-                    <MetadataRow label="名称" value={detail.name} />
-                    <MetadataRow label="来源" value={detail.sourceLabel} />
-                    <MetadataRow label="类型" value={getEntryTypeLabel(detail.kind)} />
-                    <MetadataRow label="模式" value={detail.managementMode === 'managed' ? 'Kila 管理' : '只读浏览'} />
-                    <MetadataRow label="位置" value={<span className="break-all">{detailLocation}</span>} mono />
-                    <MetadataRow label="目录" value={<span className="break-all">{detail.path}</span>} mono />
-                    <MetadataRow label="内容文件" value={<span className="break-all">{detailContentFile}</span>} mono />
+                    <MetadataRow label={t('settings.skillDetail.fieldId')} value={detail.id} mono />
+                    <MetadataRow label={t('settings.skillDetail.fieldName')} value={detail.name} />
+                    <MetadataRow label={t('settings.skillDetail.fieldSource')} value={detail.sourceLabel} />
+                    <MetadataRow label={t('settings.skillDetail.fieldKind')} value={getEntryTypeLabel(detail.kind)} />
+                    <MetadataRow
+                      label={t('settings.skillDetail.fieldMode')}
+                      value={detail.managementMode === 'managed'
+                        ? t('settings.skillDetail.modeManaged')
+                        : t('settings.skillDetail.modeReadOnly')}
+                    />
+                    <MetadataRow label={t('settings.skillDetail.fieldLocation')} value={<span className="break-all">{detailLocation}</span>} mono />
+                    <MetadataRow label={t('settings.skillDetail.fieldDirectory')} value={<span className="break-all">{detail.path}</span>} mono />
+                    <MetadataRow label={t('settings.skillDetail.fieldContentFile')} value={<span className="break-all">{detailContentFile}</span>} mono />
                   </div>
                 </section>
 
                 <section className="space-y-3">
-                  <div className="px-1 text-[13px] font-semibold text-foreground">内容</div>
+                  <div className="px-1 text-[13px] font-semibold text-foreground">{t('settings.skillDetail.content')}</div>
                   <div className="overflow-hidden rounded-[18px] border border-border/55 bg-card/65">
                     <div className="border-b border-border/45 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
                       {detail.contentType === 'json' ? 'plugin.json' : 'SKILL.md'}
@@ -260,7 +267,7 @@ export function SkillDetailDialog({
               </>
             ) : (
               <div className="flex min-h-[320px] items-center justify-center text-sm text-muted-foreground">
-                详情加载失败，请关闭后重试。
+                {t('settings.skillDetail.loadFailed')}
               </div>
             )}
           </div>

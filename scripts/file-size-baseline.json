@@ -1,0 +1,41 @@
+{
+  "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts": {
+    "lines": 1238
+  },
+  "apps/electron/src/main/lib/im-bridge/adapters/feishu-adapter.ts": {
+    "lines": 888
+  },
+  "apps/electron/src/main/lib/im-bridge/bridge-manager.ts": {
+    "lines": 1320
+  },
+  "apps/electron/src/main/lib/scheduled-task-manager.ts": {
+    "lines": 1151
+  },
+  "apps/electron/src/main/lib/session-service.ts": {
+    "lines": 919
+  },
+  "apps/electron/src/preload/index.ts": {
+    "lines": 1628
+  },
+  "apps/electron/src/renderer/atoms/agent-stream-utils.ts": {
+    "lines": 1019
+  },
+  "apps/electron/src/renderer/components/agent/AgentView.tsx": {
+    "lines": 1651
+  },
+  "apps/electron/src/renderer/components/agent/ToolActivityItem.tsx": {
+    "lines": 872
+  },
+  "apps/electron/src/renderer/components/ai-elements/message.tsx": {
+    "lines": 1044
+  },
+  "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx": {
+    "lines": 943
+  },
+  "apps/electron/src/renderer/components/settings/ChannelForm.tsx": {
+    "lines": 972
+  },
+  "packages/shared/src/types/agent.ts": {
+    "lines": 1110
+  }
+}

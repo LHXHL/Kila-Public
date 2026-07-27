@@ -10,6 +10,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   Pencil,
@@ -452,6 +453,7 @@ function CompactActivityGroupRow({
   detailsId?: string | null
   onCloseDetails?: () => void
 }): React.ReactElement {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = React.useState(false)
   const Icon = getToolIcon(group.toolName)
   const delay = animate && index < SIZE.staggerLimit ? `${index * 30}ms` : '0ms'
@@ -490,8 +492,8 @@ function CompactActivityGroupRow({
           × {group.activities.length}
         </span>
         <span className="min-w-0 flex-1 truncate text-foreground/50">
-          {preview || '连续工具调用'}
-          {hiddenTargetCount > 0 && <span className="opacity-70"> · 另 {hiddenTargetCount} 项</span>}
+          {preview || t('agent.tool.consecutiveCalls')}
+          {hiddenTargetCount > 0 && <span className="opacity-70"> · {t('agent.tool.moreTargets', { count: hiddenTargetCount })}</span>}
         </span>
         {group.elapsedSeconds !== undefined && group.elapsedSeconds > 0 && (
           <span className="shrink-0 text-[11px] text-muted-foreground/60 tabular-nums">
@@ -524,6 +526,7 @@ function CompactActivityGroupRow({
 // ===== 工具结果图片 =====
 
 function ToolResultImage({ attachment }: { attachment: { localPath: string; filename: string; mediaType: string } }): React.ReactElement {
+  const { t } = useTranslation()
   const { imageSrc, loadState, retry, markError } = useAttachmentImage(
     attachment.localPath,
     attachment.mediaType,
@@ -540,7 +543,7 @@ function ToolResultImage({ attachment }: { attachment: { localPath: string; file
       <div
         className="size-[120px] rounded-md bg-muted/30 animate-pulse"
         role="status"
-        aria-label={`正在加载 ${attachment.filename}`}
+        aria-label={t('agent.attachment.loading', { filename: attachment.filename })}
       />
     )
   }
@@ -549,21 +552,13 @@ function ToolResultImage({ attachment }: { attachment: { localPath: string; file
     return (
       <div className="flex size-[160px] flex-col items-center justify-center gap-2 rounded-md bg-destructive/5 px-3 text-center text-destructive/75">
         <XCircle className="size-5" />
-        <span className="line-clamp-2 text-[11px]">图片加载失败：{attachment.filename}</span>
+        <span className="line-clamp-2 text-[11px]">{t('agent.attachment.loadFailed', { filename: attachment.filename })}</span>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={retry}
-            className="rounded-md bg-background/70 px-2 py-1 text-[10px] text-foreground/70 hover:text-foreground"
-          >
-            重试
+          <button type="button" onClick={retry} className="rounded-md bg-background/70 px-2 py-1 text-[10px] text-foreground/70 hover:text-foreground">
+            {t('common.retry')}
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="rounded-md bg-background/70 px-2 py-1 text-[10px] text-foreground/70 hover:text-foreground"
-          >
-            另存为
+          <button type="button" onClick={handleSave} className="rounded-md bg-background/70 px-2 py-1 text-[10px] text-foreground/70 hover:text-foreground">
+            {t('agent.attachment.saveAs')}
           </button>
         </div>
       </div>
@@ -582,8 +577,8 @@ function ToolResultImage({ attachment }: { attachment: { localPath: string; file
         type="button"
         onClick={handleSave}
         className="absolute bottom-1.5 right-1.5 p-1 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-black/70"
-        aria-label="保存图片"
-        title="保存图片"
+        aria-label={t('agent.attachment.saveImage')}
+        title={t('agent.attachment.saveImage')}
       >
         <Download className="size-3.5" />
       </button>
@@ -594,6 +589,7 @@ function ToolResultImage({ attachment }: { attachment: { localPath: string; file
 // ===== 详情面板 =====
 
 function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClose: () => void }): React.ReactElement {
+  const { t } = useTranslation()
   const [copied, setCopied] = React.useState(false)
   const renderedResult = activity.result ?? activity.partialResult
   const visibleResult = React.useMemo(
@@ -605,19 +601,15 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
 
   const handleCopy = (): void => {
     const parts: string[] = [`[${activity.toolName}]`]
-    if (hasInput) {
-      parts.push('输入:\n' + formattedInput)
-    }
-    if (renderedResult) {
-      parts.push('结果:\n' + renderedResult)
-    }
+    if (hasInput) parts.push(`${t('agent.tool.input')}:\n${formattedInput}`)
+    if (renderedResult) parts.push(`${t('agent.tool.result')}:\n${renderedResult}`)
     void copyPlainText(parts.join('\n\n')).then(() => {
       setCopied(true)
-      toast.success('工具完整内容已复制')
+      toast.success(t('agent.tool.copiedToast'))
       window.setTimeout(() => setCopied(false), 1500)
     }).catch((error) => {
       console.error('[ToolActivityDetails] 复制失败:', error)
-      toast.error('复制工具完整内容失败，请重试')
+      toast.error(t('agent.tool.copyFailedToast'))
     })
   }
 
@@ -629,7 +621,7 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
             {activity.toolName}
           </div>
           <div className="mt-0.5 text-[11px] text-foreground/44">
-            {activity.isError ? '执行结果异常' : '工具详情'}
+            {activity.isError ? t('agent.tool.resultError') : t('agent.tool.details')}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -638,14 +630,14 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
             onClick={handleCopy}
             className="rounded-md px-2 py-1 text-[11px] text-foreground/42 transition-colors hover:bg-background/50 hover:text-foreground"
           >
-            {copied ? '已复制' : '复制完整内容'}
+            {copied ? t('common.copied') : t('agent.tool.copyFull')}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="rounded-md px-2 py-1 text-[11px] text-foreground/42 transition-colors hover:bg-background/50 hover:text-foreground"
           >
-            关闭
+            {t('common.close')}
           </button>
         </div>
       </div>
@@ -653,7 +645,7 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
       <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto">
         {hasInput && (
           <div className="space-y-1">
-            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-foreground/34">输入</div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-foreground/34">{t('agent.tool.input')}</div>
             <pre className="rounded-md bg-background/30 p-2 text-[11px] leading-5 text-foreground/66 overflow-x-auto max-h-[150px] overflow-y-auto whitespace-pre-wrap break-all">
               {formattedInput}
             </pre>
@@ -662,8 +654,8 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
         {renderedResult && (
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-foreground/34">结果</div>
-              {activity.isError && <span className="text-[10px] font-medium text-destructive/70">错误</span>}
+              <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-foreground/34">{t('agent.tool.result')}</div>
+              {activity.isError && <span className="text-[10px] font-medium text-destructive/70">{t('common.error')}</span>}
             </div>
             <pre
               className={cn(
@@ -675,14 +667,14 @@ function ActivityDetails({ activity, onClose }: { activity: ToolActivity; onClos
             </pre>
             {visibleResult?.truncated && (
               <div className="text-[10px] text-muted-foreground/65">
-                界面仅显示性能受限预览，可复制完整内容
+                {t('agent.tool.previewLimited')}
               </div>
             )}
           </div>
         )}
         {activity.imageAttachments && activity.imageAttachments.length > 0 && (
           <div className="space-y-1">
-            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-foreground/34">生成图片</div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-foreground/34">{t('agent.tool.generatedImages')}</div>
             <div className="flex flex-wrap gap-2">
               {activity.imageAttachments.map((img, i) => (
                 <ToolResultImage key={i} attachment={img} />
@@ -722,6 +714,7 @@ interface ToolActivityListProps {
 }
 
 export function ToolActivityList({ activities, animate = false }: ToolActivityListProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const [detailsId, setDetailsId] = React.useState<string | null>(null)
   const [expanded, setExpanded] = React.useState(false)
   const listRef = React.useRef<HTMLDivElement>(null)
@@ -856,7 +849,7 @@ export function ToolActivityList({ activities, animate = false }: ToolActivityLi
           onClick={() => setExpanded(!expanded)}
           className="mt-1 text-[11px] text-muted-foreground/60 hover:text-foreground/80 transition-colors"
         >
-          {expanded ? '收起工具活动' : `展开全部 ${visibleRows} 项工具活动`}
+          {expanded ? t('agent.tool.collapseActivities') : t('agent.tool.expandActivities', { count: visibleRows })}
         </button>
       )}
     </div>

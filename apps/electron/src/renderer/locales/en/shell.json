@@ -1,0 +1,36 @@
+{
+  "shell": {
+    "resizeSidebar": "Resize sidebar",
+    "agentToolsUpdated": "Agent tools updated",
+    "quickTask": {
+      "title": "Quick Task",
+      "placeholder": "Describe the task to run…",
+      "clickToRemove": "Click to remove",
+      "selectProject": "Select project",
+      "browseProject": "Choose another project",
+      "tempProject": "Temporary project",
+      "run": "Run",
+      "running": "Submitting"
+    },
+    "conversation": {
+      "emptyTitle": "No messages yet",
+      "emptyDescription": "Start the session from the input below"
+    },
+    "message": {
+      "thinking": "Thinking...",
+      "stopped": "Generation stopped",
+      "loadingImage": "Loading {{filename}}",
+      "imageLoadFailed": "Failed to load image: {{filename}}",
+      "saveImage": "Save image"
+    },
+    "minimap": {
+      "outline": "Session outline",
+      "openOutline": "Open session outline",
+      "emptyMessage": "(empty message)"
+    },
+    "richLink": {
+      "localFile": "Local file"
+    },
+    "mermaidLoading": "Loading Mermaid diagram…"
+  }
+}

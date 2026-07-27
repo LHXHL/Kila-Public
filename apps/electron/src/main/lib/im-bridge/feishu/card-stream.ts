@@ -12,6 +12,9 @@
  */
 
 import type * as lark from '@larksuiteoapi/node-sdk'
+import { createLogger } from '../../logger'
+
+const log = createLogger('IM Bridge')
 
 const THROTTLE_MS = 400
 const MAX_UPDATE_RETRIES = 2
@@ -144,7 +147,7 @@ export class CardStream {
       } catch (err) {
         attempt++
         if (attempt > MAX_UPDATE_RETRIES) {
-          console.error('[飞书] cardkit.card.update 失败（已达最大重试）', {
+          log.error('[IM Bridge][Feishu] cardkit.card.update 失败（已达最大重试）', {
             cardId: this.cardId,
             sequence,
             err: err instanceof Error ? err.message : String(err),

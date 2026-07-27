@@ -1,15 +1,13 @@
 {
   "name": "@kila/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "Apache-2.0",
-  "description": "kila core types,storage and core logic with agents",
+  "description": "Kila 共享 core：Provider 非流式适配器（标题/视觉）与 Shiki 代码高亮服务",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./types": "./src/types/index.ts",
-    "./utils": "./src/utils/index.ts",
     "./providers": "./src/providers/index.ts",
     "./highlight": "./src/highlight/index.ts"
   },
@@ -17,14 +15,10 @@
     "@kila/shared": "workspace:*",
     "shiki": "^3.22.0"
   },
-  "peerDependencies": {
-    "@modelcontextprotocol/sdk": ">=1.0.0"
-  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/uuid": "^11.0.0"
+    "typescript": "^5.0.0"
   }
 }

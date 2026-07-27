@@ -5,10 +5,11 @@
  * 配置文件存储在 ~/.kila/proxy-settings.json。
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import type { ProxyConfig } from '@kila/shared'
 import { getProxySettingsPath } from './config-paths'
 import { detectSystemProxy } from './system-proxy-detector'
+import { readJsonWithBackup, writeTextAtomicWithBackup } from './safe-json-file'
 
 /**
  * 默认代理配置
@@ -21,6 +22,25 @@ const DEFAULT_PROXY_CONFIG: ProxyConfig = {
   enabled: false,
   mode: 'system',
   manualUrl: '',
+}
+
+/**
+ * 归一化磁盘上的代理配置。
+ *
+ * 结构不合法时直接抛错，交给 readJsonWithBackup 回退 .bak；
+ * 否则 JSON.parse 出的 null / 数组会被当成合法配置继续往下传。
+ */
+function normalizeProxyConfig(value: unknown): ProxyConfig {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('代理配置不是合法的 JSON 对象')
+  }
+
+  const data = value as Partial<ProxyConfig>
+  return {
+    enabled: data.enabled ?? DEFAULT_PROXY_CONFIG.enabled,
+    mode: data.mode === 'manual' ? 'manual' : 'system',
+    manualUrl: typeof data.manualUrl === 'string' ? data.manualUrl : '',
+  }
 }
 
 /**
@@ -37,10 +57,10 @@ export async function getProxySettings(): Promise<ProxyConfig> {
   }
 
   try {
-    const raw = readFileSync(configPath, 'utf-8')
-    return JSON.parse(raw) as ProxyConfig
+    return readJsonWithBackup(configPath, (raw) => normalizeProxyConfig(JSON.parse(raw)))
   } catch (error) {
-    log.error('[代理配置] 读取配置失败:', error)
+    // 代理配置是整体覆盖写，不存在「用兜底值抹掉历史」的风险，因此只降级不锁写。
+    log.error('[代理配置] 读取配置失败，本次回退默认配置:', error)
     return DEFAULT_PROXY_CONFIG
   }
 }
@@ -54,7 +74,8 @@ export async function saveProxySettings(config: ProxyConfig): Promise<void> {
   const configPath = getProxySettingsPath()
 
   try {
-    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+    // 原子写 + 备份：写入中断不会留下半截 JSON，导致下次启动读不出代理配置
+    writeTextAtomicWithBackup(configPath, JSON.stringify(config, null, 2))
     log.info(`[代理配置] 配置已保存: enabled=${config.enabled}, mode=${config.mode}`)
   } catch (error) {
     log.error('[代理配置] 保存配置失败:', error)

@@ -1,9 +1,11 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { FileDialogResult } from '@kila/shared'
 import { Paperclip, FolderOpen, Play, X, Zap } from 'lucide-react'
 import { collectRecentProjects, type QuickTaskProjectOption } from './quick-task-utils'
 
 export function QuickTaskApp(): React.ReactElement {
+  const { t } = useTranslation()
   const inputRef = React.useRef<HTMLTextAreaElement>(null)
   const [prompt, setPrompt] = React.useState('')
   const [projects, setProjects] = React.useState<QuickTaskProjectOption[]>([])
@@ -66,12 +68,12 @@ export function QuickTaskApp(): React.ReactElement {
             <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <Zap className="size-4" />
             </span>
-            快速任务
+            {t('shell.quickTask.title')}
             <span className="text-xs font-normal text-muted-foreground">⌘⇧Space</span>
           </div>
           <button
             type="button"
-            aria-label="关闭"
+            aria-label={t('common.close')}
             className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground [-webkit-app-region:no-drag]"
             onClick={() => void window.electronAPI.hideQuickTask()}
           >
@@ -93,7 +95,7 @@ export function QuickTaskApp(): React.ReactElement {
                 void submit()
               }
             }}
-            placeholder="描述要完成的任务…"
+            placeholder={t('shell.quickTask.placeholder')}
             className="min-h-0 flex-1 resize-none bg-transparent px-1 py-3 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/70"
           />
 
@@ -105,7 +107,7 @@ export function QuickTaskApp(): React.ReactElement {
                   type="button"
                   onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                   className="max-w-48 truncate rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-                  title="点击移除"
+                  title={t('shell.quickTask.clickToRemove')}
                 >
                   {file.filename} ×
                 </button>
@@ -120,15 +122,15 @@ export function QuickTaskApp(): React.ReactElement {
               value={projectPath}
               onChange={(event) => setProjectPath(event.target.value)}
               className="h-9 min-w-0 max-w-56 rounded-lg bg-muted px-2.5 text-xs outline-none"
-              title="选择项目"
+              title={t('shell.quickTask.selectProject')}
             >
-              <option value="">临时项目</option>
+              <option value="">{t('shell.quickTask.tempProject')}</option>
               {projects.map((project) => <option key={project.path} value={project.path}>{project.name}</option>)}
             </select>
-            <button type="button" onClick={() => void chooseProject()} className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground" title="选择其他项目">
+            <button type="button" onClick={() => void chooseProject()} className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground" title={t('shell.quickTask.browseProject')}>
               <FolderOpen className="size-4" />
             </button>
-            <button type="button" onClick={() => void chooseFiles()} className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground" title="添加附件">
+            <button type="button" onClick={() => void chooseFiles()} className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground" title={t('composer.attachFile')}>
               <Paperclip className="size-4" />
             </button>
             <div className="flex-1" />
@@ -139,7 +141,7 @@ export function QuickTaskApp(): React.ReactElement {
               className="flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
             >
               <Play className="size-3.5 fill-current" />
-              {submitting ? '提交中' : '执行'}
+              {submitting ? t('shell.quickTask.running') : t('shell.quickTask.run')}
             </button>
           </footer>
         </div>

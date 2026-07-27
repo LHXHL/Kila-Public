@@ -1,4 +1,5 @@
 import type { ScheduledTask, ScheduledTaskHealthState } from '@kila/shared'
+import type { TFunction } from 'i18next'
 
 export function getScheduledTaskHealthTone(
   state: ScheduledTaskHealthState | undefined,
@@ -19,36 +20,38 @@ export function getScheduledTaskHealthTone(
   }
 }
 
-export function getScheduledTaskHealthLabel(task: ScheduledTask): string {
+export function getScheduledTaskHealthLabel(t: TFunction, task: ScheduledTask): string {
   switch (task.health?.state) {
     case 'healthy':
-      return task.lastSuccessfulAt ? '当前已完成' : '状态健康'
+      return task.lastSuccessfulAt
+        ? t('settingsTasks.health.completed')
+        : t('settingsTasks.health.healthy')
     case 'due_soon':
-      return '即将到期'
+      return t('settingsTasks.health.dueSoon')
     case 'late':
-      return '执行窗口中'
+      return t('settingsTasks.health.late')
     case 'missed':
-      return '已错过'
+      return t('settingsTasks.health.missed')
     case 'failing':
-      return '最近失败'
+      return t('settingsTasks.health.failing')
     case 'paused':
-      return '已暂停'
+      return t('settingsTasks.health.paused')
     default:
-      if (task.lastError?.trim()) return '最近失败'
-      if (task.executionCount > 0) return '最近完成'
-      return '尚未执行'
+      if (task.lastError?.trim()) return t('settingsTasks.health.failing')
+      if (task.executionCount > 0) return t('settingsTasks.health.recentlyCompleted')
+      return t('settingsTasks.health.neverRun')
   }
 }
 
-export function getScheduledTaskHealthReason(task: ScheduledTask): string {
+export function getScheduledTaskHealthReason(t: TFunction, task: ScheduledTask): string {
   if (task.health?.reason?.trim()) {
     return task.health.reason
   }
   if (task.lastError?.trim()) {
-    return '最近一次执行失败'
+    return t('settingsTasks.health.reasonLastFailed')
   }
   if (task.lastSuccessfulAt) {
-    return '最近一次执行成功'
+    return t('settingsTasks.health.reasonLastSucceeded')
   }
-  return '等待首次执行'
+  return t('settingsTasks.health.reasonWaitingFirstRun')
 }

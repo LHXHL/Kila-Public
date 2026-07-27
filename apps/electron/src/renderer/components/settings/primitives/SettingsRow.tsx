@@ -5,7 +5,7 @@
  * 通常用于 SettingsCard 内部。
  */
 
-import * as React from 'react'
+import type * as React from 'react'
 import { cn } from '@/lib/utils'
 import { LABEL_CLASS, DESCRIPTION_CLASS, ROW_CLASS } from './SettingsUIConstants'
 

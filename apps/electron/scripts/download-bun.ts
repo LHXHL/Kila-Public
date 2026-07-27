@@ -33,6 +33,37 @@ const PLATFORM_ARCH_MAP: Record<PlatformArch, string> = {
   'win32-x64': 'windows-x64',
 }
 
+/**
+ * 各版本各平台的 Bun 发行包 SHA256 锁定表
+ *
+ * 来源：`https://github.com/oven-sh/bun/releases/download/bun-v{version}/SHASUMS256.txt`
+ *
+ * 升级 Bun（改 package.json 的 kila.bun.version）时必须同步在这里登记新版本的哈希，
+ * 否则脚本会直接失败。这是刻意的：vendor/bun 随安装包分发给全部用户，
+ * 缺少完整性锁定意味着上游被投毒或构建机被中间人时无法察觉。
+ */
+const BUN_SHA256: Record<string, Partial<Record<PlatformArch, string>>> = {
+  '1.2.5': {
+    'darwin-arm64': '55e6520a172e22a37d4822f23afde90b26f36880ce3eaad348699418dbf788bb',
+    'darwin-x64': '969f03626233168f3cdc17e9af9e7c9de32200073831fc53ab9416035de7ea61',
+    'linux-arm64': 'ee1b5cabb5fdbb25640787e329846ef41384ca8699db504f45bfee015f348b58',
+    'linux-x64': '88f64bedee330ff4d6328e3e90c669bc7ac5314927c604f85e329ea2a1d1979b',
+    'win32-x64': '1c3c7da053f1ba9ecd914e0178165a510a82111f7e85c4543d5904d7c2f48a13',
+  },
+}
+
+/** 取指定版本+平台的期望哈希；未登记时抛出带升级指引的错误 */
+function getExpectedChecksum(version: string, platformArch: PlatformArch): string {
+  const expected = BUN_SHA256[version]?.[platformArch]
+  if (expected) return expected
+
+  throw new Error(
+    `未登记 Bun ${version} / ${platformArch} 的 SHA256，拒绝下载。\n`
+    + `  请执行以下命令取回官方校验和，并写入 download-bun.ts 的 BUN_SHA256 表：\n`
+    + `    curl -sfL https://github.com/oven-sh/bun/releases/download/bun-v${version}/SHASUMS256.txt`,
+  )
+}
+
 /** 支持的目标平台列表 */
 const TARGET_PLATFORMS: PlatformArch[] = [
   'darwin-arm64',
@@ -198,6 +229,8 @@ async function downloadBunForPlatform(
   console.log(`\n[${platformArch}] 开始处理...`)
 
   const info = getBunDownloadInfo(version, platformArch)
+  // 先取期望哈希：版本未登记时立即失败，不做无意义的下载
+  const expectedChecksum = getExpectedChecksum(version, platformArch)
   const targetDir = join(VENDOR_DIR, platformArch)
   const binaryPath = join(targetDir, info.binaryName)
 
@@ -224,9 +257,18 @@ async function downloadBunForPlatform(
     // 下载 zip 文件
     await downloadFile(info.url, zipPath)
 
-    // 计算并显示校验和
+    // 校验完整性：不匹配立即删除半成品并中止，绝不解压来路不明的二进制
     const checksum = await calculateChecksum(zipPath)
-    console.log(`  SHA256: ${checksum}`)
+    if (checksum !== expectedChecksum) {
+      rmSync(zipPath, { force: true })
+      throw new Error(
+        `SHA256 校验失败，已删除下载文件:\n`
+        + `    期望 ${expectedChecksum}\n`
+        + `    实际 ${checksum}\n`
+        + `  若为官方升级请更新 BUN_SHA256 表；否则说明下载链路不可信，请勿继续构建。`,
+      )
+    }
+    console.log(`  SHA256 校验通过: ${checksum}`)
 
     // 解压
     if (existsSync(targetDir)) {
@@ -234,11 +276,12 @@ async function downloadBunForPlatform(
     }
     await extractZip(zipPath, targetDir, info.binaryName)
 
-    // 验证（CI 环境下放宽：windows-2025-vs2026 等新镜像执行未签名 exe 受限，但 SHA256 已校验完整性）
+    // 验证（CI 环境下放宽：windows-2025-vs2026 等新镜像执行未签名 exe 受限，
+    // 但压缩包已通过上面的 SHA256 校验，完整性有保证）
     const installedVersion = await validateBunBinary(binaryPath)
     if (!installedVersion) {
       if (process.env.CI === 'true') {
-        console.log(`  ⚠️ 跳过本地执行验证（CI 环境），文件已通过 SHA256 校验`)
+        console.log(`  ⚠️ 跳过本地执行验证（CI 环境），压缩包已通过 SHA256 校验`)
       } else {
         throw new Error('安装后验证失败：无法执行 bun --version')
       }

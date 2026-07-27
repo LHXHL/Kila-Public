@@ -4,7 +4,7 @@ import type { AgentEvent, BridgeBinding, SessionMeta } from '@kila/shared'
 import { appendSessionMessage } from '../../session-manager'
 import { broadcastSessionChannel } from '../../cli-bridge/broadcaster'
 import { imBridgeConfigManager } from '../config-manager'
-import { FeishuMultiAdapter } from '../adapters'
+import type { FeishuMultiAdapter } from '../adapters'
 import { createInitialState, finalizeIfRunning, markError, reduce as reduceRunState } from './card-run-state'
 import type { RunState } from './card-run-state'
 
@@ -35,16 +35,15 @@ export class FeishuSessionMirrorService {
 
   constructor(private readonly adapter: FeishuMultiAdapter) {}
 
-  private findMirrorUserOpenId(botId: string): string | null {
-    const bindings = imBridgeConfigManager.listBindings()
-    const candidates = bindings.filter((binding) => (
-      binding.channelType === 'feishu' &&
-      binding.botId === botId &&
-      binding.userId &&
-      binding.userId !== 'unknown'
-    ))
-    candidates.sort((a, b) => b.updatedAt - a.updatedAt)
-    return candidates[0]?.userId ?? null
+  /**
+   * 镜像接收人必须来自显式配置。
+   *
+   * 历史缺陷：按「该 bot 下 updatedAt 最新的绑定」推断接收人，
+   * 陌生人只要比机器主人晚发一条消息，后续所有桌面会话内容都会被镜像给他。
+   */
+  private resolveMirrorTargetOpenId(): string | null {
+    const target = imBridgeConfigManager.getConfig().feishu.sessionMirror?.targetOpenId?.trim()
+    return target || null
   }
 
   private saveMirrorBinding(input: {
@@ -66,6 +65,8 @@ export class FeishuSessionMirrorService {
       projectPath: input.session.project.path,
       peerType: 'group',
       displayName: buildSessionMirrorGroupName(input.session),
+      // 镜像群只出不进：入站消息会在 inbound-guard 被拒绝
+      outboundOnly: true,
       createdAt: bindings.find((item) => item.endpointKey === endpointKey)?.createdAt ?? now,
       updatedAt: now,
     }
@@ -93,12 +94,12 @@ export class FeishuSessionMirrorService {
     const bot = config.bots?.find((item) => item.id === config.sessionMirror?.botId)
     if (!bot?.enabled || !bot.appId) return null
 
-    const userOpenId = this.findMirrorUserOpenId(bot.id)
+    const userOpenId = this.resolveMirrorTargetOpenId()
     if (!userOpenId) {
       appendSessionMessage(session.id, {
         id: randomUUID(),
         role: 'status',
-        content: `飞书 Session 镜像未启动：请先在飞书中向「${bot.name}」发送一条消息完成绑定。`,
+        content: `飞书 Session 镜像未启动：请先在「设置 - 飞书 - 同步到飞书」里显式填写接收人 open_id（不再自动推断最近发消息的人）。`,
         createdAt: Date.now(),
         messageSource: 'im-bridge',
         messageSourceLabel: 'Feishu',

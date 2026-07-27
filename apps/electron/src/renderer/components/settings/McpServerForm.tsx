@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -30,13 +31,6 @@ interface McpServerFormProps {
   onSaved: () => void
   onCancel: () => void
 }
-
-/** 传输类型选项 */
-const TRANSPORT_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'stdio', label: 'stdio（命令行）' },
-  { value: 'http', label: 'HTTP（Streamable HTTP）' },
-  { value: 'sse', label: 'SSE（Server-Sent Events）' },
-]
 
 /**
  * 解析多行文本为 key=value / key: value 的 Record
@@ -70,6 +64,7 @@ function serializeKeyValueText(record: Record<string, string> | undefined, separ
 }
 
 export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps): React.ReactElement {
+  const { t } = useTranslation()
   const isEdit = server !== null
   const isBuiltin = server?.entry.isBuiltin === true
 
@@ -89,6 +84,13 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
   // http/sse 字段
   const [url, setUrl] = React.useState(server?.entry.url ?? '')
   const [headersText, setHeadersText] = React.useState(serializeKeyValueText(server?.entry.headers, ':'))
+
+  /** 传输类型选项（label 需随语言切换） */
+  const transportOptions = React.useMemo(() => [
+    { value: 'stdio', label: t('settings.mcpForm.transportStdio') },
+    { value: 'http', label: t('settings.mcpForm.transportHttp') },
+    { value: 'sse', label: t('settings.mcpForm.transportSse') },
+  ], [t])
 
   // UI 状态
   const [saving, setSaving] = React.useState(false)
@@ -175,7 +177,7 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
     } catch (error) {
       setTestResult({
         success: false,
-        message: error instanceof Error ? error.message : '测试失败',
+        message: error instanceof Error ? error.message : t('settings.mcpForm.testFailed'),
       })
     } finally {
       setTesting(false)
@@ -242,45 +244,45 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
           <ArrowLeft size={18} />
         </Button>
         <h3 className="text-lg font-medium text-foreground flex-1">
-          {isEdit ? '编辑 MCP 服务器' : '添加 MCP 服务器'}
+          {isEdit ? t('settings.mcpForm.editTitle') : t('settings.mcpForm.createTitle')}
         </h3>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" type="button" onClick={onCancel}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button size="sm" type="submit" disabled={saving || !canSubmit()}>
             {saving && <Loader2 size={14} className="animate-spin" />}
-            <span>{isEdit ? '保存修改' : '创建服务器'}</span>
+            <span>{isEdit ? t('settings.mcpForm.saveChanges') : t('settings.mcpForm.createServer')}</span>
           </Button>
         </div>
       </div>
 
       {/* 基本信息 */}
-      <SettingsSection title="基本信息">
+      <SettingsSection title={t('settings.mcpForm.basicInfo')}>
         <SettingsCard>
           {/* 内置 MCP 引导提示 */}
           {isBuiltin && (
             <div className="mx-4 mt-3 rounded-md bg-accent px-4 py-3 text-sm text-foreground/80">
-              <div className="font-medium">内置 MCP 服务器</div>
+              <div className="font-medium">{t('settings.mcpForm.builtinTitle')}</div>
               <div className="text-xs mt-1 opacity-90">
-                内置服务器仍然遵循普通 MCP 配置流程；这里只维护 MCP transport / command / headers 等连接信息。
+                {t('settings.mcpForm.builtinHint')}
               </div>
             </div>
           )}
           <SettingsInput
-            label="服务器名称"
+            label={t('settings.mcpForm.serverName')}
             value={name}
             onChange={setName}
-            placeholder="例如: github-mcp"
+            placeholder={t('settings.mcpForm.serverNamePlaceholder')}
             required
             disabled={isEdit}
           />
           <SettingsSelect
-            label="传输类型"
+            label={t('settings.mcpForm.transportType')}
             value={transportType}
             onValueChange={(v) => setTransportType(v as McpTransportType)}
-            options={TRANSPORT_OPTIONS}
-            placeholder="选择传输类型"
+            options={transportOptions}
+            placeholder={t('settings.mcpForm.transportPlaceholder')}
             disabled={isBuiltin}
           />
 
@@ -288,26 +290,26 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
           {transportType === 'stdio' && (
             <>
               <SettingsInput
-                label="命令"
+                label={t('settings.mcpForm.command')}
                 value={command}
                 onChange={setCommand}
-                placeholder="例如: npx"
+                placeholder={t('settings.mcpForm.commandPlaceholder')}
                 required
                 disabled={isBuiltin}
               />
               <SettingsInput
-                label="参数"
+                label={t('settings.mcpForm.args')}
                 value={argsText}
                 onChange={setArgsText}
-                placeholder="逗号分隔，例如: -y, @modelcontextprotocol/server-github"
-                description="多个参数用逗号分隔"
+                placeholder={t('settings.mcpForm.argsPlaceholder')}
+                description={t('settings.mcpForm.argsHint')}
                 disabled={isBuiltin}
               />
               {/* 环境变量多行输入 */}
               <div className="px-4 py-3 space-y-2">
                 <div>
-                  <div className="text-sm font-medium text-foreground">环境变量</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">每行一个，格式: KEY=VALUE</div>
+                  <div className="text-sm font-medium text-foreground">{t('settings.mcpForm.env')}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{t('settings.mcpForm.envHint')}</div>
                 </div>
                 <textarea
                   value={envText}
@@ -318,8 +320,8 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
                 />
               </div>
               <SettingsInput
-                label="启动超时（秒）"
-                description="MCP 服务器启动的最大等待时间，默认 30 秒"
+                label={t('settings.mcpForm.timeout')}
+                description={t('settings.mcpForm.timeoutHint')}
                 value={timeoutStr}
                 onChange={setTimeoutStr}
                 placeholder="30"
@@ -335,14 +337,14 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
                 label="URL"
                 value={url}
                 onChange={setUrl}
-                placeholder="例如: http://localhost:3000/mcp"
+                placeholder={t('settings.mcpForm.urlPlaceholder')}
                 required
               />
               {/* 请求头多行输入 */}
               <div className="px-4 py-3 space-y-2">
                 <div>
-                  <div className="text-sm font-medium text-foreground">请求头</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">每行一个，格式: Key: Value</div>
+                  <div className="text-sm font-medium text-foreground">{t('settings.mcpForm.headers')}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{t('settings.mcpForm.headersHint')}</div>
                 </div>
                 <textarea
                   value={headersText}
@@ -359,9 +361,9 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
           <div className="px-4 py-3 space-y-3 border-t border-border">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-foreground">连接测试</div>
+                <div className="text-sm font-medium text-foreground">{t('settings.mcpForm.connectionTest')}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  必须测试成功后才能启用
+                  {t('settings.mcpForm.connectionTestHint')}
                 </div>
               </div>
               <Button
@@ -372,7 +374,7 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
                 disabled={testing || !canTest()}
               >
                 {testing && <Loader2 size={14} className="animate-spin" />}
-                <span>{testing ? '测试中...' : '测试连接'}</span>
+                <span>{testing ? t('settings.builtinTools.webSearch.testing') : t('settings.builtinTools.webSearch.testConnection')}</span>
               </Button>
             </div>
 
@@ -393,7 +395,7 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
                 )}
                 <div className="flex-1">
                   <div className="font-medium">
-                    {testResult.success ? '测试成功' : '测试失败'}
+                    {testResult.success ? t('settings.mcpForm.testSucceeded') : t('settings.mcpForm.testFailed')}
                   </div>
                   <div className="text-xs mt-0.5 opacity-90">{testResult.message}</div>
                 </div>
@@ -405,7 +407,7 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
               <div className="flex items-start gap-2 rounded-md bg-status-warning-soft px-3 py-2 text-sm text-status-warning-foreground">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <div className="text-xs">
-                  尚未测试连接。请先点击"测试连接"按钮验证配置是否正确。
+                  {t('settings.mcpForm.notTestedWarning')}
                 </div>
               </div>
             )}
@@ -413,11 +415,11 @@ export function McpServerForm({ server, onSaved, onCancel }: McpServerFormProps)
 
           {/* 启用开关 */}
           <SettingsToggle
-            label="启用此服务器"
+            label={t('settings.mcpForm.enableServer')}
             description={
               testResult?.success
-                ? '开启后该 MCP 服务器将在 Agent 会话中加载'
-                : '只有测试成功后才能启用'
+                ? t('settings.mcpForm.enableServerHint')
+                : t('settings.mcpForm.connectionTestHint')
             }
             checked={enabled}
             onCheckedChange={setEnabled}

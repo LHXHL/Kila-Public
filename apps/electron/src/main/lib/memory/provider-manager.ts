@@ -10,7 +10,6 @@ import type {
   MemoryEntry,
   MemoryListInput,
   MemoryMergeDuplicatesInput,
-  MemoryProviderMode,
   MemoryProviderStatus,
   MemorySearchInput,
   MemorySearchResult,
@@ -65,40 +64,6 @@ function mergeMemoryEntries(primary: MemoryEntry, duplicates: MemoryEntry[]): Me
     projectPath: primary.projectPath ?? latest.projectPath,
     content: contentBlocks.join('\n\n---\n\n'),
   }
-}
-
-function patchMarkdownSection(
-  currentContent: string,
-  heading: string,
-  input: Pick<WorkingMemoryPatchInput, 'content' | 'append'>,
-): string {
-  const trimmedHeading = heading.trim()
-  if (!trimmedHeading) throw new Error('working memory patch heading is required')
-  if (!currentContent.trim()) {
-    return `${trimmedHeading}\n${(input.append ?? input.content ?? '').trim()}`.trim()
-  }
-
-  const lines = currentContent.split('\n')
-  const headingLc = trimmedHeading.toLowerCase()
-  const targetLevel = trimmedHeading.match(/^(#{1,6})\s/)?.[1]?.length ?? 2
-  const startIndex = lines.findIndex((line) => line.trim().toLowerCase() === headingLc)
-  if (startIndex < 0) {
-    return `${currentContent.trimEnd()}\n\n${trimmedHeading}\n${(input.append ?? input.content ?? '').trim()}`.trim()
-  }
-
-  let endIndex = lines.length
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    const match = lines[index]!.match(/^(#{1,6})\s/)
-    if (match && match[1]!.length <= targetLevel) {
-      endIndex = index
-      break
-    }
-  }
-  const existingBody = lines.slice(startIndex + 1, endIndex).join('\n').trimEnd()
-  const nextBody = typeof input.append === 'string'
-    ? [existingBody, input.append.trim()].filter(Boolean).join('\n')
-    : (input.content ?? '').trim()
-  return [...lines.slice(0, startIndex), lines[startIndex]!, nextBody, ...lines.slice(endIndex)].join('\n').trim()
 }
 
 /**
@@ -245,13 +210,7 @@ export class MemoryProviderManager {
   async patchWorkingMemory(input: WorkingMemoryPatchInput): Promise<WorkingMemory> {
     if (input.scope === 'project') throw new Error('项目级 working memory 已随本地存储移除')
     const provider = await this.getNowledgeMutationProvider()
-    if (provider.patchWorkingMemory) return provider.patchWorkingMemory(input)
-    const current = await provider.getWorkingMemory(input)
-    return provider.setWorkingMemory({
-      scope: input.scope,
-      projectPath: input.projectPath,
-      content: patchMarkdownSection(current?.content ?? '', input.heading, input),
-    })
+    return provider.patchWorkingMemory(input)
   }
 
   async captureThread(input: MemoryThreadCaptureInput): Promise<void> {
@@ -299,7 +258,7 @@ export class MemoryProviderManager {
     return {
       mode: 'nowledge',
       activeProvider: 'nowledge',
-      // 本地存储已移除：保留字段以兼容既有状态类型，恒为不可用。
+      // 本地存储已移除：这两个字段只为兼容既有状态类型保留，恒为不可用。
       localReady: false,
       memoryDirectory: '',
       nowledgeEnabled: config.nowledgeEnabled,

@@ -7,18 +7,14 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAtom, useAtomValue } from 'jotai'
 import { LeftSidebar } from './LeftSidebar'
 import { MainArea } from '@/components/tabs/MainArea'
-import { AppShellProvider, type AppShellContextType } from '@/contexts/AppShellContext'
 import { sidebarCollapsedAtom, sidebarWidthAtom } from '@/atoms/tab-atoms'
 
-export interface AppShellProps {
-  /** Context 值，用于传递给子组件 */
-  contextValue: AppShellContextType
-}
-
-export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
+export function AppShell(): React.ReactElement {
+  const { t } = useTranslation()
   const [atomSidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom)
   const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom)
   const [isResizingSidebar, setIsResizingSidebar] = React.useState(false)
@@ -81,7 +77,7 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
   }, [setSidebarWidth])
 
   return (
-    <AppShellProvider value={contextValue}>
+    <>
       {/* 可拖动标题栏区域，用于窗口拖动 */}
       <div className="titlebar-drag-region fixed left-0 right-0 top-0 h-[50px] z-[var(--kila-z-titlebar)]" />
 
@@ -93,7 +89,7 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="调整侧边栏宽度"
+            aria-label={t('shell.resizeSidebar')}
             aria-valuemin={248}
             aria-valuemax={420}
             aria-valuenow={Math.round(sidebarWidth)}
@@ -114,6 +110,6 @@ export function AppShell({ contextValue }: AppShellProps): React.ReactElement {
           <MainArea />
         </div>
       </div>
-    </AppShellProvider>
+    </>
   )
 }

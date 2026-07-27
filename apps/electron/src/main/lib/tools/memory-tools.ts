@@ -1,5 +1,6 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core'
 import { Type } from '@sinclair/typebox'
+import type { AnyAgentTool } from '../agent-tool-names'
 import { memoryProviderManager } from '../memory/provider-manager'
 import type {
   MemoryCategory,
@@ -56,24 +57,24 @@ const MEMORY_LIST_SCHEMA = Type.Object({
   offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 2000 })),
 })
 
+// working memory 仅剩全局作用域：项目级实现随本地存储移除，schema 不再暴露 'project'，
+// 否则模型会调用一个必然抛错的参数组合。
+const WORKING_MEMORY_SCOPE_SCHEMA = Type.Optional(
+  Type.Literal('global', { description: 'working memory 仅支持全局作用域' }),
+)
+
 const MEMORY_CONTEXT_SCHEMA = Type.Object({
   action: Type.Union([
     Type.Literal('get'),
     Type.Literal('set'),
     Type.Literal('clear'),
   ]),
-  scope: Type.Optional(Type.Union([
-    Type.Literal('global'),
-    Type.Literal('project'),
-  ])),
+  scope: WORKING_MEMORY_SCOPE_SCHEMA,
   content: Type.Optional(Type.String()),
 })
 
 const MEMORY_CONTEXT_PATCH_SCHEMA = Type.Object({
-  scope: Type.Optional(Type.Union([
-    Type.Literal('global'),
-    Type.Literal('project'),
-  ])),
+  scope: WORKING_MEMORY_SCOPE_SCHEMA,
   section: Type.String({ description: '要 patch 的 markdown heading，例如 ## Notes' }),
   content: Type.Optional(Type.String()),
   append: Type.Optional(Type.String()),
@@ -113,9 +114,8 @@ function formatMemoryEntry(entry: MemoryEntry): string {
   return `${title}${tags}${key}${project}URI: ${entry.uri}\n类别: ${entry.category}\n内容: ${entry.content}`
 }
 
-function resolveScope(scope?: WorkingMemoryScope): WorkingMemoryScope {
-  return scope === 'project' ? 'project' : 'global'
-}
+/** working memory 只剩全局作用域，schema 也只允许 'global' */
+const WORKING_MEMORY_SCOPE: WorkingMemoryScope = 'global'
 
 export function resolveMemoryWriteProjectPath(
   scope: WorkingMemoryScope | undefined,
@@ -124,12 +124,6 @@ export function resolveMemoryWriteProjectPath(
   if (scope !== 'project') return undefined
   if (!projectPath) throw new Error('当前会话未绑定项目，无法写入项目级长期记忆')
   return projectPath
-}
-
-export function resolveMemoryEntryProvider(uri: string): 'local' | 'nowledge' {
-  return uri.startsWith('memory://global/') || uri.startsWith('memory://project/')
-    ? 'local'
-    : 'nowledge'
 }
 
 export interface MemoryToolDeps {
@@ -144,12 +138,12 @@ export function createMemoryTools(
     backendAvailable?: boolean
   },
   deps: MemoryToolDeps = {},
-): AgentTool<any>[] {
+): AnyAgentTool[] {
   const writeMemory = deps.writeMemory ?? memoryProviderManager.write.bind(memoryProviderManager)
   const memoryWriteTool: AgentTool<typeof MEMORY_WRITE_SCHEMA> = {
     name: 'memory_write',
     label: 'Memory Write',
-    description: '立即写入长期记忆。Nowledge 启用时写入 Nowledge；未启用时写入本地 Markdown。用户偏好与跨项目事实写入 global；仅当前项目适用的约束写入 project；未指定时默认 global。',
+    description: '立即写入长期记忆。记忆仅写入 Nowledge；未配置 Nowledge 时该工具不可用。用户偏好与跨项目事实写入 global；仅当前项目适用的约束写入 project；未指定时默认 global。',
     parameters: MEMORY_WRITE_SCHEMA,
     execute: async (_toolCallId, params) => {
       const entry = await writeMemory({
@@ -161,17 +155,14 @@ export function createMemoryTools(
         sourceSessionId: options.sessionId,
         projectPath: resolveMemoryWriteProjectPath(params.scope, options.projectPath),
       })
-      const provider = resolveMemoryEntryProvider(entry.uri)
-      const providerLabel = provider === 'nowledge' ? ' Nowledge ' : '本地 Markdown '
-
       return {
         content: [{
           type: 'text',
-          text: `已写入${providerLabel}长期记忆：${entry.uri}`,
+          text: `已写入 Nowledge 长期记忆：${entry.uri}`,
         }],
         details: {
           persisted: true,
-          provider,
+          provider: 'nowledge',
           uri: entry.uri,
           sessionId: options.sessionId,
           projectPath: entry.projectPath,
@@ -311,16 +302,13 @@ export function createMemoryTools(
   const memoryContextTool: AgentTool<typeof MEMORY_CONTEXT_SCHEMA> = {
     name: 'memory_context',
     label: 'Memory Context',
-    description: '读取或更新 working memory。',
+    description: '读取或更新全局 working memory。',
     parameters: MEMORY_CONTEXT_SCHEMA,
     execute: async (_toolCallId, params) => {
-      const scope = resolveScope(params.scope)
+      const scope = WORKING_MEMORY_SCOPE
 
       if (params.action === 'get') {
-        const state = await memoryProviderManager.getWorkingMemory({
-          scope,
-          projectPath: scope === 'project' ? options.projectPath : undefined,
-        })
+        const state = await memoryProviderManager.getWorkingMemory({ scope })
         return {
           content: [{ type: 'text', text: state?.content?.trim() || '当前 working memory 为空。' }],
           details: { scope, updatedAt: state?.updatedAt ?? null },
@@ -329,7 +317,6 @@ export function createMemoryTools(
 
       const next = await memoryProviderManager.setWorkingMemory({
         scope,
-        projectPath: scope === 'project' ? options.projectPath : undefined,
         content: params.action === 'clear'
           ? '## Focus Areas\n- cleared'
           : (params.content ?? ''),
@@ -342,7 +329,7 @@ export function createMemoryTools(
     },
   }
 
-  const memoryStatusTool: AgentTool<any> = {
+  const memoryStatusTool: AnyAgentTool = {
     name: 'memory_status',
     label: 'Memory Status',
     description: '检查当前记忆后端状态。',
@@ -362,13 +349,12 @@ export function createMemoryTools(
   const memoryContextPatchTool: AgentTool<typeof MEMORY_CONTEXT_PATCH_SCHEMA> = {
     name: 'memory_context_patch',
     label: 'Memory Context Patch',
-    description: '按 section patch working memory，而不是整块覆盖。',
+    description: '按 section patch 全局 working memory，而不是整块覆盖。',
     parameters: MEMORY_CONTEXT_PATCH_SCHEMA,
     execute: async (_toolCallId, params) => {
-      const scope = resolveScope(params.scope)
+      const scope = WORKING_MEMORY_SCOPE
       const next = await memoryProviderManager.patchWorkingMemory({
         scope,
-        projectPath: scope === 'project' ? options.projectPath : undefined,
         heading: params.section,
         content: params.content,
         append: params.append,

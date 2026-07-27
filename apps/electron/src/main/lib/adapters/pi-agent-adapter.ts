@@ -39,6 +39,7 @@ import type {
 } from '@kila/shared'
 import { extractKilaImageAttachments, inferApiTypeFromProvider, resolveModelMetadata, resolveThinkingLevel, detectBackgroundEvents, type ModelCapabilitiesOverride } from '@kila/shared'
 import { convertHistoryToPiMessages } from './pi-history-converter'
+import { deriveCompactionSettings, estimateCjkRatio, getCompactionNoopMessage, mapPiUsageToAgentEventUsage, parseManualCompactCommand, resolveEffectiveContextWindow, toPiCompactionSettings, waitForCompactionToSettle } from '../compaction-settings'
 import { getPiAgentDir, getPiSessionDir } from '../config-paths'
 import { resolveModelCost } from '../model-pricing'
 import {
@@ -282,6 +283,12 @@ export async function buildPiModel(
   // 如果 API 真不支持图片，会在 adapter 层捕获错误并给出清晰提示。
   const includeImage = metadata.abilities.vision === 'supported' || (hasImages ?? false)
 
+  // 窗口未知时必须保守：告诉本地小模型「你有 20 万窗口」会让它跳过压缩直撞 overflow。
+  const contextWindow = resolveEffectiveContextWindow(metadata)
+  if (contextWindow.source === 'fallback') {
+    log.warn(`[Pi Agent] 模型 ${modelId} 上下文窗口未知，按保守默认 ${contextWindow.contextWindowTokens} 处理`)
+  }
+
   return {
     id: modelId,
     name: modelId,
@@ -291,7 +298,7 @@ export async function buildPiModel(
     reasoning: metadata.abilities.reasoning === 'supported',
     input: includeImage ? ['text', 'image'] : ['text'],
     cost,
-    contextWindow: metadata.contextWindowTokens ?? 200000,
+    contextWindow: contextWindow.contextWindowTokens,
     maxTokens: metadata.maxOutputTokens ?? 32768,
   }
 }
@@ -442,9 +449,15 @@ function mapUsage(message: AssistantMessage, contextWindow?: number): AgentEvent
   return usageEvents
 }
 
+export interface PiEventMapOptions {
+  contextWindow?: number
+  /** summarization 重试事件只有 scheduled 带 attempt；用可变游标给空载荷的 start/finished 补序号。 */
+  summarizationRetryCursor?: { attempt: number }
+}
+
 export function mapPiEventToKilaEvents(
   event: PiRuntimeEvent,
-  options?: { contextWindow?: number },
+  options?: PiEventMapOptions,
 ): AgentEvent[] {
   switch (event.type) {
     case 'compaction_start':
@@ -467,6 +480,9 @@ export function mapPiEventToKilaEvents(
         tokensBefore: event.result.tokensBefore,
         details: event.result.details,
         willRetry: event.willRetry,
+        // 摘要那次 LLM 调用的真实用量；不计入会让「压缩越频繁、月度用量偏差越大」。
+        usage: mapPiUsageToAgentEventUsage(event.result.usage, options?.contextWindow),
+        estimatedTokensAfter: event.result.estimatedTokensAfter,
       }]
     }
 
@@ -515,13 +531,34 @@ export function mapPiEventToKilaEvents(
     case 'entry_appended':
     case 'session_info_changed':
     case 'thinking_level_changed':
-    // Pi 0.82 新增：压缩/分支摘要的重试韧性事件 + bash 流式输出增量。
-    // 经审计属 Pi 内部生命周期，产品终态与工具输出已由 compaction_end / tool_execution_* 收敛，显式忽略。
-    case 'summarization_retry_scheduled':
-    case 'summarization_retry_attempt_start':
-    case 'summarization_retry_finished':
+    // Pi 0.82 新增：bash 流式输出增量。工具输出已由 tool_execution_* 收敛，显式忽略。
     case 'bash_execution_update':
       return []
+
+    // Pi 0.82 新增：摘要（压缩 / 分支摘要）调用的重试生命周期。
+    // 压缩期间界面若不给反馈，用户会面对十几秒的静默，所以必须映射出来。
+    case 'summarization_retry_scheduled': {
+      if (options?.summarizationRetryCursor) options.summarizationRetryCursor.attempt = event.attempt
+      return [{
+        type: 'summarization_retry',
+        attempt: event.attempt,
+        delaySeconds: event.delayMs / 1000,
+        phase: 'scheduled',
+      }]
+    }
+
+    case 'summarization_retry_attempt_start':
+      return [{
+        type: 'summarization_retry',
+        attempt: options?.summarizationRetryCursor?.attempt ?? 1,
+        phase: 'start',
+      }]
+
+    case 'summarization_retry_finished': {
+      const attempt = options?.summarizationRetryCursor?.attempt ?? 1
+      if (options?.summarizationRetryCursor) options.summarizationRetryCursor.attempt = 0
+      return [{ type: 'summarization_retry', attempt, phase: 'finished' }]
+    }
 
     case 'message_update':
       switch (event.assistantMessageEvent.type) {
@@ -878,48 +915,6 @@ function hasPiSessionMessages(sessionManager: SessionManager): boolean {
   ))
 }
 
-function parseManualCompactCommand(rawPrompt: string | undefined): string | null {
-  const trimmed = rawPrompt?.trim() ?? ''
-  const match = trimmed.match(/^\/compact(?:\s+([\s\S]+))?$/i)
-  if (!match) return null
-  return match[1]?.trim() ?? ''
-}
-
-/**
- * Pi 把「无需压缩」作为 reject，而非单独结果类型。
- * Kila 将其建模为良性空操作，确保流正常结束且不会伪造 compact_complete。
- */
-function getCompactionNoopMessage(error: unknown): string | null {
-  const raw = typeof error === 'string'
-    ? error
-    : error instanceof Error
-      ? error.message
-      : ''
-  if (/nothing to compact/i.test(raw)) return '当前上下文较小，暂时无需压缩。'
-  if (/already compacted/i.test(raw)) return '当前上下文已经压缩过，无需重复压缩。'
-  return null
-}
-
-async function waitForCompactionToSettle(
-  session: AgentSession,
-  timeoutMs = 120_000,
-  abortSignal?: AbortSignal,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  await new Promise((resolve) => setTimeout(resolve, 25))
-  while (session.isCompacting) {
-    if (abortSignal?.aborted) {
-      session.abortCompaction()
-      return
-    }
-    if (Date.now() >= deadline) {
-      session.abortCompaction()
-      throw new Error(`Pi 上下文压缩在 ${timeoutMs}ms 内未完成，已中止以避免会话永久卡住`)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-}
-
 export class PiAgentAdapter implements AgentProviderAdapter {
   readonly ownsRetry = true
   private runtimes = new Map<string, PiRuntime>()
@@ -949,12 +944,17 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     }
 
     const thinkingLevel = resolvePiThinkingLevel(options.thinkingLevel, options.thinking, options.effort)
+    // 按模型窗口比例推导压缩预算，并按当前提示的语言特征补偿 CJK 低估；
+    // 旧固定值 16384/20000 会让 8K 小窗口预算变负、让中文会话实际保留量超估 4 倍。
+    const derivedCompaction = deriveCompactionSettings({
+      contextWindowTokens: model.contextWindow,
+      cjkRatio: estimateCjkRatio([options.rawPrompt]),
+    })
+    if (!derivedCompaction.enabled) {
+      log.warn(`[Pi Agent] 模型 ${model.id} 上下文窗口过小（${derivedCompaction.contextWindowTokens}），已关闭自动压缩（${derivedCompaction.disabledReason}）`)
+    }
     const settingsManager = sdk.SettingsManager.inMemory({
-      compaction: {
-        enabled: true,
-        reserveTokens: 16384,
-        keepRecentTokens: 20000,
-      },
+      compaction: toPiCompactionSettings(derivedCompaction),
       retry: {
         enabled: true,
         maxRetries: 3,
@@ -1034,7 +1034,7 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     })
     session.agent.toolExecution = 'sequential'
     getAgentStateRef.current = () => session.agent.state
-    session.setAutoCompactionEnabled(true)
+    session.setAutoCompactionEnabled(derivedCompaction.enabled)
 
     return {
       session,

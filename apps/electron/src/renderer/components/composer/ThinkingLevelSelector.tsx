@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Brain } from 'lucide-react'
 import type { ThinkingLevel } from '@kila/shared'
 import { resolveModelMetadata } from '@kila/shared'
@@ -17,7 +18,8 @@ interface LevelOption {
   value: ThinkingLevel
   label: string
   badgeLabel: string
-  description: string
+  /** 档位说明的译文 key，渲染时才解析 */
+  descriptionKey: string
   buttonClassName: string
   badgeClassName: string
 }
@@ -27,7 +29,7 @@ const DEFAULT_OPTIONS: LevelOption[] = [
     value: 'none',
     label: 'none',
     badgeLabel: 'N',
-    description: '关闭额外思考，优先速度',
+    descriptionKey: 'composer.thinkingNoneDesc',
     buttonClassName: 'bg-muted/70 text-muted-foreground hover:bg-accent hover:text-accent-foreground',
     badgeClassName: 'text-muted-foreground/80',
   },
@@ -35,7 +37,7 @@ const DEFAULT_OPTIONS: LevelOption[] = [
     value: 'low',
     label: 'low',
     badgeLabel: 'L',
-    description: '轻量思考，适合快速问答',
+    descriptionKey: 'composer.thinkingLowDesc',
     buttonClassName: 'bg-accent/80 text-muted-foreground hover:bg-accent hover:text-accent-foreground',
     badgeClassName: 'text-muted-foreground/85',
   },
@@ -43,7 +45,7 @@ const DEFAULT_OPTIONS: LevelOption[] = [
     value: 'medium',
     label: 'medium',
     badgeLabel: 'M',
-    description: '均衡速度和推理深度',
+    descriptionKey: 'composer.thinkingMediumDesc',
     buttonClassName: 'bg-brand-soft text-brand-soft-foreground hover:bg-brand-soft-hover',
     badgeClassName: 'text-brand-soft-foreground',
   },
@@ -51,7 +53,7 @@ const DEFAULT_OPTIONS: LevelOption[] = [
     value: 'high',
     label: 'high',
     badgeLabel: 'H',
-    description: '更深入地分析和推理',
+    descriptionKey: 'composer.thinkingHighDesc',
     buttonClassName: 'bg-brand-soft-hover text-brand-soft-foreground hover:bg-[hsl(var(--brand-strong)/0.22)] hover:text-foreground',
     badgeClassName: 'text-brand-soft-foreground',
   },
@@ -59,7 +61,7 @@ const DEFAULT_OPTIONS: LevelOption[] = [
     value: 'xhigh',
     label: 'xhigh',
     badgeLabel: 'X',
-    description: '最高思考强度，优先质量',
+    descriptionKey: 'composer.thinkingXhighDesc',
     buttonClassName: 'bg-[hsl(var(--brand-strong)/0.24)] text-foreground hover:bg-[hsl(var(--brand-strong)/0.32)]',
     badgeClassName: 'text-foreground/90',
   },
@@ -141,6 +143,7 @@ export function ThinkingLevelSelector({
   buttonClassName,
   iconClassName,
 }: ThinkingLevelSelectorProps = {}): React.ReactElement {
+  const { t } = useTranslation()
   const [thinkingLevel, setThinkingLevel] = useSessionThinkingLevelPreference()
   const [sessionModel] = useSessionModelPreferenceOptional()
 
@@ -202,7 +205,7 @@ export function ThinkingLevelSelector({
   const currentOption = options.find((option) => option.value === thinkingLevel)
     ?? options[0]
     ?? DEFAULT_OPTIONS[0]!
-  const tooltipText = `思考强度：${currentOption.label}`
+  const tooltipText = t('composer.thinkingLevelLabel', { level: currentOption.label })
 
   // 模型档位变化后，如果当前选中档位不在选项里，强制回落到 none 或第一项
   React.useEffect(() => {
@@ -265,7 +268,7 @@ export function ThinkingLevelSelector({
                     {option.label}
                   </span>
                   <span className="text-xs leading-5 text-muted-foreground">
-                    {option.description}
+                    {t(option.descriptionKey)}
                   </span>
                 </button>
               )

@@ -15,6 +15,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Clock3, CornerDownLeft, Square, Settings, Paperclip, FolderPlus, X, Sparkles, Eye, EyeOff } from 'lucide-react'
 import { AgentMessages } from './AgentMessages'
@@ -52,6 +53,7 @@ import {
 import { incognitoModeAtom } from '@/atoms/agent-ui-atoms'
 import {
   agentStreamingStatesAtom,
+  agentSessionStreamStateAtomFamily,
   agentContextInputsAtom,
   agentContextStatusAtomFamily,
   agentContextCalibrationSnapshotsAtom,
@@ -61,7 +63,6 @@ import {
   agentPendingFilesMapAtom,
   getSessionPendingFiles,
   setSessionPendingFilesMap,
-  agentStreamErrorsAtom,
   agentSessionDraftsAtom,
   agentPromptSuggestionsAtom,
   agentMessageHydratingAtom,
@@ -72,16 +73,11 @@ import {
   removeQueuedSendMapItem,
   shiftQueuedSendMap,
   type AgentQueuedSend,
-  cachedTeamOverviewsAtom,
-  cachedTeamActivitiesAtom,
-  dismissedTeamSessionIdsAtom,
-  buildTeamActivityEntries,
-  rebuildTeamDataFromMessages,
   agentAttachedDirectoriesMapAtom,
   clearWidgetDraftProposalAtom,
   widgetDraftProposalMapAtom,
 } from '@/atoms/agent-atoms'
-import { tabsAtom, splitLayoutAtom, openTab } from '@/atoms/tab-atoms'
+import { tabsAtom, splitLayoutAtom } from '@/atoms/tab-atoms'
 import { sessionsAtom, currentSessionIdAtom } from '@/atoms/session-atoms'
 import { SessionHeader } from '@/components/session/SessionHeader'
 import {
@@ -116,6 +112,7 @@ interface EditingTurnState {
 
 /** 隐身模式切换按钮 — 紧贴发送按钮左侧 */
 function IncognitoToggle(): React.ReactElement {
+  const { t } = useTranslation()
   const [incognitoMode, setIncognitoMode] = useAtom(incognitoModeAtom)
   return (
     <Tooltip>
@@ -136,13 +133,14 @@ function IncognitoToggle(): React.ReactElement {
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">
-        <p>{incognitoMode ? '隐身模式已开启 — 本条消息不加入记忆' : '点击开启隐身模式'}</p>
+        <p>{incognitoMode ? t('agent.composer.incognitoOn') : t('agent.composer.incognitoOff')}</p>
       </TooltipContent>
     </Tooltip>
   )
 }
 
 export function AgentView({ sessionId }: { sessionId: string }): React.ReactElement {
+  const { t } = useTranslation()
   const [messages, setMessages] = React.useState<AgentMessage[]>([])
   const [messagesLoading, setMessagesLoading] = React.useState(true)
   const [messagesLoadError, setMessagesLoadError] = React.useState<string | null>(null)
@@ -154,8 +152,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const [rewindTargetMessageId, setRewindTargetMessageId] = React.useState<string | null>(null)
   const [channels, setChannels] = React.useState<Channel[]>([])
   const setStreamingStates = useSetAtom(agentStreamingStatesAtom)
-  const streamingStates = useAtomValue(agentStreamingStatesAtom)
-  const streamState = streamingStates.get(sessionId)
+  // 只订阅本会话的流式状态：后台会话流式时本视图不再逐 token 重渲染
+  const streamState = useAtomValue(agentSessionStreamStateAtomFamily(sessionId))
   const streaming = streamState?.running ?? false
   const contextStatus = useAtomValue(agentContextStatusAtomFamily(sessionId))
   const [agentChannelId, setAgentChannelId] = useAtom(agentChannelIdAtom)
@@ -175,7 +173,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const [queuedSendMap, setQueuedSendMap] = useAtom(agentQueuedSendMapAtom)
   const setAgentContextInputs = useSetAtom(agentContextInputsAtom)
   const setContextCalibrations = useSetAtom(agentContextCalibrationSnapshotsAtom)
-  const setAgentStreamErrors = useSetAtom(agentStreamErrorsAtom)
   const store = useStore()
   const suggestionsMap = useAtomValue(agentPromptSuggestionsAtom)
   const suggestion = suggestionsMap.get(sessionId) ?? null
@@ -488,26 +485,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         setTotalMessageCount(result.total)
         setLoadingEarlierMessages(false)
 
-        // 从持久化消息中重建 Team 数据并填充缓存（页面刷新后恢复）
-        const teamData = rebuildTeamDataFromMessages(msgs)
-        if (teamData) {
-          if (teamData.overview) {
-            store.set(cachedTeamOverviewsAtom, (prev) => {
-              const map = new Map(prev)
-              map.set(sessionId, teamData.overview!)
-              return map
-            })
-          }
-          const entries = buildTeamActivityEntries(teamData.toolActivities)
-          if (entries.length > 0) {
-            store.set(cachedTeamActivitiesAtom, (prev) => {
-              const map = new Map(prev)
-              map.set(sessionId, entries)
-              return map
-            })
-          }
-        }
-
         // 消息加载完成后，清除已完成的流式状态（running=false 的过渡气泡）
         // 在同一个微任务中执行，确保 React 在一次渲染中同时显示持久化消息并移除流式气泡
         setStreamingStates((prev) => {
@@ -529,12 +506,17 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         if (!cancelled && requestGeneration === messageLoadGenerationRef.current) {
           setLoadingEarlierMessages(false)
           setMessagesLoading(false)
-          setMessagesLoadError(error instanceof Error ? error.message : '会话消息加载失败')
+          setMessagesLoadError(error instanceof Error ? error.message : t('agent.message.loadFailed'))
           console.error('[AgentView] 加载会话消息失败:', error)
         }
       })
     return () => { cancelled = true }
-  }, [messageLoadRetryVersion, sessionId, refreshVersion, setMessageHydrating, setStreamingStates, store])
+  }, [messageLoadRetryVersion, sessionId, refreshVersion, setMessageHydrating, setStreamingStates, store, t])
+
+  /** 消息加载失败后的重试 — useCallback 保持引用稳定，避免击穿 AgentMessages 的 memo */
+  const handleRetryLoadMessages = React.useCallback((): void => {
+    setMessageLoadRetryVersion((version) => version + 1)
+  }, [])
 
   const handleLoadEarlierMessages = React.useCallback(() => {
     if (loadingEarlierMessages || messageWindowStart <= 0) return
@@ -559,14 +541,14 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       .catch((error) => {
         if (requestGeneration !== messageLoadGenerationRef.current) return
         console.error('[AgentView] 加载更早消息失败:', error)
-        toast.error('加载更早消息失败')
+        toast.error(t('agent.message.loadEarlierFailed'))
       })
       .finally(() => {
         if (requestGeneration === messageLoadGenerationRef.current) {
           setLoadingEarlierMessages(false)
         }
       })
-  }, [loadingEarlierMessages, messageWindowStart, sessionId])
+  }, [loadingEarlierMessages, messageWindowStart, sessionId, t])
 
   // 从会话元数据初始化附加目录
   React.useEffect(() => {
@@ -635,8 +617,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       }
       window.electronAPI.sendSessionMessage(input).catch((error) => {
         console.error('[AgentView] 自动发送配置消息失败:', error)
-        toast.error('自动发送配置消息失败', {
-          description: error instanceof Error ? error.message : '消息已恢复到输入框，请重试',
+        toast.error(t('agent.composer.autoSendFailed'), {
+          description: error instanceof Error ? error.message : t('agent.composer.draftRestored'),
         })
         setMessages((prev) => prev.filter((message) => message.id !== tempUserMsg.id))
         const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
@@ -650,7 +632,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     }, 150)
 
     return () => clearTimeout(timer)
-  }, [pendingPrompt, sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, historyTurns, sessionMeta?.updatedAt, thinkingLevel, streaming, setInputContent, setMessages, setPendingPrompt, setStreamingStates, store])
+  }, [pendingPrompt, sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, historyTurns, sessionMeta?.updatedAt, thinkingLevel, streaming, setInputContent, setMessages, setPendingPrompt, setStreamingStates, store, t])
 
   /** ModelSelector 选择回调 */
   const handleModelSelect = React.useCallback((option: ModelOption): void => {
@@ -721,7 +703,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       }
     } catch (error) {
       console.error('[AgentView] 加载待编辑附件失败:', error)
-      toast.error('读取原消息附件失败')
+      toast.error(t('agent.composer.readAttachmentsFailed'))
       return
     }
 
@@ -735,7 +717,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     requestAnimationFrame(() => {
       inputRef.current?.focus()
     })
-  }, [capturePendingComposerSnapshot, inputContent, setInputContent, setPendingComposerFiles])
+  }, [capturePendingComposerSnapshot, inputContent, setInputContent, setPendingComposerFiles, t])
 
   const handleCancelEditTurn = React.useCallback((): void => {
     if (!editingTurn) return
@@ -785,13 +767,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       clearComposerDraft?: boolean
     },
   ): Promise<void> => {
-    setAgentStreamErrors((prev) => {
-      if (!prev.has(sessionId)) return prev
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-
     setPromptSuggestions((prev) => {
       if (!prev.has(sessionId)) return prev
       const map = new Map(prev)
@@ -813,13 +788,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         }]
       })
     }
-
-    store.set(dismissedTeamSessionIdsAtom, (prev: Set<string>) => {
-      if (!prev.has(sessionId)) return prev
-      const next = new Set(prev)
-      next.delete(sessionId)
-      return next
-    })
 
     if (!streaming) {
       setStreamingStates((prev) => {
@@ -851,7 +819,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
 
     return window.electronAPI.sendSessionMessage(input).catch((error) => {
       console.error('[AgentView] 发送消息失败:', error)
-      toast.error(error instanceof Error ? error.message : '发送消息失败')
+      toast.error(error instanceof Error ? error.message : t('agent.sendFailed'))
       setMessages((prev) => prev.filter((message) => message.id !== tempUserMsg.id))
       if (options?.clearComposerDraft) {
         const currentDraft = store.get(agentSessionDraftsAtom).get(sessionId) ?? ''
@@ -870,12 +838,12 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   }, [
     currentSelection.modelId,
     sessionId,
-    setAgentStreamErrors,
     setInputContent,
     setPromptSuggestions,
     setStreamingStates,
     store,
     streaming,
+    t,
   ])
 
   const enqueueSessionSend = React.useCallback((input: SessionSendInput): void => {
@@ -893,8 +861,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       map.delete(sessionId)
       return map
     })
-    toast.info('已加入等待区')
-  }, [sessionId, setPromptSuggestions, setQueuedSendMap])
+    toast.info(t('agent.composer.queued'))
+  }, [sessionId, setPromptSuggestions, setQueuedSendMap, t])
 
   const dispatchPreparedMessage = React.useCallback(async (
     finalMessage: string,
@@ -994,13 +962,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     const plan = buildSessionTurnReplayPlan(messages, messageId)
     if (!plan) return false
 
-    setAgentStreamErrors((prev) => {
-      if (!prev.has(sessionId)) return prev
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-
     setPromptSuggestions((prev) => {
       if (!prev.has(sessionId)) return prev
       const map = new Map(prev)
@@ -1038,8 +999,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     })
       .catch(async (error) => {
         console.error('[AgentView] 编辑重发失败:', error)
-        toast.error('编辑重发失败', {
-          description: '请稍后再试，或检查当前渠道和模型是否可用',
+        toast.error(t('agent.composer.editResendFailed'), {
+          description: t('agent.retryLater'),
         })
         setStreamingStates((prev) => {
           const map = new Map(prev)
@@ -1074,10 +1035,10 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     currentSelection.modelId,
     messages,
     sessionId,
-    setAgentStreamErrors,
     setPromptSuggestions,
     setStreamingStates,
     streaming,
+    t,
   ])
 
   /** 发送消息 */
@@ -1103,8 +1064,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     if (pendingFiles.length > 0) {
       const preparation = preparePendingFilePayloads(pendingFiles, window.__pendingAgentFileData)
       if (preparation.missingFileNames.length > 0) {
-        toast.error('附件数据不可用', {
-          description: `请重新添加：${preparation.missingFileNames.join('、')}`,
+        toast.error(t('agent.attachment.dataUnavailable'), {
+          description: t('agent.attachment.readdFiles', { files: preparation.missingFileNames.join('、') }),
         })
         return
       }
@@ -1114,7 +1075,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           files: preparation.files,
         })
         if (saved.length !== pendingFiles.length) {
-          throw new Error(`预期保存 ${pendingFiles.length} 个附件，实际保存 ${saved.length} 个`)
+          throw new Error(t('agent.attachment.saveCountMismatch', { expected: pendingFiles.length, actual: saved.length }))
         }
         savedAttachments = saved.map((file, index) => {
           const mediaType = pendingFiles[index]?.mediaType ?? 'application/octet-stream'
@@ -1132,8 +1093,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         })
       } catch (error) {
         console.error('[AgentView] 保存附件到项目目录失败:', error)
-        toast.error('附件保存失败', {
-          description: error instanceof Error ? error.message : '附件仍保留在输入区，请重试',
+        toast.error(t('agent.attachment.saveFailed'), {
+          description: error instanceof Error ? error.message : t('agent.attachment.keptInComposer'),
         })
         return
       }
@@ -1200,7 +1161,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       }
       clearWidgetDraftProposal(sessionId)
     }
-  }, [clearWidgetDraftProposal, currentSelection.channelId, dispatchEditedTurn, dispatchPreparedMessage, editingTurn, pendingFiles, sessionId, setInputContent, setPendingFiles, store, streaming, suggestion])
+  }, [clearWidgetDraftProposal, currentSelection.channelId, dispatchEditedTurn, dispatchPreparedMessage, editingTurn, pendingFiles, sessionId, setInputContent, setPendingFiles, store, streaming, suggestion, t])
 
   /** 停止生成 */
   const handleStop = React.useCallback((): void => {
@@ -1278,13 +1239,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     const plan = buildSessionTurnReplayPlan(messages, messageId)
     if (!plan) return
 
-    setAgentStreamErrors((prev) => {
-      if (!prev.has(sessionId)) return prev
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-
     const optimisticReplayUser = createOptimisticReplayUserMessage(plan.replayUserMessage)
     setMessages([...plan.prefixBeforeTurn, optimisticReplayUser])
     setStreamingStates((prev) => {
@@ -1305,8 +1259,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       messageId,
     }).catch((error) => {
       console.error('[AgentView] 原地重生失败:', error)
-      toast.error('重新生成失败', {
-        description: '请稍后再试，或检查当前渠道和模型是否可用',
+      toast.error(t('agent.regenerateFailed'), {
+        description: t('agent.retryLater'),
       })
       setStreamingStates((prev) => {
         const map = new Map(prev)
@@ -1322,7 +1276,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         })
         .catch(console.error)
     })
-  }, [messages, sessionId, currentSelection.channelId, currentSelection.modelId, streaming, setAgentStreamErrors, setStreamingStates])
+  }, [messages, sessionId, currentSelection.channelId, currentSelection.modelId, streaming, setStreamingStates, t])
 
   /** 重试：复用最近失败 turn 的 replay 路径，避免不断追加重复 user turn */
   const handleRetry = React.useCallback((): void => {
@@ -1405,7 +1359,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           onLoadEarlierMessages={handleLoadEarlierMessages}
           initialLoading={messagesLoading}
           loadError={messagesLoadError}
-          onRetryLoad={() => setMessageLoadRetryVersion((version) => version + 1)}
+          onRetryLoad={handleRetryLoadMessages}
         />
 
         {/* 拖拽文件夹结果 */}
@@ -1415,7 +1369,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
             <span className="flex-1">{dragFolderNotice}</span>
             <button
               type="button"
-              aria-label="关闭文件夹附加提示"
+              aria-label={t('agent.composer.dismissFolderNotice')}
               className="shrink-0 rounded p-0.5 transition-colors hover:bg-muted"
               onClick={dismissDragFolderNotice}
             >
@@ -1444,9 +1398,9 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
           <div className={cn(railGutterClassName, 'mb-2')}>
             <div className="surface-subtle flex items-center gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-medium text-foreground">编辑已发送消息</div>
+                <div className="text-[12px] font-medium text-foreground">{t('agent.composer.editingTitle')}</div>
                 <div className="text-[11px] text-muted-foreground">
-                  重新发送后，这条消息之后的内容会按新输入重新执行。
+                  {t('agent.composer.editingHint')}
                 </div>
               </div>
               <Button
@@ -1456,7 +1410,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                 className="h-8 rounded-lg px-3 text-xs"
                 onClick={handleCancelEditTurn}
               >
-                取消
+                {t('common.cancel')}
               </Button>
             </div>
           </div>
@@ -1477,13 +1431,13 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
             {!currentSelection.channelId && (
               <div className="flex items-center gap-2 px-4 py-3 text-sm text-status-warning-foreground">
                 <Settings size={14} />
-                <span>请先配置并启用可用渠道</span>
+                <span>{t('agent.configureChannel')}</span>
                 <button
                   type="button"
                   className="text-xs underline underline-offset-2 hover:text-foreground transition-colors"
                   onClick={() => { void window.electronAPI.openSettingsWindow('channels') }}
                 >
-                  前往设置
+                  {t('agent.goToSettings')}
                 </button>
               </div>
             )}
@@ -1514,7 +1468,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                   </button>
                   <button
                     type="button"
-                    aria-label="忽略建议"
+                    aria-label={t('agent.composer.dismissSuggestion')}
                     className="mr-2 mt-2.5 shrink-0 rounded p-0.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-foreground"
                     onClick={(e) => {
                       setPromptSuggestions((prev) => {
@@ -1536,7 +1490,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                 <div className="rounded-xl border border-border/60 bg-muted/25 px-3 py-2">
                   <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
                     <Clock3 className="size-3.5" />
-                    <span>等待区</span>
+                    <span>{t('agent.composer.queueTitle')}</span>
                     <span>{queuedSends.length}</span>
                   </div>
                   <div className="space-y-1">
@@ -1548,7 +1502,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                         <span className="min-w-0 flex-1 truncate">
                           {item.input.userMessage.trim()
                             || item.input.attachments?.map((attachment) => attachment.filename).join(', ')
-                            || '附件'}
+                            || t('agent.composer.queuedAttachment')}
                         </span>
                         <button
                           type="button"
@@ -1570,11 +1524,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
               onChange={setInputContent}
               onSubmit={handleSend}
               onPasteFiles={handlePasteFiles}
-              placeholder={
-                currentSelection.channelId
-                  ? '输入消息...'
-                  : '请先配置并启用可用渠道'
-              }
+              placeholder={currentSelection.channelId ? t('agent.composer.placeholder') : t('agent.placeholderNoChannel')}
               disabled={!currentSelection.channelId}
               autoFocusTrigger={sessionId}
               collapsible
@@ -1582,8 +1532,6 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
               capabilitySessionId={sessionId}
               attachedDirs={attachedDirs}
             />
-
-
 
             {/* Footer 工具栏 */}
             <div className="flex min-h-[48px] flex-wrap items-center justify-between gap-2 px-3 pb-2.5 pt-1.5">
@@ -1598,13 +1546,13 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                           size="icon"
                           className="size-[30px] rounded-lg text-foreground/60 hover:text-foreground"
                           onClick={handleOpenFileDialog}
-                          aria-label="添加附件"
+                          aria-label={t('agent.composer.attach')}
                         >
                           <Paperclip className="size-5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="top">
-                        <p>添加附件</p>
+                        <p>{t('agent.composer.attach')}</p>
                       </TooltipContent>
                     </Tooltip>
                     <SkillTriggerButton
@@ -1643,7 +1591,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                     size="icon"
                     className="size-[30px] rounded-lg text-destructive hover:bg-destructive/10"
                     onClick={handleStop}
-                    aria-label="停止生成"
+                    aria-label={t('agent.composer.stopGenerating')}
                   >
                     <Square className="size-[22px]" />
                   </Button>
@@ -1663,13 +1611,13 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                       )}
                       onClick={handleSend}
                       disabled={!canSend}
-                      aria-label={streaming ? '加入等待区' : '发送消息'}
+                      aria-label={streaming ? t('agent.composer.addToQueue') : t('agent.composer.send')}
                     >
                       {streaming ? <Clock3 className="size-[21px]" /> : <CornerDownLeft className="size-[22px]" />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    <p>{streaming ? '加入等待区' : '发送消息'}</p>
+                    <p>{streaming ? t('agent.composer.addToQueue') : t('agent.composer.send')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -1685,14 +1633,14 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       <AlertDialog open={rewindTargetMessageId !== null} onOpenChange={(open) => { if (!open) setRewindTargetMessageId(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>回退到这条消息？</AlertDialogTitle>
+            <AlertDialogTitle>{t('agent.session.rewindTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              该消息之后的会话记录会被删除，Agent 运行时状态也会重建。建议先创建分叉会话保留当前路线。项目文件不会自动回滚。
+              {t('agent.session.rewindDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { void handleConfirmRewind() }}>确认回退</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { void handleConfirmRewind() }}>{t('agent.session.rewindConfirm')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

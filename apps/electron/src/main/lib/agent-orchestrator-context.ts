@@ -10,7 +10,7 @@ import type { AgentSendInput, KilaPermissionMode, MemoryRunTrace, PermissionRequ
 import { buildSessionContextSnapshot, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { buildPromptImages, splitAttachmentsForPiPrompt } from './adapters/pi-history-converter'
-import { AgentEventBus } from './agent-event-bus'
+import type { AgentEventBus } from './agent-event-bus'
 import { decryptApiKey, getChannelById } from './channel-manager'
 import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
 import { resolveShell } from './shell-resolver'
@@ -21,7 +21,12 @@ import { permissionService, type PermissionResolution } from './agent-permission
 import { askUserService } from './agent-ask-user-service'
 import { appendAgentMessage, getAgentMessages } from './agent-message-store'
 import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
-import type { AgentTool } from '@earendil-works/pi-agent-core'
+import {
+  collectReservedToolNames,
+  mergeAgentTools,
+  normalizeToolNameKey,
+  type AnyAgentTool,
+} from './agent-tool-names'
 import { resolveChannelModel } from './channel-model-resolution'
 import { lookupProviderDbModel } from './provider-db-loader'
 import { createTrackedBashOperations } from './process-registry'
@@ -43,7 +48,7 @@ export interface ChannelContext {
 }
 
 type ExtendedAgentSendInput = AgentSendInput & {
-  extraTools?: AgentTool[]
+  extraTools?: AnyAgentTool[]
 }
 
 export interface PreparedAgentRunContext {
@@ -103,32 +108,23 @@ function resolveChannelApiKey(
   return decryptApiKey(channelId)
 }
 
-function mergeAgentTools(...toolSets: Array<AgentTool<any>[] | undefined>): AgentTool<any>[] {
-  const merged = new Map<string, AgentTool<any>>()
-
-  for (const toolSet of toolSets) {
-    for (const tool of toolSet ?? []) {
-      const key = tool.name.trim().toLowerCase()
-      if (merged.has(key)) {
-        merged.delete(key)
-      }
-      merged.set(key, tool)
-    }
-  }
-
-  return [...merged.values()]
-}
-
+/**
+ * 给 Pi 内置 bash 工具套上进程追踪
+ *
+ * 必须在合并之前作用于 codingTools 本身：Pi `0.82.1` 的内置工具名是小写的
+ * `read` / `bash` / `edit` / `write`，这里按归一化后的名字匹配，
+ * 避免大小写差异让后台任务面板与进程管理静默失效。
+ */
 function withTrackedBashTool(
-  tools: AgentTool<any>[],
+  tools: AnyAgentTool[],
   options: {
     sessionId: string
     cwd: string
     createBashTool: PiCodingAgentModule['createBashTool']
   },
-): AgentTool<any>[] {
+): AnyAgentTool[] {
   return tools.map((tool) => {
-    if (tool.name !== 'bash') return tool
+    if (normalizeToolNameKey(tool.name) !== 'bash') return tool
     return {
       ...tool,
       execute: (toolCallId, params, signal, onUpdate) => {
@@ -369,7 +365,7 @@ export async function buildAgentRunContext(
 
   // Shell 环境不可用时跳过 coding tools（bash/file 操作），
   // 仅保留 MCP / 内置 / memory 等不依赖 shell 的工具
-  let codingTools: AgentTool<any>[] = []
+  let codingTools: AnyAgentTool[] = []
   if (isShellRuntimeAvailable()) {
     const { createBashTool, createCodingTools } = await loadPiCodingAgent()
     codingTools = withTrackedBashTool(createCodingTools(agentCwd), {
@@ -386,9 +382,13 @@ export async function buildAgentRunContext(
     sessionChannelId: channelContext.channel.id,
     sessionModelId: resolvedModel,
   })
+  // 把内置工具名预留给 MCP 桥接：任一 MCP 服务器暴露 read/write/edit/bash
+  // 都会被降级成 {服务器名}__{工具名}，不会再静默顶替真实的文件与 shell 工具。
   const mcpToolBundle = await getMcpAgentTools({
+    sessionId,
     cwd: agentCwd,
     customMcpServers,
+    reservedToolNames: collectReservedToolNames(codingTools, builtinTools),
   })
 
   const smartCanUseTool = permissionService.createCanUseTool(
@@ -415,12 +415,13 @@ export async function buildAgentRunContext(
     (resolution) => handlePermissionResolution(eventBus, resolution),
   )
 
-  const tools = mergeAgentTools(
-    codingTools,
-    builtinTools,
-    mcpToolBundle.tools,
-    extraTools ?? [],
-  )
+  // 合并顺序即优先级：先到者保留，内置工具永远排在 MCP 与外部注入工具之前
+  const tools = mergeAgentTools([
+    { source: 'Pi 内置编码工具', tools: codingTools },
+    { source: 'Kila 内置工具', tools: builtinTools },
+    { source: 'MCP 工具', tools: mcpToolBundle.tools },
+    { source: '运行时注入工具', tools: extraTools },
+  ])
   const contextSnapshot = buildSessionContextSnapshot({
     modelId: resolvedModel,
     contextWindow: modelMetadata.contextWindowTokens,

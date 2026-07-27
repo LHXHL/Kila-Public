@@ -14,6 +14,7 @@
  */
 
 import { forwardRef, useState, useEffect, useRef, useMemo, useCallback, useImperativeHandle } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { JSONContent } from '@tiptap/core'
 import { useEditor, EditorContent, type Editor as TiptapEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -185,7 +186,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   onChange,
   onSubmit,
   onPasteFiles,
-  placeholder = '有什么可以帮助到你的呢？',
+  placeholder,
   suggestionActive = false,
   className,
   disabled = false,
@@ -195,6 +196,9 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
   capabilitySessionId,
   attachedDirs = [],
 }: RichTextInputProps, ref): React.ReactElement {
+  const { t } = useTranslation()
+  // 未显式传入时回落到默认占位文案（跟随语言切换）
+  const resolvedPlaceholder = placeholder ?? t('composer.placeholder')
   const [isExpanded, setIsExpanded] = useState(false)
   // 手动折叠状态：用户主动折叠输入框
   const [isManuallyCollapsed, setIsManuallyCollapsed] = useState(false)
@@ -278,7 +282,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
         },
       }),
       Placeholder.configure({
-        placeholder,
+        placeholder: resolvedPlaceholder,
         emptyEditorClass: 'is-editor-empty',
       }),
       // Mention 扩展：仅在 Agent 模式（有工作区）时启用
@@ -522,11 +526,11 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
       (ext) => ext.name === 'placeholder'
     )
     if (placeholderExt) {
-      placeholderExt.options.placeholder = placeholder
+      placeholderExt.options.placeholder = resolvedPlaceholder
       // 触发 TipTap 重新渲染 placeholder
       editor.view.dispatch(editor.state.tr)
     }
-  }, [editor, placeholder])
+  }, [editor, resolvedPlaceholder])
 
   // 自动聚焦：组件挂载时 + autoFocusTrigger 变化时
   useEffect(() => {
@@ -596,7 +600,7 @@ export const RichTextInput = forwardRef<RichTextInputHandle, RichTextInputProps>
             </button>
           </TooltipTrigger>
           <TooltipContent side="top">
-            {isManuallyCollapsed ? '展开输入框' : '折叠输入框'}
+            {isManuallyCollapsed ? t('composer.expandInput') : t('composer.collapseInput')}
           </TooltipContent>
         </Tooltip>
       )}

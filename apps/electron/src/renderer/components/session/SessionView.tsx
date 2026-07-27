@@ -1,4 +1,4 @@
-import * as React from 'react'
+import type * as React from 'react'
 import { SessionProvider } from '@/contexts/session-context'
 import { AgentView } from '@/components/agent'
 

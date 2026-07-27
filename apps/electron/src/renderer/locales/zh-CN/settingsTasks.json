@@ -1,0 +1,263 @@
+{
+  "settingsTasks": {
+    "title": "定时任务",
+    "description": "管理后台调度、目标会话、远程投递和运行结果。",
+    "actions": {
+      "createFromSession": "从当前会话创建",
+      "create": "新建任务",
+      "recoverOverdue": "恢复错过任务",
+      "refresh": "刷新",
+      "refreshing": "刷新中…"
+    },
+    "naturalLanguage": {
+      "label": "用自然语言准备任务草稿",
+      "hint": "先解析为可核对的草稿，不会直接创建或启动任务。",
+      "placeholder": "例如：每天上午 9 点总结当前项目进度",
+      "parse": "解析草稿",
+      "review": "核对并完善",
+      "errors": {
+        "empty": "请输入任务描述",
+        "intervalRange": "执行间隔需要在 1 分钟到 1 年之间",
+        "missingPrompt": "请补充要执行的任务内容",
+        "dailyNeedsTime": "“每天”任务需要明确时间，例如每天上午 9 点",
+        "onceNeedsTime": "一次性任务需要明确时间，例如明天下午 3 点",
+        "unsupported": "暂支持“每 30 分钟”“每天上午 9 点”“明天下午 3 点”这类表达"
+      },
+      "scheduleLabel": {
+        "everyMinutes_other": "每 {{count}} 分钟",
+        "dailyAt": "每天 {{time}}",
+        "relativeDayAt": "{{day}} {{time}}"
+      },
+      "relativeDay": {
+        "today": "今天",
+        "tomorrow": "明天",
+        "dayAfterTomorrow": "后天"
+      }
+    },
+    "overview": {
+      "totalTasks": "全部任务",
+      "runningCount": "{{count}} 个运行中",
+      "needsAttention": "需关注",
+      "needsAttentionHelper": "晚点、错过或最近执行失败",
+      "scheduler": "调度器",
+      "schedulerWaiting": "等待 scheduler heartbeat",
+      "lastScan": "最近扫描",
+      "activeRuns_other": "活跃运行 {{count}} 个"
+    },
+    "runtimeStatus": {
+      "loading": "等待加载",
+      "stale": "陈旧",
+      "idle": "未启动",
+      "healthy": "正常"
+    },
+    "status": {
+      "running": "运行中",
+      "stopped": "已停止",
+      "start": "启动",
+      "stop": "停止"
+    },
+    "runMode": {
+      "singleSession": "连续会话",
+      "newSession": "新建会话"
+    },
+    "schedule": {
+      "everyMinutes_other": "每 {{count}} 分钟",
+      "loop": "loop 连续执行"
+    },
+    "delivery": {
+      "none": "不投递",
+      "multipleTargets_other": "{{count}} 个远程渠道目标"
+    },
+    "health": {
+      "completed": "当前已完成",
+      "healthy": "状态健康",
+      "dueSoon": "即将到期",
+      "late": "执行窗口中",
+      "missed": "已错过",
+      "failing": "最近失败",
+      "paused": "已暂停",
+      "recentlyCompleted": "最近完成",
+      "neverRun": "尚未执行",
+      "reasonLastFailed": "最近一次执行失败",
+      "reasonLastSucceeded": "最近一次执行成功",
+      "reasonWaitingFirstRun": "等待首次执行"
+    },
+    "list": {
+      "title": "任务",
+      "summary": "共 {{total}} 个，{{running}} 个运行中",
+      "create": "新建",
+      "emptyTitle": "还没有定时任务",
+      "emptyDescription": "创建任务后，可在这里查看调度状态和最近执行结果。",
+      "nextRun": "下一次",
+      "health": "健康度",
+      "executions": "执行",
+      "executionSummary_other": "{{count}} 次 · {{reason}}"
+    },
+    "detail": {
+      "emptyTitle": "选择任务查看详情",
+      "emptyDescription": "任务详情包含执行时间、健康状态、投递设置和最近运行记录。",
+      "noPrompt": "该任务还没有填写 prompt。",
+      "edit": "编辑",
+      "runNow": "立即执行",
+      "delete": "删除",
+      "nextRunLabel": "下一次执行",
+      "nextRunRunningHelper": "按 wall-clock 时间触发",
+      "nextRunStoppedHelper": "任务停止后不会触发",
+      "lastSuccessLabel": "上次成功",
+      "noSuccessHelper": "还没有成功执行记录",
+      "healthLabel": "健康度",
+      "heartbeatLabel": "最近 heartbeat",
+      "heartbeatLoopHelper": "loop 活动会刷新 heartbeat",
+      "heartbeatHelper": "最近一次调度活动时间",
+      "deliveryLabel": "结果投递",
+      "aiCanExitHelper": "AI 可主动结束 loop 任务",
+      "aiCannotExitHelper": "未启用 AI 主动结束",
+      "verificationLabel": "结果校验",
+      "verifierCount_other": "{{count}} 条规则",
+      "verifierDisabled": "未启用",
+      "executionCountHelper_other": "已执行 {{count}} 次",
+      "statusPrefix": "状态：",
+      "errorPrefix": "错误：",
+      "openLastSession": "打开最近会话"
+    },
+    "runs": {
+      "title": "最近运行",
+      "count_other": "{{count}} 条",
+      "emptyTitle": "暂无运行历史",
+      "emptyDescription": "首次执行后，这里会按时间倒序展示结果、错误和关联会话。",
+      "outcome": {
+        "success": "成功",
+        "stoppedByAi": "AI 已结束",
+        "error": "失败",
+        "skippedBusy": "忙碌跳过",
+        "skippedInvalidConfig": "配置无效",
+        "skippedConcurrencyLimit": "并发跳过"
+      },
+      "triggerManual": "手动触发",
+      "triggerSchedule": "调度触发",
+      "errorPrefix": "错误：",
+      "verification": "校验：{{summary}}",
+      "duration": "耗时 {{seconds}}s",
+      "session": "会话 {{sessionId}}",
+      "retry": "重试",
+      "openSession": "打开会话"
+    },
+    "toast": {
+      "loadFailed": "加载定时任务失败",
+      "saveFailed": "保存定时任务失败",
+      "runStarted": "任务已开始执行",
+      "runFailed": "执行任务失败",
+      "retryStarted": "失败任务已重新执行",
+      "recoverDone": "错过任务恢复扫描已完成",
+      "recoverFailed": "恢复错过任务失败",
+      "toggleFailed": "切换定时任务状态失败",
+      "deleteFailed": "删除失败"
+    },
+    "scheduleEditor": {
+      "title": "调度方式",
+      "everyHint": "按固定分钟数重复执行",
+      "cronHint": "用 cron 表达式精确定时",
+      "atHint": "只在指定时间执行一次",
+      "loopHint": "完成后自动继续，适合自治流程",
+      "intervalMinutesLabel": "间隔分钟",
+      "startAtLabel": "起始时间（可选）",
+      "cronExprLabel": "Cron 表达式",
+      "cronInvalid": "Cron 表达式无效",
+      "timezoneLabel": "时区（可选）",
+      "runAtLabel": "执行时间",
+      "loopNotice": "loop 模式会在每次完成后继续运行：成功 3 秒后重跑，失败按退避策略延迟，更适合自治型长期任务。"
+    },
+    "editor": {
+      "createTitle": "新建定时任务",
+      "editTitle": "编辑定时任务",
+      "description": "配置任务内容、执行时间、目标会话和结果处理。",
+      "summaryHeading": "任务摘要",
+      "untitledTask": "未命名任务",
+      "promptSummaryPlaceholder": "将在这里显示任务 prompt 摘要，方便在保存前快速核对任务全貌。",
+      "sourceSession": "来源会话",
+      "noModel": "未选择模型",
+      "toolCount_other": "{{count}} 个工具",
+      "noTools": "未选择工具",
+      "noVerifier": "无校验",
+      "defaultName": "新定时任务",
+      "defaultNameFromSession": "定时任务 · {{title}}",
+      "selectModelError": "请选择模型",
+      "footerNotice": "定时任务会使用你为它单独配置的权限模式运行，不会继承当前前台会话的审批状态。",
+      "cancel": "取消",
+      "save": "保存任务",
+      "saving": "保存中...",
+      "summary": {
+        "schedule": "执行时间",
+        "runMode": "会话模式",
+        "model": "模型",
+        "delivery": "投递",
+        "tools": "工具",
+        "verification": "校验",
+        "everyMinutes_other": "每 {{count}} 分钟",
+        "singleShot": "一次性",
+        "loop": "loop"
+      },
+      "content": {
+        "title": "任务内容",
+        "description": "任务名称与 prompt 定义了这个后台流程的身份和预期输出。",
+        "nameLabel": "名称",
+        "promptLabel": "Prompt",
+        "promptDescription": "这里的内容会在每次触发时发送给 Agent。",
+        "promptPlaceholder": "输入定时触发时发送给 Agent 的内容"
+      },
+      "schedule": {
+        "title": "执行时间",
+        "description": "可以选择固定间隔、cron、一次性触发或 loop 持续自治。"
+      },
+      "target": {
+        "title": "目标会话与投递",
+        "description": "新建会话适合周期性报告；连续会话适合长期上下文演进。",
+        "newSession": "新建会话",
+        "newSessionHint": "每次执行创建一条新的 session",
+        "singleSession": "连续会话",
+        "singleSessionHint": "把消息持续追加到同一个 session",
+        "projectPathLabel": "项目目录",
+        "projectPathDescription": "新建会话会以这个目录作为 project root。",
+        "chooseFolder": "选择目录",
+        "sessionLabel": "目标会话",
+        "sessionPlaceholder": "请选择会话"
+      },
+      "runtime": {
+        "title": "运行配置与结果",
+        "description": "右侧统一配置运行时上下文、启用工具和结果处理策略。",
+        "modelLabel": "模型",
+        "thinkingLabel": "Thinking",
+        "historyTurnsLabel": "History Turns",
+        "additionalDirectoriesLabel": "Additional Directories",
+        "additionalDirectoriesDescription": "每行一个目录，作为本次任务的附加上下文范围。",
+        "additionalDirectoriesPlaceholder": "每行一个目录",
+        "enabledToolsLabel": "Enabled Tools",
+        "enabledToolsDescription": "只启用本任务真正需要的工具，能让行为更可预测。",
+        "permissionModeLabel": "权限模式",
+        "permissionModeDescription": "后台任务会严格按这里的模式运行，不依赖当前前台会话的审批状态。",
+        "permissionModeHint": "`auto` 适合完全自动化任务；`smart` 是默认交互策略，适合需要审批敏感操作的后台流程。"
+      },
+      "result": {
+        "title": "结果处理",
+        "deliveryLabel": "结果投递",
+        "deliveryDescription": "可同时投递到多个远程渠道绑定；默认要求全部投递成功才通过远程渠道送达校验。",
+        "deliveryNone": "不投递",
+        "deliveryNoneDescription": "只在本地 session 记录任务结果。",
+        "noBindings": "当前没有远程渠道绑定。先从 Telegram / Discord / 飞书 / 微信发一条消息创建绑定。",
+        "verificationLabel": "结果校验",
+        "verificationDescription": "把“任务跑了”和“产出合格”分开判断，适合日报、日记和备份类任务。",
+        "replyNonEmptyLabel": "Reply 非空",
+        "replyNonEmptyDescription": "推荐给写日记、日报和总结任务，避免“执行成功但没有正文”。",
+        "bridgeDeliveryLabel": "远程渠道投递成功",
+        "bridgeDeliveryDescription": "如果任务依赖远程渠道送达最终结果，可以把投递也纳入成功条件。",
+        "fileExistsLabel": "文件产出存在",
+        "fileExistsDescription": "适合备份、日志或写文件类任务。路径默认相对当前 project root 解析。",
+        "fileExistsPlaceholder": "例如 diary/today.md",
+        "notifyMissedRunLabel": "Missed run 提醒",
+        "notifyMissedRunDescription": "当任务错过本轮 deadline 时，追加本地 system message；如果配置了远程渠道，也会发出提醒。",
+        "aiCanExitLabel": "AI 可结束任务",
+        "aiCanExitDescription": "仅 loop 模式下建议开启，允许模型在任务完成后主动调用退出工具。"
+      }
+    }
+  }
+}

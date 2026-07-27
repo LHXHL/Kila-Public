@@ -10,6 +10,9 @@ const baseConfig: FeishuBridgeConfig = {
   allowP2P: true,
   allowGroup: true,
   requireMention: true,
+  allowedOpenIds: [],
+  allowedChatIds: [],
+  maxInboundFileBytes: 10 * 1024 * 1024,
   defaultSession: {},
   bots: [],
 }

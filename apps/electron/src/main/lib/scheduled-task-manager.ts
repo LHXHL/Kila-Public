@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, resolve } from 'node:path'
 import type {
   BridgeChannelType,
   ScheduledTask,
@@ -27,21 +26,31 @@ import {
   parseCronNextRunAt,
   trimErrorMessage,
   buildDelivery,
-  getDeliveryFailurePolicy,
   normalizeDeliveryTargets,
   normalizeExecutionTarget,
   validateScheduleShape,
   computeInitialNextRunAt,
-  computeRecurringNextRunAt,
   computeScheduledTaskHealth,
   parseCronPreviousRunAt,
-  shouldStopTaskAfterOutcome,
   buildSkippedRunRecord,
   DEFAULT_SCAN_INTERVAL_MS,
   DEFAULT_STARTUP_RECOVERY_DELAY_MS,
   DEFAULT_MAX_CONCURRENT_RUNS,
-  MAX_LOOP_FAILURES,
 } from './scheduled-task-helpers'
+import {
+  applyRunResult,
+  deliverRunResult,
+  verifyBridgeDelivery,
+  verifyLocalResult,
+} from './scheduled-task-run-result'
+import {
+  computeSchedulerWatchdog,
+  resolveHeartbeatStaleMs,
+  ScheduledTaskRunTracker,
+  DEFAULT_MAX_RUN_DURATION_MS,
+  type ActiveRunSnapshot,
+  type ExpiredRunReason,
+} from './scheduled-task-scheduler'
 
 
 import { createLogger } from './logger'
@@ -95,6 +104,7 @@ interface ScheduledTaskManagerDeps {
   scanIntervalMs?: number
   startupRecoveryDelayMs?: number
   maxConcurrentRuns?: number
+  maxRunDurationMs?: number
   getDefaultTimeZone?: () => string
   createRuntimeTools?: (input: { sessionId: string }) => unknown[]
 }
@@ -126,12 +136,13 @@ export class ScheduledTaskManager {
   private readonly scanIntervalMs: number
   private readonly startupRecoveryDelayMs: number
   private readonly maxConcurrentRuns: number
+  private readonly maxRunDurationMs: number
+  private readonly heartbeatStaleMs: number
   private readonly getDefaultTimeZone: () => string
   private readonly createRuntimeToolsFn: (input: { sessionId: string }) => unknown[]
 
   private readonly tasks = new Map<string, ScheduledTask>()
-  private readonly activeRuns = new Set<string>()
-  private readonly activeRunSessions = new Map<string, string>()
+  private readonly runTracker: ScheduledTaskRunTracker
   private readonly listeners = new Set<(payload: ScheduledTaskUpdatedPayload) => void>()
   private readonly recoveredOverdueTasks = new Set<string>()
   private readonly loopFailureCounts = new Map<string, number>()
@@ -198,10 +209,21 @@ export class ScheduledTaskManager {
     this.scanIntervalMs = deps?.scanIntervalMs ?? DEFAULT_SCAN_INTERVAL_MS
     this.startupRecoveryDelayMs = deps?.startupRecoveryDelayMs ?? DEFAULT_STARTUP_RECOVERY_DELAY_MS
     this.maxConcurrentRuns = deps?.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS
+    this.maxRunDurationMs = deps?.maxRunDurationMs ?? DEFAULT_MAX_RUN_DURATION_MS
+    this.heartbeatStaleMs = resolveHeartbeatStaleMs(this.scanIntervalMs)
     this.getDefaultTimeZone = deps?.getDefaultTimeZone ?? getLocalTimeZone
     this.createRuntimeToolsFn = deps?.createRuntimeTools ?? ((input) => {
       const { createScheduledTaskRuntimeTools } = require('./pi-tools-bridge') as typeof import('./pi-tools-bridge')
       return createScheduledTaskRuntimeTools(input)
+    })
+    this.runTracker = new ScheduledTaskRunTracker({
+      now: this.nowFn,
+      setTimeoutFn: this.setTimeoutFn,
+      clearTimeoutFn: this.clearTimeoutFn,
+      maxRunDurationMs: this.maxRunDurationMs,
+      heartbeatStaleMs: this.heartbeatStaleMs,
+      isRunAlive: (sessionId) => this.isSessionActiveFn(sessionId),
+      onExpired: (run, reason) => { this.finalizeExpiredRun(run, reason) },
     })
   }
 
@@ -324,68 +346,6 @@ export class ScheduledTaskManager {
     }
   }
 
-  private buildProjectFilePath(projectPath: string, candidatePath: string): string {
-    return isAbsolute(candidatePath) ? candidatePath : resolve(projectPath, candidatePath)
-  }
-
-  private verifyLocalResult(
-    task: ScheduledTask,
-    finalReplyPreview: string | undefined,
-    projectPath: string,
-  ): { error?: string; summary?: string } {
-    const verifiers = (task.resultVerifiers ?? []).filter((verifier) => verifier.kind !== 'bridge_delivery_success')
-    if (verifiers.length === 0) {
-      return {}
-    }
-
-    const checks: string[] = []
-
-    for (const verifier of verifiers) {
-      if (verifier.kind === 'reply_non_empty') {
-        if (!finalReplyPreview?.trim()) {
-          return { error: '结果校验失败：要求 final reply 非空，但本次任务没有产出可用文本回复。' }
-        }
-        checks.push('reply_non_empty')
-        continue
-      }
-
-      if (verifier.kind === 'file_exists') {
-        const filePath = this.buildProjectFilePath(projectPath, verifier.path)
-        if (!this.pathExistsFn(filePath)) {
-          return { error: `结果校验失败：未找到期望文件 ${verifier.path}` }
-        }
-        checks.push(`file_exists:${verifier.path}`)
-      }
-    }
-
-    return checks.length > 0 ? { summary: `已通过 ${checks.join(' / ')}` } : {}
-  }
-
-  private verifyBridgeDelivery(
-    task: ScheduledTask,
-    deliveryFailed: boolean,
-  ): { error?: string; summary?: string } {
-    const requiresBridgeDelivery = (task.resultVerifiers ?? []).some((verifier) => verifier.kind === 'bridge_delivery_success')
-    if (!requiresBridgeDelivery) {
-      return {}
-    }
-
-    const targets = normalizeDeliveryTargets(task.delivery)
-    if (targets.length === 0) {
-      return { error: '结果校验失败：已启用 bridge_delivery_success，但当前任务没有配置结果投递。' }
-    }
-
-    if (deliveryFailed) {
-      return { error: '结果校验失败：Bridge 结果投递没有成功完成。' }
-    }
-
-    return {
-      summary: targets.length > 1
-        ? `已通过 bridge_delivery_success(${targets.length} targets)`
-        : '已通过 bridge_delivery_success',
-    }
-  }
-
   private updateTaskHeartbeat(taskId: string, timestamp: number): void {
     const current = this.tasks.get(taskId)
     if (!current) return
@@ -395,6 +355,67 @@ export class ScheduledTaskManager {
       lastHeartbeatAt: timestamp,
     }))
     this.persistTasks()
+  }
+
+  /**
+   * 巡检活跃 run：刷新心跳并回收卡死 run
+   *
+   * 运行时仍认为会话活跃即刷新心跳；心跳长期停滞说明底层 Promise 已经不会落地，
+   * 由 tracker 走 onExpired 强制释放槽位。
+   */
+  private sweepActiveRuns(now: number): void {
+    for (const run of this.runTracker.sweep(now)) {
+      this.updateTaskHeartbeat(run.taskId, now)
+    }
+  }
+
+  /**
+   * 非阻塞派发一次执行
+   *
+   * 返回的 Promise 已吞掉异常，仅供启动补跑等待使用；扫描路径不得 await。
+   */
+  private dispatchTask(taskId: string, triggerSource: 'scheduler' | 'manual'): Promise<void> {
+    return this.executeTask(taskId, triggerSource).catch((error) => {
+      log.warn('[ScheduledTaskManager] 任务派发失败', { taskId, error: trimErrorMessage(error) })
+    })
+  }
+
+  /** 超时/卡死回收：停止会话并落一条 error run 记录，槽位已由 tracker 释放 */
+  private finalizeExpiredRun(run: ActiveRunSnapshot, reason: ExpiredRunReason): void {
+    try {
+      this.stopSessionFn(run.sessionId)
+    } catch (error) {
+      log.warn('[ScheduledTaskManager] 回收超时 run 时停止会话失败', {
+        taskId: run.taskId,
+        error: trimErrorMessage(error),
+      })
+    }
+    clearScheduledTaskRunContext(run.sessionId)
+
+    const task = this.tasks.get(run.taskId)
+    if (!task) return
+
+    const finishedAt = this.nowFn()
+    const record: ScheduledTaskRunRecord = {
+      id: randomUUID(),
+      taskId: task.id,
+      triggerSource: run.triggerSource,
+      outcome: 'error',
+      startedAt: run.startedAt,
+      finishedAt,
+      durationMs: Math.max(0, finishedAt - run.startedAt),
+      sessionId: run.sessionId,
+      error: reason === 'timeout'
+        ? `任务执行超过最大时长 ${Math.round(this.maxRunDurationMs / 60_000)} 分钟，已强制中止`
+        : '任务运行心跳已停止，判定为卡死并强制回收',
+    }
+    log.warn('[ScheduledTaskManager] 强制回收 run', { taskId: task.id, reason })
+
+    this.recordRun(task, record)
+    const updated = this.applyRunResult(task, record, { preserveStatus: task.status === 'stopped' })
+    this.tasks.set(task.id, updated)
+    this.persistTasks()
+    this.emitUpdated({ taskId: task.id, reason: 'run-finished' })
   }
 
   private persistTasks(): void {
@@ -409,19 +430,22 @@ export class ScheduledTaskManager {
     }
   }
 
+  /**
+   * 安排下一轮扫描
+   *
+   * 下一轮定时器在 tick 开始时立即重排，不等待本轮扫描/任务执行完成，
+   * 因此单个长任务不会再冻结整个调度器。
+   */
   private scheduleNextScan(): void {
     if (!this.running) return
     if (this.scanTimer) {
       this.clearTimeoutFn(this.scanTimer)
     }
     this.scanTimer = this.setTimeoutFn(() => {
-      void this.scanNow()
-        .catch((error) => {
-          log.error('[ScheduledTaskManager] 定时扫描失败:', error)
-        })
-        .finally(() => {
-          this.scheduleNextScan()
-        })
+      this.scheduleNextScan()
+      void this.scanNow().catch((error) => {
+        log.error('[ScheduledTaskManager] 定时扫描失败:', error)
+      })
     }, this.scanIntervalMs)
   }
 
@@ -591,151 +615,34 @@ export class ScheduledTaskManager {
     }
   }
 
+  /** applyRunResult 薄封装：注入 loop 失败计数与 cron 依赖 */
+  private applyRunResult(
+    task: ScheduledTask,
+    run: ScheduledTaskRunRecord,
+    options?: { preserveStatus?: boolean; stopReason?: string },
+  ): ScheduledTask {
+    return applyRunResult(task, run, {
+      ...options,
+      loopFailureCounts: this.loopFailureCounts,
+      parseCronNextRunAt: this.parseCronNextRunAtFn,
+      getDefaultTimeZone: this.getDefaultTimeZone,
+    })
+  }
+
   private recordRun(task: ScheduledTask, run: ScheduledTaskRunRecord): void {
     this.store.appendRun(task.id, run)
   }
 
-  private async deliverResult(
-    task: ScheduledTask,
-    outcome: ScheduledTaskRunOutcome,
-    sessionId: string | undefined,
-    finalReply: string | undefined,
-    error: string | undefined,
-  ): Promise<{ error?: string; deliveryFailed: boolean }> {
-    const targets = normalizeDeliveryTargets(task.delivery)
-    if (!this.deliverScheduledTaskResultFn || targets.length === 0) {
-      return { error, deliveryFailed: false }
+  /** 任务有在跑的 run 时发出会话中止信号（删除/手动停止共用） */
+  private stopActiveRunSession(task: ScheduledTask): void {
+    if (!this.runTracker.has(task.id)) return
+    const sessionId = this.runTracker.getSessionId(task.id)
+      ?? (task.executionTarget.kind === 'single_session'
+        ? task.executionTarget.sessionId
+        : task.lastSessionId)
+    if (sessionId) {
+      this.stopSessionFn(sessionId)
     }
-
-    const shouldDeliverSuccess = outcome === 'success' || outcome === 'stopped_by_ai'
-    const shouldDeliverError = outcome === 'error'
-    if (!shouldDeliverSuccess && !shouldDeliverError) {
-      return { error, deliveryFailed: false }
-    }
-
-    const text = shouldDeliverSuccess
-      ? (finalReply?.trim() || `任务《${task.name}》执行完成，但没有可发送的最终文本回复。`)
-      : `任务《${task.name}》执行失败：${error || '未知错误'}`
-    const failures: string[] = []
-    let successCount = 0
-
-    for (const target of targets) {
-      try {
-        await this.deliverScheduledTaskResultFn({
-          endpointKey: target.endpointKey,
-          channelType: target.channelType,
-          text,
-          sessionId,
-          taskId: task.id,
-          ...(shouldDeliverError ? { isError: true } : {}),
-        })
-        successCount += 1
-      } catch (deliveryError) {
-        failures.push(`${target.endpointKey} (${target.channelType}): ${trimErrorMessage(deliveryError)}`)
-      }
-    }
-
-    const failurePolicy = getDeliveryFailurePolicy(task.delivery)
-    const deliveryFailed = failurePolicy === 'any'
-      ? successCount === 0
-      : failures.length > 0
-
-    if (deliveryFailed) {
-      const message = failures.join('; ')
-      return {
-        error: error ? `${error}\n投递失败：${message}` : `投递失败：${message}`,
-        deliveryFailed: true,
-      }
-    }
-
-    if (failures.length > 0) {
-      log.warn('[ScheduledTaskManager] 部分 Bridge 结果投递失败，但 failurePolicy=any 已满足', {
-        taskId: task.id,
-        failures,
-      })
-    }
-
-    return { error, deliveryFailed: false }
-  }
-
-  private applyRunResult(
-    task: ScheduledTask,
-    run: ScheduledTaskRunRecord,
-    options?: {
-      preserveStatus?: boolean
-      stopReason?: string
-    },
-  ): ScheduledTask {
-    const now = run.finishedAt
-    const outcome = run.outcome
-    const next = cloneTask(task)
-    next.updatedAt = now
-    next.lastTriggeredAt = run.startedAt
-    next.lastCompletedAt = run.finishedAt
-    next.lastHeartbeatAt = run.finishedAt
-    next.lastDurationMs = run.durationMs
-    next.lastError = run.error
-    if (outcome === 'success' || outcome === 'stopped_by_ai') {
-      next.lastSuccessfulAt = run.finishedAt
-    }
-    next.executionCount += 1
-    next.lastSessionId = run.sessionId ?? next.lastSessionId
-    next.lastFinalReplyPreview = run.finalReplyPreview
-
-    if (options?.preserveStatus) {
-      return next
-    }
-
-    if (shouldStopTaskAfterOutcome(task, outcome)) {
-      next.status = 'stopped'
-      next.nextRunAt = undefined
-      next.stopReason = options?.stopReason
-        ?? (outcome === 'stopped_by_ai' ? 'stopped_by_ai' : task.schedule.kind === 'at' ? 'completed_once' : outcome)
-      return next
-    }
-
-    if (task.schedule.kind === 'loop') {
-      const failureCount = outcome === 'error'
-        ? (this.loopFailureCounts.get(task.id) ?? 0) + 1
-        : 0
-
-      if (failureCount > 0) {
-        this.loopFailureCounts.set(task.id, failureCount)
-      } else {
-        this.loopFailureCounts.delete(task.id)
-      }
-
-      if (failureCount >= MAX_LOOP_FAILURES) {
-        next.status = 'stopped'
-        next.nextRunAt = undefined
-        next.stopReason = 'loop_failure_limit'
-        next.lastError = run.error || `连续失败 ${failureCount} 次，已自动停止`
-        return next
-      }
-
-      next.nextRunAt = computeRecurringNextRunAt(
-        task.schedule,
-        now,
-        this.parseCronNextRunAtFn,
-        this.getDefaultTimeZone,
-        failureCount,
-      )
-      next.stopReason = undefined
-      return next
-    }
-
-    if (outcome === 'error' || outcome === 'success' || outcome === 'skipped_busy' || outcome === 'skipped_concurrency_limit') {
-      next.nextRunAt = computeRecurringNextRunAt(
-        task.schedule,
-        now,
-        this.parseCronNextRunAtFn,
-        this.getDefaultTimeZone,
-      )
-      next.stopReason = undefined
-      return next
-    }
-
-    return next
   }
 
   private async executeTask(
@@ -750,7 +657,7 @@ export class ScheduledTaskManager {
       throw new Error(`定时任务不存在: ${taskId}`)
     }
 
-    if (this.activeRuns.has(taskId)) {
+    if (this.runTracker.has(taskId)) {
       throw new Error('任务正在执行中')
     }
 
@@ -772,11 +679,11 @@ export class ScheduledTaskManager {
       return
     }
 
-    if (triggerSource === 'manual' && this.activeRuns.size >= this.maxConcurrentRuns) {
+    if (triggerSource === 'manual' && this.runTracker.size >= this.maxConcurrentRuns) {
       throw new Error('当前后台并发已达上限')
     }
 
-    if (this.activeRuns.size >= this.maxConcurrentRuns) {
+    if (this.runTracker.size >= this.maxConcurrentRuns) {
       const run = buildSkippedRunRecord(task.id, 'skipped_concurrency_limit', triggerSource, now)
       this.recordRun(task, run)
       const updated = this.applyRunResult(task, run, {
@@ -822,11 +729,11 @@ export class ScheduledTaskManager {
     }
 
     const startedAt = now
-    this.activeRuns.add(task.id)
-    this.activeRunSessions.set(task.id, sessionId)
+    const runToken = this.runTracker.begin({ taskId: task.id, sessionId, triggerSource, startedAt })
     this.updateTaskHeartbeat(task.id, startedAt)
     this.emitUpdated({ taskId: task.id, reason: 'run-started' })
 
+    let runOwned = true
     let outcome: ScheduledTaskRunOutcome = 'success'
     let runError: string | undefined
     let finalReplyPreview: string | undefined
@@ -867,7 +774,7 @@ export class ScheduledTaskManager {
           outcome = 'stopped_by_ai'
         }
 
-        const localVerification = this.verifyLocalResult(task, finalReplyPreview, target.projectPath)
+        const localVerification = verifyLocalResult(task, finalReplyPreview, target.projectPath, this.pathExistsFn)
         if (localVerification.error) {
           outcome = 'error'
           stopReason = undefined
@@ -884,8 +791,13 @@ export class ScheduledTaskManager {
       runError = trimErrorMessage(error)
     } finally {
       clearScheduledTaskRunContext(sessionId)
-      this.activeRuns.delete(task.id)
-      this.activeRunSessions.delete(task.id)
+      runOwned = this.runTracker.end(task.id, runToken)
+    }
+
+    // 本次 run 已被超时/看门狗回收并落过 error 记录，禁止重复写回结果。
+    if (!runOwned) {
+      log.info('[ScheduledTaskManager] run 已被强制回收，跳过结果写回', { taskId: task.id })
+      return
     }
 
     let currentTask = this.tasks.get(task.id)
@@ -894,12 +806,19 @@ export class ScheduledTaskManager {
       return
     }
 
-    const deliveryResult = await this.deliverResult(currentTask, outcome, sessionId, finalReplyPreview, runError)
+    const deliveryResult = await deliverRunResult({
+      task: currentTask,
+      outcome,
+      sessionId,
+      finalReply: finalReplyPreview,
+      error: runError,
+      deliver: this.deliverScheduledTaskResultFn,
+    })
     runError = deliveryResult.error
     deliveryFailed = deliveryResult.deliveryFailed
 
     if (outcome !== 'error') {
-      const bridgeVerification = this.verifyBridgeDelivery(currentTask, deliveryFailed)
+      const bridgeVerification = verifyBridgeDelivery(currentTask, deliveryFailed)
       if (bridgeVerification.error) {
         outcome = 'error'
         stopReason = undefined
@@ -985,8 +904,9 @@ export class ScheduledTaskManager {
 
     // 调度器停止后不能让已启动的 headless run 继续修改项目或写入会话。
     // stopSessionFn 只发出中止信号；executeTask 的 finally 仍负责完整清理上下文。
-    const activeSessionIds = new Set(this.activeRunSessions.values())
-    for (const sessionId of activeSessionIds) {
+    // 这里只停掉超时定时器，保留 run 条目让在途 executeTask 正常收尾。
+    this.runTracker.stopTimers()
+    for (const sessionId of this.runTracker.activeSessionIds()) {
       this.stopSessionFn(sessionId)
     }
   }
@@ -1003,33 +923,31 @@ export class ScheduledTaskManager {
   }
 
   getRuntimeStatus(): ScheduledTaskRuntimeStatus {
-    const now = this.nowFn()
-    if (!this.running) {
-      return {
-        running: false,
-        activeRunCount: this.activeRuns.size,
-        lastScanAt: this.lastScanAt,
-        lastRecoveryAt: this.lastRecoveryAt,
-        lastPersistAt: this.lastPersistAt,
-        watchdogState: 'idle',
-        watchdogReason: '调度器当前未启动',
-      }
-    }
-
-    const referenceAt = this.lastScanAt ?? this.startupTimestamp
-    const staleThresholdMs = this.scanIntervalMs * 2
-    const isStale = !referenceAt || now - referenceAt > staleThresholdMs
-
-    return {
-      running: true,
-      activeRunCount: this.activeRuns.size,
+    const base = {
+      activeRunCount: this.runTracker.size,
       lastScanAt: this.lastScanAt,
       lastRecoveryAt: this.lastRecoveryAt,
       lastPersistAt: this.lastPersistAt,
-      watchdogState: isStale ? 'stale' : 'healthy',
-      watchdogReason: isStale
-        ? `最近一次 scan 已超过 ${Math.round(staleThresholdMs / 1000)} 秒`
-        : '调度器 heartbeat 正常',
+    }
+
+    if (!this.running) {
+      return { ...base, running: false, watchdogState: 'idle', watchdogReason: '调度器当前未启动' }
+    }
+
+    const watchdog = computeSchedulerWatchdog({
+      now: this.nowFn(),
+      lastScanAt: this.lastScanAt,
+      startupTimestamp: this.startupTimestamp,
+      scanIntervalMs: this.scanIntervalMs,
+      heartbeatStaleMs: this.heartbeatStaleMs,
+      activeRuns: this.runTracker.snapshots(),
+    })
+
+    return {
+      ...base,
+      running: true,
+      watchdogState: watchdog.state,
+      watchdogReason: watchdog.reason,
     }
   }
 
@@ -1055,18 +973,9 @@ export class ScheduledTaskManager {
     const task = this.tasks.get(taskId)
     if (!task) return
 
-    if (this.activeRuns.has(taskId)) {
-      const activeSessionId = this.activeRunSessions.get(taskId)
-        ?? (task.executionTarget.kind === 'single_session'
-          ? task.executionTarget.sessionId
-          : task.lastSessionId)
-      if (activeSessionId) {
-        this.stopSessionFn(activeSessionId)
-      }
-    }
+    this.stopActiveRunSession(task)
 
     this.tasks.delete(taskId)
-    this.activeRunSessions.delete(taskId)
     this.loopFailureCounts.delete(taskId)
     this.recoveredOverdueTasks.delete(taskId)
     this.persistTasks()
@@ -1099,15 +1008,7 @@ export class ScheduledTaskManager {
       throw new Error(`定时任务不存在: ${taskId}`)
     }
 
-    if (this.activeRuns.has(taskId)) {
-      const activeSessionId = this.activeRunSessions.get(taskId)
-        ?? (task.executionTarget.kind === 'single_session'
-          ? task.executionTarget.sessionId
-          : task.lastSessionId)
-      if (activeSessionId) {
-        this.stopSessionFn(activeSessionId)
-      }
-    }
+    this.stopActiveRunSession(task)
 
     const updated = this.mutateTask(taskId, (current) => ({
       ...current,
@@ -1137,13 +1038,23 @@ export class ScheduledTaskManager {
     ))
   }
 
+  /**
+   * 执行一轮扫描
+   *
+   * 到期任务只做非阻塞派发，并发由 runTracker 槽位与 maxConcurrentRuns 控制：
+   * 超出上限的任务保持 nextRunAt 不变，留到下一轮扫描，不排队堆积。
+   */
   async scanNow(): Promise<void> {
     const now = this.nowFn()
     this.lastScanAt = now
+    this.sweepActiveRuns(now)
+
     const dueTasks = [...this.tasks.values()]
       .filter((task) => {
         if (task.status !== 'running') return false
         if (typeof task.nextRunAt !== 'number') return false
+        // 长任务的 nextRunAt 要等本轮跑完才推进，期间不能重复派发。
+        if (this.runTracker.has(task.id)) return false
         if (this.startupRecovering && task.nextRunAt <= this.startupTimestamp) {
           return false
         }
@@ -1152,7 +1063,8 @@ export class ScheduledTaskManager {
       .sort((a, b) => (a.nextRunAt ?? 0) - (b.nextRunAt ?? 0))
 
     for (const task of dueTasks) {
-      await this.executeTask(task.id, 'scheduler')
+      if (this.runTracker.size >= this.maxConcurrentRuns) break
+      void this.dispatchTask(task.id, 'scheduler')
     }
 
     await this.notifyMissedTasksIfNeeded()
@@ -1166,13 +1078,18 @@ export class ScheduledTaskManager {
         && typeof task.nextRunAt === 'number'
         && task.nextRunAt <= this.startupTimestamp
         && !this.recoveredOverdueTasks.has(task.id)
+        && !this.runTracker.has(task.id)
       ))
       .sort((a, b) => (a.nextRunAt ?? 0) - (b.nextRunAt ?? 0))
 
+    // 补跑同样受并发上限约束；未派发的逾期任务交给后续扫描处理。
+    const dispatched: Array<Promise<void>> = []
     for (const task of overdueTasks) {
+      if (this.runTracker.size >= this.maxConcurrentRuns) break
       this.recoveredOverdueTasks.add(task.id)
-      await this.executeTask(task.id, 'scheduler')
+      dispatched.push(this.dispatchTask(task.id, 'scheduler'))
     }
+    await Promise.all(dispatched)
 
     this.startupRecovering = false
     await this.notifyMissedTasksIfNeeded()

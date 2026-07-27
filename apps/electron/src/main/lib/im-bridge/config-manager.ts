@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import type {
   BridgeBinding,
   BridgeConfig,
@@ -18,6 +18,7 @@ import {
   getImBridgeConfigPath,
   getImBridgeRuntimePath,
 } from '../config-paths'
+import { writeTextAtomic } from '../safe-json-file'
 
 
 import { createLogger } from '../logger'
@@ -58,14 +59,17 @@ const DEFAULT_CONFIG: BridgeConfig = {
     defaultSession: {},
   },
   feishu: {
-      enabled: false,
-      appId: '',
-      appSecret: '',
-      bots: [],
-      sessionMirror: { mode: 'off' },
-      allowP2P: true,
+    enabled: false,
+    appId: '',
+    appSecret: '',
+    bots: [],
+    sessionMirror: { mode: 'off' },
+    allowP2P: true,
     allowGroup: true,
     requireMention: true,
+    allowedOpenIds: [],
+    allowedChatIds: [],
+    maxInboundFileBytes: 10 * 1024 * 1024,
     streamingCards: true,
     quietWindowMs: 600,
     maxConcurrent: 5,
@@ -76,6 +80,7 @@ const DEFAULT_CONFIG: BridgeConfig = {
     baseUrl: 'https://ilinkai.weixin.qq.com',
     accountIds: [],
     allowedUserIds: [],
+    maxInboundFileBytes: 25 * 1024 * 1024,
     aggregateWindowMs: 1200,
     deferredOutboundTtlMs: 12 * 60 * 60 * 1000,
     contextTtlMs: 24 * 60 * 60 * 1000,
@@ -158,8 +163,15 @@ function normalizeFeishuBot(value: unknown): FeishuBotConfig | null {
     enabled: Boolean(source.enabled),
     appId: source.appId?.trim() || '',
     appSecret: source.appSecret?.trim() || '',
+    autoApprove: Boolean(source.autoApprove),
     defaultSession: normalizeSessionOverride(source.defaultSession),
   }
+}
+
+function normalizeByteLimit(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : fallback
 }
 
 function normalizeFeishuBots(current: Partial<BridgeConfig> | undefined): FeishuBotConfig[] {
@@ -176,6 +188,8 @@ function normalizeFeishuBots(current: Partial<BridgeConfig> | undefined): Feishu
     enabled: Boolean(current.feishu.enabled),
     appId: current.feishu.appId?.trim() || '',
     appSecret: current.feishu.appSecret?.trim() || '',
+    // 旧配置迁移一律以“关闭自动放行”落地，历史硬编码 auto 不再被继承
+    autoApprove: false,
     defaultSession: normalizeSessionOverride(current.feishu.defaultSession),
   }]
 }
@@ -186,6 +200,10 @@ function normalizeWeChatConfig(current: Partial<BridgeConfig> | undefined): Brid
     baseUrl: normalizeWeChatBaseUrl(current?.wechat?.baseUrl),
     accountIds: normalizeStringArray(current?.wechat?.accountIds),
     allowedUserIds: normalizeStringArray(current?.wechat?.allowedUserIds),
+    maxInboundFileBytes: normalizeByteLimit(
+      current?.wechat?.maxInboundFileBytes,
+      DEFAULT_CONFIG.wechat.maxInboundFileBytes,
+    ),
     aggregateWindowMs: typeof current?.wechat?.aggregateWindowMs === 'number'
       ? Math.max(0, current.wechat.aggregateWindowMs)
       : DEFAULT_CONFIG.wechat.aggregateWindowMs,
@@ -208,12 +226,20 @@ function normalizeFeishuConfig(current: Partial<BridgeConfig> | undefined): Brid
     appId: firstBot?.appId ?? current?.feishu?.appId?.trim() ?? '',
     appSecret: firstBot?.appSecret ?? current?.feishu?.appSecret?.trim() ?? '',
     bots,
-    sessionMirror: current?.feishu?.sessionMirror?.mode === 'stream'
-      ? { mode: 'stream', botId: current.feishu.sessionMirror.botId?.trim() || undefined }
-      : { mode: 'off', botId: current?.feishu?.sessionMirror?.botId?.trim() || undefined },
+    sessionMirror: {
+      mode: current?.feishu?.sessionMirror?.mode === 'stream' ? 'stream' : 'off',
+      botId: current?.feishu?.sessionMirror?.botId?.trim() || undefined,
+      targetOpenId: current?.feishu?.sessionMirror?.targetOpenId?.trim() || undefined,
+    },
     allowP2P: current?.feishu?.allowP2P ?? DEFAULT_CONFIG.feishu.allowP2P,
     allowGroup: current?.feishu?.allowGroup ?? DEFAULT_CONFIG.feishu.allowGroup,
     requireMention: current?.feishu?.requireMention ?? DEFAULT_CONFIG.feishu.requireMention,
+    allowedOpenIds: normalizeStringArray(current?.feishu?.allowedOpenIds),
+    allowedChatIds: normalizeStringArray(current?.feishu?.allowedChatIds),
+    maxInboundFileBytes: normalizeByteLimit(
+      current?.feishu?.maxInboundFileBytes,
+      DEFAULT_CONFIG.feishu.maxInboundFileBytes,
+    ),
     streamingCards: current?.feishu?.streamingCards ?? DEFAULT_CONFIG.feishu.streamingCards,
     quietWindowMs: typeof current?.feishu?.quietWindowMs === 'number'
       ? Math.max(0, current.feishu.quietWindowMs)
@@ -273,8 +299,9 @@ function readJsonFile<T>(filePath: string, fallback: T): T {
   }
 }
 
+/** 统一原子写：避免进程崩溃或并发写导致配置/绑定/runtime 文件被截断 */
 function writeJsonFile(filePath: string, value: unknown): void {
-  writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf-8')
+  writeTextAtomic(filePath, JSON.stringify(value, null, 2))
 }
 
 export class ImBridgeConfigManager {
@@ -342,6 +369,7 @@ export class ImBridgeConfigManager {
               appSecret: bot.appSecret.trim()
                 ? this.secretBox.encryptString(bot.appSecret.trim())
                 : current.feishu.bots?.find((item) => item.id === bot.id)?.appSecret ?? '',
+              autoApprove: Boolean(bot.autoApprove),
               defaultSession: bot.defaultSession,
             })),
         sessionMirror: input.feishu?.sessionMirror ?? current.feishu.sessionMirror,
@@ -383,6 +411,7 @@ export class ImBridgeConfigManager {
       appSecret: input.appSecret.trim()
         ? this.secretBox.encryptString(input.appSecret.trim())
         : existing?.appSecret ?? '',
+      autoApprove: input.autoApprove ?? existing?.autoApprove ?? false,
       defaultSession: {
         ...existing?.defaultSession,
         ...input.defaultSession,
@@ -480,6 +509,7 @@ export class ImBridgeConfigManager {
           peerId: item.peerId?.trim() || undefined,
           peerType: item.peerType,
           displayName: item.displayName?.trim() || undefined,
+          outboundOnly: item.outboundOnly === true ? true : undefined,
         }))
       : []
   }

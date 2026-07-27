@@ -1,0 +1,25 @@
+# Git 钩子配置
+#
+# pre-commit 只做秒级检查（lint 暂存文件 + 文件体积闸门），不阻塞提交节奏；
+# 类型检查与测试放在 pre-push，避免每次提交都等全量 tsc。
+#
+# 跳过单次钩子：LEFTHOOK=0 git commit ...
+# 重新安装钩子：bunx lefthook install
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      glob: "*.{ts,tsx}"
+      run: bunx biome lint {staged_files}
+
+    - name: file-size
+      run: bun run scripts/check-file-size.ts
+
+pre-push:
+  jobs:
+    - name: typecheck
+      run: bun run typecheck
+
+    - name: test
+      run: bun test

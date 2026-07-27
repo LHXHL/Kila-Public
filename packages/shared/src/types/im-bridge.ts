@@ -100,6 +100,11 @@ export interface FeishuBridgeConfig {
   allowP2P: boolean
   allowGroup: boolean
   requireMention: boolean
+  /** 允许驱动 Agent 的发送者 open_id 白名单；为空表示拒绝全部入站 */
+  allowedOpenIds: string[]
+  /** 可选的会话范围收窄；为空表示不额外限制 chat */
+  allowedChatIds: string[]
+  maxInboundFileBytes: number
   /** 启用流式卡片（CardKit 2.0），实时展示 Agent 运行进度 */
   streamingCards?: boolean
   /** 消息聚合静默窗口（ms），群聊高频消息合并投递 */
@@ -115,6 +120,11 @@ export interface FeishuBotConfig {
   enabled: boolean
   appId: string
   appSecret: string
+  /**
+   * 高危开关：该机器人的入站消息跳过权限闸门（等价于全放行）。
+   * 默认关闭；开启后仍要求 `allowedOpenIds` 非空才会生效。
+   */
+  autoApprove?: boolean
   defaultSession?: BridgeChannelSessionOverride
 }
 
@@ -124,6 +134,7 @@ export interface FeishuBotConfigInput {
   enabled: boolean
   appId: string
   appSecret: string
+  autoApprove?: boolean
   defaultSession?: BridgeChannelSessionOverride
 }
 
@@ -141,6 +152,11 @@ export type FeishuSessionSyncMode = 'off' | 'stream'
 export interface FeishuSessionMirrorSettings {
   mode: FeishuSessionSyncMode
   botId?: string
+  /**
+   * 镜像接收人的 open_id。必须显式配置，禁止按“最近发消息的人”推断。
+   * 未配置时会话镜像不启动。
+   */
+  targetOpenId?: string
 }
 
 export interface FeishuRegisterAppQRCode {
@@ -166,6 +182,7 @@ export interface WeChatBridgeConfig {
   baseUrl: string
   accountIds: string[]
   allowedUserIds: string[]
+  maxInboundFileBytes: number
   aggregateWindowMs: number
   deferredOutboundTtlMs: number
   contextTtlMs: number
@@ -214,6 +231,8 @@ export interface BridgeBinding {
   createdAt: number
   updatedAt: number
   displayName?: string
+  /** 仅用于出站推送（如飞书 Session 镜像群）；入站消息必须被拒绝 */
+  outboundOnly?: boolean
 }
 
 export interface BridgeBindingUpdateInput {

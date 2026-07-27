@@ -8,6 +8,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
+import { Trans, useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ExternalLink, Eye, EyeOff, Loader2, CheckCircle2, XCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ async function refreshAgentTools(
 }
 
 function WebSearchSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const [apiKey, setApiKey] = React.useState('')
   const [showApiKey, setShowApiKey] = React.useState(false)
   const [enabled, setEnabled] = React.useState(false)
@@ -65,11 +67,11 @@ function WebSearchSettings(): React.ReactElement {
       await window.electronAPI.updateAgentToolCredentials('web-search', { apiKey: trimmed })
       savedApiKeyRef.current = trimmed
       await refreshAgentTools(setAgentTools)
-      toast.success('联网搜索设置已保存')
+      toast.success(t('settings.builtinTools.webSearch.saved'))
     } catch (error) {
       console.error('[联网搜索设置] 保存失败:', error)
     }
-  }, [apiKey, setAgentTools])
+  }, [apiKey, setAgentTools, t])
 
   const handleToggle = async (checked: boolean): Promise<void> => {
     try {
@@ -106,36 +108,44 @@ function WebSearchSettings(): React.ReactElement {
   }
 
   if (loading) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">加载中...</div>
+    return <div className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</div>
   }
 
   return (
     <SettingsSection
-      title="联网搜索"
-      description="启用后 AI 可以实时搜索互联网获取最新信息"
+      title={t('settings.builtinTools.webSearch.title')}
+      description={t('settings.builtinTools.webSearch.description')}
       action={<Switch checked={enabled} onCheckedChange={handleToggle} />}
     >
       <SettingsCard divided={false}>
         <div className="space-y-4 p-4">
           <div className="space-y-2 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-            <p>联网搜索由 <span className="font-medium text-foreground">Tavily</span> 提供，启用后 AI 可以搜索互联网获取实时信息。</p>
-            <p className="text-xs">配置步骤：</p>
+            <p>
+              <Trans
+                i18nKey="settings.builtinTools.webSearch.intro"
+                components={{ provider: <span className="font-medium text-foreground" /> }}
+              />
+            </p>
+            <p className="text-xs">{t('settings.builtinTools.webSearch.setupTitle')}</p>
             <ol className="list-inside list-decimal space-y-1 text-xs">
               <li>
-                访问{' '}
-                <a
-                  href="https://tavily.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 text-primary hover:underline"
-                >
-                  Tavily 官网
-                  <ExternalLink size={10} />
-                </a>
-                {' '}注册账号
+                <Trans
+                  i18nKey="settings.builtinTools.webSearch.step1"
+                  components={{
+                    link: (
+                      <a
+                        href="https://tavily.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-primary hover:underline"
+                      />
+                    ),
+                    icon: <ExternalLink size={10} />,
+                  }}
+                />
               </li>
-              <li>在控制台获取 API Key（免费额度每月 1000 次搜索）</li>
-              <li>将 API Key 填入下方，然后开启开关</li>
+              <li>{t('settings.builtinTools.webSearch.step2')}</li>
+              <li>{t('settings.builtinTools.webSearch.step3')}</li>
             </ol>
           </div>
 
@@ -143,7 +153,7 @@ function WebSearchSettings(): React.ReactElement {
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">API Key</label>
               <Button size="sm" variant="outline" disabled={testing || !apiKey.trim()} onClick={handleTest}>
-                {testing ? <><Loader2 size={14} className="mr-1.5 animate-spin" />测试中...</> : '测试连接'}
+                {testing ? <><Loader2 size={14} className="mr-1.5 animate-spin" />{t('settings.builtinTools.webSearch.testing')}</> : t('settings.builtinTools.webSearch.testConnection')}
               </Button>
             </div>
             <div className="relative">
@@ -179,6 +189,7 @@ function WebSearchSettings(): React.ReactElement {
 }
 
 function CustomToolsSection(): React.ReactElement | null {
+  const { t } = useTranslation()
   const tools = useAtomValue(agentToolsAtom)
   const setAgentTools = useSetAtom(agentToolsAtom)
 
@@ -198,17 +209,17 @@ function CustomToolsSection(): React.ReactElement | null {
     try {
       await window.electronAPI.deleteCustomAgentTool(toolId)
       await refreshAgentTools(setAgentTools)
-      toast.success(`已删除工具: ${toolName}`)
+      toast.success(t('settings.builtinTools.customTools.deleted', { name: toolName }))
     } catch (error) {
       console.error('[自定义工具] 删除失败:', error)
-      toast.error('删除工具失败')
+      toast.error(t('settings.builtinTools.customTools.deleteFailed'))
     }
   }
 
   return (
     <SettingsSection
-      title="自定义工具"
-      description="通过 Agent 模式创建的 HTTP API 工具"
+      title={t('settings.builtinTools.customTools.title')}
+      description={t('settings.builtinTools.customTools.description')}
     >
       <SettingsCard divided>
         {customTools.map((tool) => (
@@ -253,17 +264,19 @@ function CustomToolsSection(): React.ReactElement | null {
 }
 
 export function BuiltinToolSettings(): React.ReactElement {
+  const { t } = useTranslation()
+
   return (
     <div className="space-y-8">
       <SettingsSection
-        title="内置工具"
-        description="Kila 的全局工具能力也收口到这里统一配置，不再保留单独的 tools 菜单。"
+        title={t('settings.builtinTools.title')}
+        description={t('settings.builtinTools.description')}
       >
         <SettingsCard divided={false} className="p-4 text-sm text-muted-foreground">
           <div className="space-y-2">
-            <p>- Built-in tools 与 MCP 一样都是全局能力，不再挂在单独设置页</p>
-            <p>- 工具开关影响输入区的可用工具与 Agent runtime 注入</p>
-            <p>- 自定义 HTTP 工具也在这里统一管理</p>
+            <p>- {t('settings.builtinTools.note1')}</p>
+            <p>- {t('settings.builtinTools.note2')}</p>
+            <p>- {t('settings.builtinTools.note3')}</p>
           </div>
         </SettingsCard>
       </SettingsSection>

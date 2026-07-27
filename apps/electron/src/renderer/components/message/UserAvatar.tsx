@@ -8,7 +8,8 @@
  * - 圆角 20%，柔和边框
  */
 
-import * as React from 'react'
+import type * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 interface UserAvatarProps {
@@ -31,6 +32,7 @@ export function UserAvatar({
   className,
   onClick,
 }: UserAvatarProps): React.ReactElement {
+  const { t } = useTranslation()
   const fontSize = Math.round(size * 0.5)
 
   if (isImageUrl(avatar)) {
@@ -46,7 +48,7 @@ export function UserAvatar({
       >
         <img
           src={avatar}
-          alt="用户头像"
+          alt={t('agent.message.userAvatarAlt')}
           className="size-full object-cover"
         />
       </div>

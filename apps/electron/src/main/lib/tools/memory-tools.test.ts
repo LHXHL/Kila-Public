@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { Value } from '@sinclair/typebox/value'
 import {
   createMemoryTools,
-  resolveMemoryEntryProvider,
   resolveMemoryWriteProjectPath,
 } from './memory-tools'
 
@@ -62,35 +62,13 @@ describe('memory_write 持久化时机', () => {
     })
   })
 
-  test('Given 本地 Markdown 返回全局 URI，When memory_write 写入成功，Then 明确反馈本地落点', async () => {
-    const tools = createMemoryTools({
-      sessionId: 'session-local',
-      backendAvailable: true,
-    }, {
-      writeMemory: async (input) => ({
-        kind: 'memory',
-        id: 'local-memory-1',
-        uri: 'memory://global/local-memory-1',
-        content: input.content,
-        tags: [],
-        category: 'general',
-        sourceSessionId: input.sourceSessionId,
-        createdAt: 1,
-        updatedAt: 1,
-      }),
-    })
+  test('Given 本地存储已移除，When memory_write 描述被注入模型上下文，Then 不再宣称存在本地 Markdown 回退', () => {
+    const tools = createMemoryTools({ sessionId: 'session-desc', backendAvailable: true })
     const tool = tools.find((candidate) => candidate.name === 'memory_write')
     if (!tool) throw new Error('memory_write tool not registered')
 
-    const result = await tool.execute('tool-local', { content: '本地长期记忆' })
-    const textContent = result.content.find((item) => item.type === 'text')
-
-    expect(textContent?.text).toContain('已写入本地 Markdown 长期记忆')
-    expect(result.details).toMatchObject({
-      persisted: true,
-      provider: 'local',
-      uri: 'memory://global/local-memory-1',
-    })
+    expect(tool.description).not.toContain('本地 Markdown')
+    expect(tool.description).toContain('仅写入 Nowledge')
   })
 
   test('Given 当前后端写入失败，When memory_write 被调用，Then 将错误直接交给 Agent 而不是伪装成成功', async () => {
@@ -109,13 +87,31 @@ describe('memory_write 持久化时机', () => {
   })
 })
 
-describe('长期记忆 URI 后端识别', () => {
-  test('Given 本地全局或项目 URI，When 识别后端，Then 返回 local', () => {
-    expect(resolveMemoryEntryProvider('memory://global/preference/demo')).toBe('local')
-    expect(resolveMemoryEntryProvider('memory://project/project-id/demo')).toBe('local')
+describe('working memory 作用域 schema', () => {
+  function schemaOf(toolName: string) {
+    const tools = createMemoryTools({
+      sessionId: 'session-scope',
+      projectPath: '/tmp/session-project',
+      backendAvailable: true,
+    })
+    const tool = tools.find((candidate) => candidate.name === toolName)
+    if (!tool) throw new Error(`${toolName} tool not registered`)
+    return tool.parameters
+  }
+
+  test('Given 项目级 working memory 已随本地存储移除，When memory_context 传 project 作用域，Then schema 层直接拒绝', () => {
+    expect(Value.Check(schemaOf('memory_context'), { action: 'get', scope: 'project' })).toBe(false)
+    expect(Value.Check(schemaOf('memory_context'), { action: 'get', scope: 'global' })).toBe(true)
+    expect(Value.Check(schemaOf('memory_context'), { action: 'get' })).toBe(true)
   })
 
-  test('Given Nowledge 记忆 URI，When 识别后端，Then 返回 nowledge', () => {
-    expect(resolveMemoryEntryProvider('memory://01JMEMORYID')).toBe('nowledge')
+  test('Given 项目级 working memory 已随本地存储移除，When memory_context_patch 传 project 作用域，Then schema 层直接拒绝', () => {
+    const schema = schemaOf('memory_context_patch')
+    expect(Value.Check(schema, { section: '## Notes', append: 'x', scope: 'project' })).toBe(false)
+    expect(Value.Check(schema, { section: '## Notes', append: 'x', scope: 'global' })).toBe(true)
+  })
+
+  test('Given 长期记忆写入仍支持项目作用域，When 检查 memory_write schema，Then project 依然是合法枚举', () => {
+    expect(Value.Check(schemaOf('memory_write'), { content: '项目约束', scope: 'project' })).toBe(true)
   })
 })

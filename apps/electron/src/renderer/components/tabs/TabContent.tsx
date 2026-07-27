@@ -5,8 +5,9 @@
  * Tab 只负责定位 sessionId，所有会话统一渲染为 Agent 模式。
  */
 
-import * as React from 'react'
+import type * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { tabsAtom } from '@/atoms/tab-atoms'
 import { SessionView } from '@/components/session/SessionView'
 
@@ -15,13 +16,14 @@ export interface TabContentProps {
 }
 
 export function TabContent({ tabId }: TabContentProps): React.ReactElement {
+  const { t } = useTranslation()
   const tabs = useAtomValue(tabsAtom)
-  const tab = tabs.find((t) => t.id === tabId)
+  const tab = tabs.find((candidate) => candidate.id === tabId)
 
   if (!tab) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        标签页不存在
+        {t('tabs.content.missingTab')}
       </div>
     )
   }

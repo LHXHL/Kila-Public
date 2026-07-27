@@ -14,7 +14,6 @@ import type {
   SessionContextCalibrationSnapshot,
   SessionContextSnapshot,
 } from '@kila/shared'
-import { currentSessionIdAtom } from './session-atoms'
 import type { AgentStreamState } from './agent-stream-atoms'
 import { agentStreamingStatesAtom } from './agent-stream-atoms'
 
@@ -219,16 +218,3 @@ export function agentContextStatusAtomFamily(sessionId: string) {
 export function releaseAgentContextStatusAtom(sessionId: string): void {
   agentContextStatusAtomCache.delete(sessionId)
 }
-
-/** 当前会话的上下文使用量派生 atom */
-export const agentContextStatusAtom = atom<AgentContextStatus>((get) => {
-  const currentId = get(currentSessionIdAtom)
-  if (!currentId) {
-    return {
-      isCompacting: false,
-      canSeedCalibration: false,
-    }
-  }
-
-  return get(agentContextStatusAtomFamily(currentId))
-})

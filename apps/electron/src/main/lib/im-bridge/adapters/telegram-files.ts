@@ -4,6 +4,12 @@ import { join } from 'node:path'
 import type { FileAttachment } from '@kila/shared'
 import { getImBridgeSessionFilesDir } from '../../config-paths'
 import type { BridgeAttachmentReference } from './base-adapter'
+import {
+  DEFAULT_MAX_INBOUND_FILE_BYTES,
+  assertActualSizeWithinLimit,
+  assertDeclaredSizeWithinLimit,
+  assertDownloadResponseOk,
+} from './download-limits'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
@@ -31,24 +37,30 @@ export async function downloadTelegramAttachments(input: {
   botToken: string
   attachments: BridgeAttachmentReference[]
   sessionId: string
+  maxBytes?: number
 }): Promise<FileAttachment[]> {
   const sessionDir = getImBridgeSessionFilesDir(input.sessionId)
+  const maxBytes = input.maxBytes ?? DEFAULT_MAX_INBOUND_FILE_BYTES
   const results: FileAttachment[] = []
 
   for (const attachment of input.attachments) {
+    const filename = sanitizeFilename(attachment.filename)
     const meta = await downloadTelegramFile(input.fetchImpl, input.botToken, attachment.remoteId)
     const response = await input.fetchImpl(`https://api.telegram.org/file/bot${input.botToken}/${meta.filePath}`)
-    const arrayBuffer = await response.arrayBuffer()
-    const filename = sanitizeFilename(attachment.filename)
-    const targetPath = join(sessionDir, filename)
+    assertDownloadResponseOk(response, filename)
+    assertDeclaredSizeWithinLimit(response, filename, maxBytes)
 
-    writeFileSync(targetPath, Buffer.from(arrayBuffer))
+    const buffer = Buffer.from(await response.arrayBuffer())
+    assertActualSizeWithinLimit(buffer.byteLength, filename, maxBytes)
+
+    const targetPath = join(sessionDir, filename)
+    writeFileSync(targetPath, buffer)
     results.push({
       id: randomUUID(),
       filename,
       mediaType: attachment.mediaType,
       localPath: targetPath,
-      size: attachment.size || Buffer.byteLength(Buffer.from(arrayBuffer)),
+      size: attachment.size || buffer.byteLength,
     })
   }
 

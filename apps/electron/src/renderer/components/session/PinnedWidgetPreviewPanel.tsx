@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import type { SessionPinnedWidget, WidgetDraftIntent } from '@kila/shared'
 import { Code, Eye, LayoutPanelTop } from 'lucide-react'
 import { setWidgetDraftProposalAtom } from '@/atoms/agent-atoms'
@@ -33,6 +34,7 @@ export function PinnedWidgetPreviewPanel({
   viewMode,
   onViewModeChange,
 }: PinnedWidgetPreviewPanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const setWidgetDraftProposal = useSetAtom(setWidgetDraftProposalAtom)
 
   const handleDraftIntent = React.useCallback((intent: WidgetDraftIntent): void => {
@@ -47,8 +49,8 @@ export function PinnedWidgetPreviewPanel({
       <div className="flex h-full items-center justify-center px-6">
         <div className="flex max-w-[260px] flex-col items-center gap-2 text-center text-muted-foreground">
           <LayoutPanelTop className="size-8" />
-          <div className="text-sm font-medium text-foreground">选择一个已固定 widget</div>
-          <div className="text-xs leading-5">在 transcript 中 pin 的 widget 会出现在这里，方便持续查看。</div>
+          <div className="text-sm font-medium text-foreground">{t('session.pinnedWidget.emptyTitle')}</div>
+          <div className="text-xs leading-5">{t('session.pinnedWidget.emptyDescription')}</div>
         </div>
       </div>
     )

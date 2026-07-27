@@ -1,14 +1,11 @@
 import { atom } from 'jotai'
 import type {
-  AgentMessage,
   AgentPendingFile,
   QuickSuggestion,
-  SessionMeta,
   SessionSendInput,
   ThinkingLevel,
   WidgetDraftIntent,
 } from '@kila/shared'
-import { currentSessionIdAtom, sessionsAtom } from './session-atoms'
 
 /** 待自动发送的 Agent 提示（从设置页"session完成配置"触发） */
 export interface AgentPendingPrompt {
@@ -47,7 +44,6 @@ export interface BackgroundTask {
 
 export const agentChannelIdAtom = atom<string | null>(null)
 export const agentModelIdAtom = atom<string | null>(null)
-export const currentAgentMessagesAtom = atom<AgentMessage[]>([])
 export const agentPendingPromptAtom = atom<AgentPendingPrompt | null>(null)
 
 /** Agent 待发送文件列表（按 Session 隔离，避免切换标签时附件串会话） */
@@ -175,19 +171,6 @@ export const agentMaxBudgetUsdAtom = atom<number | undefined>(undefined)
 /** Agent 最大轮次 */
 export const agentMaxTurnsAtom = atom<number | undefined>(undefined)
 
-export const currentAgentSessionAtom = atom<SessionMeta | null>((get) => {
-  const sessions = get(sessionsAtom)
-  const currentId = get(currentSessionIdAtom)
-  if (!currentId) return null
-  return sessions.find((session) => session.id === currentId) ?? null
-})
-
-/**
- * Agent 流式错误消息 Map — 以 sessionId 为 key
- * 错误发生时写入，下次发送或手动关闭时清除
- */
-export const agentStreamErrorsAtom = atom<Map<string, string>>(new Map())
-
 /**
  * Agent 消息刷新版本 Map — 以 sessionId 为 key
  * 全局监听器在流式完成/错误时递增版本号，
@@ -197,13 +180,6 @@ export const agentMessageRefreshAtom = atom<Map<string, number>>(new Map())
 
 /** 会话消息正在从持久化存储重新水合，用于保留已完成流式气泡直到消息落屏 */
 export const agentMessageHydratingAtom = atom<Set<string>>(new Set<string>())
-
-/** 当前 Agent 会话的错误消息（派生只读原子） */
-export const currentAgentErrorAtom = atom<string | null>((get) => {
-  const currentId = get(currentSessionIdAtom)
-  if (!currentId) return null
-  return get(agentStreamErrorsAtom).get(currentId) ?? null
-})
 
 /**
  * Agent 会话输入框草稿 Map — 以 sessionId 为 key
@@ -220,42 +196,6 @@ export const widgetDraftProposalMapAtom = atom<Map<string, WidgetDraftIntent>>(n
  * 这些路径作为 SDK additionalDirectories 参数传递。
  */
 export const agentAttachedDirectoriesMapAtom = atom<Map<string, string[]>>(new Map())
-
-/**
- * 工作区级附加目录列表（按 workspaceId 存储）
- *
- * 工作区内所有会话共享这些附加目录。
- */
-export const workspaceAttachedDirectoriesMapAtom = atom<Map<string, string[]>>(new Map())
-
-/** 当前 Agent 会话的草稿内容（派生读写原子） */
-export const currentAgentSessionDraftAtom = atom(
-  (get) => {
-    const currentId = get(currentSessionIdAtom)
-    if (!currentId) return ''
-    return get(agentSessionDraftsAtom).get(currentId) ?? ''
-  },
-  (get, set, newDraft: string) => {
-    const currentId = get(currentSessionIdAtom)
-    if (!currentId) return
-    set(agentSessionDraftsAtom, (prev) => {
-      const map = new Map(prev)
-      if (newDraft.trim() === '') {
-        map.delete(currentId)
-      } else {
-        map.set(currentId, newDraft)
-      }
-      return map
-    })
-  },
-)
-
-/** 当前 Agent 会话的 widget 草稿提案（派生只读原子） */
-export const currentWidgetDraftProposalAtom = atom<WidgetDraftIntent | null>((get) => {
-  const currentId = get(currentSessionIdAtom)
-  if (!currentId) return null
-  return get(widgetDraftProposalMapAtom).get(currentId) ?? null
-})
 
 export const setWidgetDraftProposalAtom = atom(
   null,
@@ -282,13 +222,6 @@ export const clearWidgetDraftProposalAtom = atom(
 
 /** Agent 提示建议 Map — 以 sessionId 为 key，存储最近一条建议 */
 export const agentPromptSuggestionsAtom = atom<Map<string, string>>(new Map())
-
-/** 当前 Agent 会话的提示建议（派生只读原子） */
-export const currentAgentSuggestionAtom = atom<string | null>((get) => {
-  const currentId = get(currentSessionIdAtom)
-  if (!currentId) return null
-  return get(agentPromptSuggestionsAtom).get(currentId) ?? null
-})
 
 /** 欢迎界面快捷建议 — 应用启动时 LLM 生成并缓存（所有空会话共享） */
 export const sessionQuickSuggestionsAtom = atom<QuickSuggestion[]>([])

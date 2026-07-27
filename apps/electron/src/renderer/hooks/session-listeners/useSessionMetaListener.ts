@@ -7,13 +7,10 @@ import type {
   SessionUpdatedPayload,
 } from '@kila/shared'
 import {
-  cachedTeamActivitiesAtom,
-  cachedTeamOverviewsAtom,
-  dismissedTeamSessionIdsAtom,
-  buildTeamActivityEntries,
-  extractTeamOverview,
-} from '@/atoms/agent-team-atoms'
-import { agentStreamingStatesAtom } from '@/atoms/agent-stream-atoms'
+  agentStreamingStatesAtom,
+  releaseAgentSessionStreamStateAtom,
+  settleAgentStreamStateAtom,
+} from '@/atoms/agent-stream-atoms'
 import {
   agentAttachedDirectoriesMapAtom,
   agentMessageHydratingAtom,
@@ -25,7 +22,6 @@ import {
   agentSessionDraftsAtom,
   agentSidePanelActiveToolMapAtom,
   agentSidePanelCloseRequestMapAtom,
-  agentStreamErrorsAtom,
   backgroundTasksAtomFamily,
   disposePendingFiles,
   releaseBackgroundTasksAtom,
@@ -54,7 +50,6 @@ import {
   sessionsAtom,
 } from '@/atoms/session-atoms'
 import { sessionPinnedWidgetsMapAtom } from '@/atoms/session-board-atoms'
-import { sessionUsageSnapshotsAtom } from '@/atoms/usage-atoms'
 import {
   notificationsEnabledAtom,
   sendDesktopNotification,
@@ -119,50 +114,16 @@ export function useSessionMetaListener(): void {
         )
       }
 
-      const streamState = store.get(agentStreamingStatesAtom).get(data.sessionId)
-      if (streamState && streamState.toolActivities.length > 0) {
-        const teamEntries = buildTeamActivityEntries(streamState.toolActivities)
-        if (teamEntries.length > 0) {
-          store.set(cachedTeamActivitiesAtom, (prev) => {
-            const map = new Map(prev)
-            map.set(data.sessionId, teamEntries)
-            return map
-          })
-        }
-
-        const overview = extractTeamOverview(streamState.toolActivities)
-        if (overview) {
-          store.set(cachedTeamOverviewsAtom, (prev) => {
-            const map = new Map(prev)
-            map.set(data.sessionId, overview)
-            return map
-          })
-        }
-      }
-
-      store.set(agentStreamingStatesAtom, (prev) => {
-        const current = prev.get(data.sessionId)
-        if (!current) return prev
-        const map = new Map(prev)
-        map.set(data.sessionId, { ...current, running: false })
-        return map
-      })
+      // 不可见会话（IM Bridge / 定时任务 / 已关闭 Tab）直接回收流式状态，
+      // 避免完整正文 + processEvents + 工具结果长期滞留内存。
+      store.set(settleAgentStreamStateAtom, data.sessionId)
       bumpAgentRefresh(data.sessionId)
     })
 
+    // 错误正文不再单独缓存到 renderer：失败会以持久化 status 消息落盘，
+    // 这里只结束流式态并触发消息重载，由 status 消息负责展示与重试入口。
     const cleanupError = window.electronAPI.onSessionStreamError((data: SessionStreamErrorPayload) => {
-      store.set(agentStreamingStatesAtom, (prev) => {
-        const current = prev.get(data.sessionId)
-        if (!current) return prev
-        const map = new Map(prev)
-        map.set(data.sessionId, { ...current, running: false })
-        return map
-      })
-      store.set(agentStreamErrorsAtom, (prev) => {
-        const map = new Map(prev)
-        map.set(data.sessionId, data.error)
-        return map
-      })
+      store.set(settleAgentStreamStateAtom, data.sessionId)
       bumpAgentRefresh(data.sessionId)
     })
 
@@ -199,7 +160,6 @@ export function useSessionMetaListener(): void {
         }
 
         store.set(agentStreamingStatesAtom, (prev) => deleteMapKey(prev, sessionId))
-        store.set(agentStreamErrorsAtom, (prev) => deleteMapKey(prev, sessionId))
         store.set(agentQueuedSendMapAtom, (prev) => deleteMapKey(prev, sessionId))
         store.set(agentMessageRefreshAtom, (prev) => deleteMapKey(prev, sessionId))
         store.set(agentMessageHydratingAtom, (prev) => deleteSetValue(prev, sessionId))
@@ -227,15 +187,11 @@ export function useSessionMetaListener(): void {
         store.set(sessionFileWorkbenchStateMapAtom, (prev) => deleteMapKey(prev, sessionId))
         store.set(sessionWebPreviewStateMapAtom, (prev) => deleteMapKey(prev, sessionId))
         store.set(sessionPinnedWidgetsMapAtom, (prev) => deleteMapKey(prev, sessionId))
-        store.set(sessionUsageSnapshotsAtom, (prev) => deleteMapKey(prev, sessionId))
-
-        store.set(dismissedTeamSessionIdsAtom, (prev) => deleteSetValue(prev, sessionId))
-        store.set(cachedTeamActivitiesAtom, (prev) => deleteMapKey(prev, sessionId))
-        store.set(cachedTeamOverviewsAtom, (prev) => deleteMapKey(prev, sessionId))
 
         store.set(backgroundTasksAtomFamily(sessionId), [])
         releaseBackgroundTasksAtom(sessionId)
         releaseAgentContextStatusAtom(sessionId)
+        releaseAgentSessionStreamStateAtom(sessionId)
       }
       void refreshAllLists()
     })

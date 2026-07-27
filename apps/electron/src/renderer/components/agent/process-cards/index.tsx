@@ -6,7 +6,7 @@
  * - 流式空状态 → 思考中占位卡片
  */
 
-import * as React from 'react'
+import type * as React from 'react'
 import { ThinkingProcessCard } from './ThinkingProcessCard'
 import { WorkflowCollapse } from './WorkflowCollapse'
 import type { BackgroundTask, ProcessTimelineEntry } from '@/atoms/agent-atoms'

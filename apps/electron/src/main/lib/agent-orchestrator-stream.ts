@@ -17,11 +17,15 @@ import type {
 } from '@kila/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { friendlyErrorMessage, isPromptTooLongError } from './adapters/pi-agent-adapter'
-import { AgentEventBus } from './agent-event-bus'
+import type { AgentEventBus } from './agent-event-bus'
 import { appendAgentMessage, getAgentMessages, touchAgentSession } from './agent-message-store'
 import { getSessionMessages, saveSessionMessages } from './session-manager'
+import { createLogger } from './logger'
 import { memoryLifecycleManager, shouldPersistRunMemory } from './memory/lifecycle-manager'
 import { patchLatestAssistantMemoryTrace } from './memory/write-trace'
+import { recordCompactionTokenUsage } from './token-usage-service'
+
+const log = createLogger('Agent流')
 
 const AUTO_RETRYABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   'rate_limited',
@@ -62,6 +66,16 @@ function getRetryDelayMs(attempt: number): number {
 type CompactCompleteEvent = Extract<AgentEvent, { type: 'compact_complete' }>
 type CompactNoopEvent = Extract<AgentEvent, { type: 'compact_noop' }>
 
+/** 压缩摘要那次模型调用的 token 合计，仅用于状态卡展示。 */
+function sumCompactionUsageTokens(event: CompactCompleteEvent): number {
+  const usage = event.usage
+  if (!usage) return 0
+  return (usage.inputTokens || 0)
+    + (usage.outputTokens || 0)
+    + (usage.cacheReadTokens || 0)
+    + (usage.cacheCreationTokens || 0)
+}
+
 function formatCompactionStatus(event: CompactCompleteEvent): string {
   const lines = [
     '上下文已压缩。Kila 已保留原始 JSONL 历史，并将 Pi runtime 的压缩结果作为后续模型上下文边界。',
@@ -70,6 +84,9 @@ function formatCompactionStatus(event: CompactCompleteEvent): string {
   const meta: string[] = []
   if (event.reason) meta.push(`reason=${event.reason}`)
   if (typeof event.tokensBefore === 'number') meta.push(`tokensBefore=${event.tokensBefore}`)
+  if (typeof event.estimatedTokensAfter === 'number') meta.push(`tokensAfter=${event.estimatedTokensAfter}`)
+  const summaryTokens = sumCompactionUsageTokens(event)
+  if (summaryTokens > 0) meta.push(`summaryTokens=${summaryTokens}`)
   if (event.firstKeptEntryId) meta.push(`firstKeptEntryId=${event.firstKeptEntryId}`)
   if (typeof event.willRetry === 'boolean') meta.push(`willRetry=${event.willRetry}`)
   if (meta.length > 0) lines.push(meta.join(' · '))
@@ -178,6 +195,18 @@ const RETRY_HISTORY_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
   'memory_trace',
 ])
 
+/**
+ * 不写入 assistant 消息 events 的事件类型（只实时推送，或由专门的消息承载）。
+ *
+ * - `model_resolved`：由 attemptBuffer.modelEvent 单独承载
+ * - `compact_complete`：压缩边界的唯一真相源是独立的 `role: 'status'` 消息。
+ *   两处同时落盘会让设置页的压缩次数、tokensBefore 累计和摘要长度统计全部翻倍。
+ */
+const UNBUFFERED_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
+  'model_resolved',
+  'compact_complete',
+])
+
 function createAttemptBuffer(model: string): AttemptBuffer {
   return {
     text: '',
@@ -247,7 +276,8 @@ export async function runAgentStream({
   let attemptBuffer = createAttemptBuffer(activeModel)
   // Pi 内部自动重试的当前 attempt 编号，用于识别“新 attempt”并只在切换时重置一次持久化缓冲。
   let lastPersistedRetryAttempt: number | undefined
-  let lastCompactionEvent: CompactCompleteEvent | null = null
+  // 本轮尚未落盘的压缩事件。一轮内可能压缩多次，逐条落盘避免漏计。
+  const pendingCompactionEvents: CompactCompleteEvent[] = []
   let lastCompactionNoopEvent: CompactNoopEvent | null = null
   let terminalError: string | null = null
 
@@ -262,6 +292,57 @@ export async function runAgentStream({
     if (patched.patched) {
       saveSessionMessages(sessionId, patched.messages)
     }
+  }
+
+  /** 压缩摘要是一次额外的模型调用，按 compaction 来源单独计入 Token 用量。 */
+  const recordCompactionUsage = (event: CompactCompleteEvent): void => {
+    if (!event.usage) return
+    try {
+      recordCompactionTokenUsage({
+        sessionId,
+        channelId: input.channelId,
+        channelBaseUrl: input.channelBaseUrlOverride,
+        modelId: activeModel,
+        usage: event.usage,
+      })
+    } catch (error) {
+      log.warn('[Agent流] 压缩摘要 Token 用量落盘失败:', error)
+    }
+  }
+
+  /**
+   * 把本轮累计的压缩事件各落盘为一条 status 消息，并清空待落盘队列。
+   *
+   * 该 status 消息是压缩边界的唯一真相源：assistant 消息里不再重复保存 compact_complete。
+   */
+  const flushCompactionStatusMessages = (): number => {
+    if (pendingCompactionEvents.length === 0) return 0
+
+    const events = pendingCompactionEvents.splice(0)
+    for (const event of events) {
+      appendAgentMessage(sessionId, {
+        id: randomUUID(),
+        role: 'status',
+        content: formatCompactionStatus(event),
+        createdAt: Date.now(),
+        model: activeModel,
+        events: [event],
+        messageSource: sourceMeta.messageSource,
+        messageSourceLabel: sourceMeta.messageSourceLabel,
+        relatedTaskId: sourceMeta.relatedTaskId,
+      })
+    }
+    return events.length
+  }
+
+  /**
+   * 收敛所有终态路径的持久化：先落 assistant 内容，再落压缩边界。
+   *
+   * 中止和失败路径同样要落盘压缩记录——压缩已经真实发生并消耗了 token。
+   */
+  const persistTurnArtifacts = (): number => {
+    persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
+    return flushCompactionStatusMessages()
   }
 
   const completeWithPostRun = (): AgentMessage[] => {
@@ -325,7 +406,7 @@ export async function runAgentStream({
       await new Promise((resolve) => setTimeout(resolve, delayMs))
 
       if (!canContinue(sessionId)) {
-        persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
+        persistTurnArtifacts()
         touchAgentSession(sessionId)
         onComplete(completeWithPostRun(), 'stopped')
         return
@@ -351,7 +432,7 @@ export async function runAgentStream({
             break
           }
 
-          persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
+          persistTurnArtifacts()
           appendAgentMessage(sessionId, {
             id: randomUUID(),
             role: 'status',
@@ -415,14 +496,15 @@ export async function runAgentStream({
         }
 
         if (timelineEvent.type === 'compact_complete') {
-          lastCompactionEvent = timelineEvent
+          pendingCompactionEvents.push(timelineEvent)
           lastCompactionNoopEvent = null
+          recordCompactionUsage(timelineEvent)
         }
         if (timelineEvent.type === 'compact_noop') {
           lastCompactionNoopEvent = timelineEvent
         }
 
-        if (timelineEvent.type !== 'model_resolved') {
+        if (!UNBUFFERED_EVENT_TYPES.has(timelineEvent.type)) {
           attemptBuffer.events.push(timelineEvent)
         }
         eventBus.emit(sessionId, timelineEvent)
@@ -436,7 +518,7 @@ export async function runAgentStream({
       }
 
       if (!canContinue(sessionId)) {
-        persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
+        persistTurnArtifacts()
         touchAgentSession(sessionId)
         onComplete(completeWithPostRun(), 'stopped')
         return
@@ -447,7 +529,7 @@ export async function runAgentStream({
       }
 
       if (terminalError) {
-        persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
+        persistTurnArtifacts()
         appendAgentMessage(sessionId, {
           id: randomUUID(),
           role: 'status',
@@ -463,19 +545,8 @@ export async function runAgentStream({
         return
       }
 
-      persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
-      if (lastCompactionEvent) {
-        appendAgentMessage(sessionId, {
-          id: randomUUID(),
-          role: 'status',
-          content: formatCompactionStatus(lastCompactionEvent),
-          createdAt: Date.now(),
-          model: activeModel,
-          events: [lastCompactionEvent],
-          messageSource: sourceMeta.messageSource,
-          messageSourceLabel: sourceMeta.messageSourceLabel,
-          relatedTaskId: sourceMeta.relatedTaskId,
-        })
+      const compactionCount = persistTurnArtifacts()
+      if (compactionCount > 0) {
         if (shouldPersistRunMemory(input.incognito)) {
           await memoryLifecycleManager.onAfterCompaction({
             sessionId,
@@ -501,7 +572,7 @@ export async function runAgentStream({
       return
     } catch (error) {
       if (!canContinue(sessionId)) {
-        persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
+        persistTurnArtifacts()
         touchAgentSession(sessionId)
         onComplete(completeWithPostRun(), 'stopped')
         return
@@ -512,7 +583,7 @@ export async function runAgentStream({
         ? '上下文过长：当前对话的上下文已超出模型限制，请压缩上下文或开启新会话'
         : friendlyErrorMessage(errorMessage)
 
-      persistAttemptBuffer(sessionId, attemptBuffer, activeModel, sourceMeta)
+      persistTurnArtifacts()
 
       appendAgentMessage(sessionId, {
         id: randomUUID(),

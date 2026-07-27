@@ -6,7 +6,6 @@ import {
   applyAgentEvent,
   type AgentStreamState,
 } from '@/atoms/agent-stream-atoms'
-import { syncUsageSnapshotAtom } from '@/atoms/usage-atoms'
 import {
   agentPromptSuggestionsAtom,
   backgroundTasksAtomFamily,
@@ -67,16 +66,6 @@ export function useAgentStreamListener(): void {
       }
 
       updateAgentState(sessionId, (state) => applyAgentEvent(state, streamEvent))
-      // 用量快照只在真正携带 usage 变化的事件后同步。
-      // syncUsageSnapshotAtom 会整表复制 + 扫描所有会话，若每个 text_delta 都触发，
-      // 高频 token 流下会造成大量无谓的 Map 拷贝与派生重算。
-      if (
-        streamEvent.type === 'complete' ||
-        streamEvent.type === 'usage_update' ||
-        streamEvent.type === 'context_snapshot'
-      ) {
-        void store.set(syncUsageSnapshotAtom)
-      }
 
       if (streamEvent.type === 'complete' && streamEvent.usage?.inputTokens) {
         const snapshot = store.get(agentContextSnapshotsAtom).get(sessionId)

@@ -1,0 +1,14 @@
+{
+  "tools": {
+    "builtinTools": "Built-in Tools",
+    "enabledMcp": "Enabled MCP",
+    "noMcp": "当前没有启用的 MCP",
+    "manageTools": "管理工具",
+    "needsConfig": "需配置",
+    "loading": "加载中...",
+    "tools": "工具",
+    "loadingMcp": "正在加载 MCP…",
+    "capabilitiesLoadFailed": "能力列表加载失败",
+    "toggleFailed": "工具状态更新失败"
+  }
+}

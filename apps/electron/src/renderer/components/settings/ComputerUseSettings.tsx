@@ -8,6 +8,7 @@
  */
 
 import * as React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   CheckCircle2,
   CircleX,
@@ -41,6 +42,7 @@ function formatTime(timestamp: number): string {
 }
 
 export function ComputerUseSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const [status, setStatus] = React.useState<CuaDriverStatus | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [detecting, setDetecting] = React.useState(false)
@@ -56,7 +58,7 @@ export function ComputerUseSettings(): React.ReactElement {
       setStatus(result)
     } catch (error) {
       console.error('[ComputerUse] 获取状态失败:', error)
-      toast.error('获取 Cua Driver 状态失败')
+      toast.error(t('settings.computerUse.statusFailed'))
     } finally {
       setLoading(false)
     }
@@ -73,10 +75,10 @@ export function ComputerUseSettings(): React.ReactElement {
     try {
       await window.electronAPI.detectCuaDriver()
       await loadStatus()
-      toast.success('检测完成')
+      toast.success(t('settings.computerUse.detectDone'))
     } catch (error) {
       console.error('[ComputerUse] 检测失败:', error)
-      toast.error('检测失败')
+      toast.error(t('settings.computerUse.detectFailed'))
     } finally {
       setDetecting(false)
     }
@@ -95,7 +97,7 @@ export function ComputerUseSettings(): React.ReactElement {
       await loadStatus()
     } catch (error) {
       console.error('[ComputerUse] 安装失败:', error)
-      toast.error('安装失败')
+      toast.error(t('settings.computerUse.installFailed'))
     } finally {
       setInstalling(false)
     }
@@ -107,10 +109,10 @@ export function ComputerUseSettings(): React.ReactElement {
     try {
       const newStatus = await window.electronAPI.toggleCuaDriver(enabled)
       setStatus(newStatus)
-      toast.success(enabled ? 'Cua Driver 已启用' : 'Cua Driver 已禁用')
+      toast.success(enabled ? t('settings.computerUse.enabledToast') : t('settings.computerUse.disabledToast'))
     } catch (error) {
       console.error('[ComputerUse] 切换失败:', error)
-      toast.error('操作失败')
+      toast.error(t('settings.computerUse.actionFailed'))
     } finally {
       setToggling(false)
     }
@@ -124,7 +126,7 @@ export function ComputerUseSettings(): React.ReactElement {
       const result = await window.electronAPI.testCuaDriver()
       setTestResult(result)
     } catch (error) {
-      setTestResult({ success: false, message: '测试异常' })
+      setTestResult({ success: false, message: t('settings.computerUse.testError') })
     } finally {
       setTesting(false)
     }
@@ -135,7 +137,7 @@ export function ComputerUseSettings(): React.ReactElement {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
         <Loader2 size={24} className="animate-spin" />
-        <span className="ml-2">加载中...</span>
+        <span className="ml-2">{t('common.loading')}</span>
       </div>
     )
   }
@@ -147,8 +149,8 @@ export function ComputerUseSettings(): React.ReactElement {
     <div className="space-y-6">
       {/* 概览 */}
       <SettingsSection
-        title="桌面操控"
-        description="让 Agent 能看到屏幕、点击按钮、输入文字，像人一样操控桌面应用"
+        title={t('settings.computerUse.title')}
+        description={t('settings.computerUse.description')}
       >
         <SettingsCard>
           {/* 状态栏 */}
@@ -168,7 +170,7 @@ export function ComputerUseSettings(): React.ReactElement {
                       : getStatusToneClasses('warning').subtleSurface,
                   )}
                 >
-                  {isInstalled ? `已安装 ${status.version ? `v${status.version}` : ''}` : '未安装'}
+                  {isInstalled ? t('settings.computerUse.installed', { version: status.version ? `v${status.version}` : '' }).trim() : t('settings.computerUse.notInstalled')}
                 </Badge>
                 {status.platform && (
                   <Badge variant="outline" className="border-border/50 bg-muted/15 text-[11px] text-muted-foreground">
@@ -188,11 +190,11 @@ export function ComputerUseSettings(): React.ReactElement {
                 {status.registered && (
                   <div className="flex items-center gap-2">
                     <Wrench size={14} className="shrink-0" />
-                    <span>已注册为全局 MCP 服务器</span>
+                    <span>{t('settings.computerUse.registered')}</span>
                   </div>
                 )}
                 <div className="text-xs text-muted-foreground/60">
-                  上次检测: {formatTime(status.lastCheckedAt)}
+                  {t('settings.computerUse.lastChecked', { time: formatTime(status.lastCheckedAt) })}
                 </div>
               </div>
 
@@ -205,7 +207,7 @@ export function ComputerUseSettings(): React.ReactElement {
                   disabled={detecting}
                 >
                   {detecting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <RefreshCw size={14} className="mr-1.5" />}
-                  重新检测
+                  {t('settings.computerUse.redetect')}
                 </Button>
 
                 {!isInstalled && (
@@ -216,7 +218,7 @@ export function ComputerUseSettings(): React.ReactElement {
                     disabled={installing}
                   >
                     {installing ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
-                    一键安装
+                    {t('settings.computerUse.quickInstall')}
                   </Button>
                 )}
 
@@ -228,7 +230,7 @@ export function ComputerUseSettings(): React.ReactElement {
                     disabled={testing}
                   >
                     {testing ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Wrench size={14} className="mr-1.5" />}
-                    测试连接
+                    {t('settings.builtinTools.webSearch.testConnection')}
                   </Button>
                 )}
 
@@ -238,7 +240,7 @@ export function ComputerUseSettings(): React.ReactElement {
                   onClick={() => window.open(CUA_DRIVER_DOCS_URL, '_blank')}
                 >
                   <ExternalLink size={14} className="mr-1.5" />
-                  文档
+                  {t('settings.computerUse.docs')}
                 </Button>
               </div>
 
@@ -264,15 +266,15 @@ export function ComputerUseSettings(): React.ReactElement {
       {/* 启用/禁用 */}
       {isInstalled && (
         <SettingsSection
-          title="Agent 能力"
-          description="启用后 Agent 将获得桌面操控能力（截图、鼠标、键盘、窗口管理等 40+ 工具）"
+          title={t('settings.computerUse.agentCapability')}
+          description={t('settings.computerUse.agentCapabilityDescription')}
         >
           <SettingsCard>
             <SettingsToggle
-              label="启用桌面操控"
+              label={t('settings.computerUse.enableToggle')}
               description={status.enabled
-                ? 'Agent 可通过 MCP 调用 cua-driver 提供的所有桌面操控工具'
-                : '启用后 cua-driver 将自动注册为全局 MCP 服务器'}
+                ? t('settings.computerUse.enableToggleOn')
+                : t('settings.computerUse.enableToggleOff')}
               checked={status.enabled}
               onCheckedChange={(checked) => handleToggle(checked)}
               disabled={toggling}
@@ -284,8 +286,8 @@ export function ComputerUseSettings(): React.ReactElement {
       {/* 未安装提示 */}
       {!isInstalled && (
         <SettingsSection
-          title="安装方式"
-          description="选择适合你平台的安装命令"
+          title={t('settings.computerUse.installMethods')}
+          description={t('settings.computerUse.installMethodsDescription')}
         >
           <SettingsCard>
             <div className="space-y-4 px-5 py-4">
@@ -323,7 +325,7 @@ export function ComputerUseSettings(): React.ReactElement {
               )}
 
               <div className="text-xs text-muted-foreground">
-                安装完成后点击「重新检测」，或直接点击「一键安装」自动完成。
+                {t('settings.computerUse.installHint')}
               </div>
             </div>
           </SettingsCard>
@@ -332,22 +334,25 @@ export function ComputerUseSettings(): React.ReactElement {
 
       {/* 安全提示 */}
       <SettingsSection
-        title="安全提示"
-        description="桌面操控能力的权限边界"
+        title={t('settings.computerUse.securityTitle')}
+        description={t('settings.computerUse.securityDescription')}
       >
         <SettingsCard>
           <div className="space-y-3 px-5 py-4 text-sm text-muted-foreground">
             <div className="flex items-start gap-2">
               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-status-warning" />
-              <span>cua-driver 能操控整个桌面（鼠标、键盘、文件系统），建议在 <strong className="text-foreground">Ask</strong> 权限模式下使用，所有工具调用需确认后执行</span>
+              <Trans
+                i18nKey="settings.computerUse.securityNote1"
+                components={{ mode: <strong className="text-foreground" /> }}
+              />
             </div>
             <div className="flex items-start gap-2">
               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-status-warning" />
-              <span>macOS 需要在「系统设置 → 隐私与安全性 → 辅助功能」中授权应用</span>
+              <span>{t('settings.computerUse.securityNote2')}</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-status-success" />
-              <span>cua-driver 以 MCP 服务器方式运行，所有工具调用都经过 Kila 的权限系统管控</span>
+              <span>{t('settings.computerUse.securityNote3')}</span>
             </div>
           </div>
         </SettingsCard>

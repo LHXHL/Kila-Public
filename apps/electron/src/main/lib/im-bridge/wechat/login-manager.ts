@@ -4,7 +4,7 @@ import type {
 } from '@kila/shared'
 import QRCode from 'qrcode'
 import { WeChatIlinkClient } from './client'
-import { WeChatCredentialStore } from './credential-store'
+import type { WeChatCredentialStore } from './credential-store'
 import type {
   WeChatIlinkLoginStatusResponse,
   WeChatLoginTicket,

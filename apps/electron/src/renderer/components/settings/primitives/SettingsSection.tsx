@@ -5,7 +5,7 @@
  * 用于将相关的设置项分组显示。
  */
 
-import * as React from 'react'
+import type * as React from 'react'
 import { SECTION_TITLE_CLASS, SECTION_DESCRIPTION_CLASS } from './SettingsUIConstants'
 
 interface SettingsSectionProps {

@@ -6,9 +6,11 @@
  * 数据持久化到 ~/.kila/channels.json。
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { getChannelsPath } from './config-paths'
+import { readJsonWithBackup, writeTextAtomicWithBackup } from './safe-json-file'
+import { createDegradedConfigRegistry, degradeCorruptConfig } from './config-file-guard'
 import type {
   Channel,
   ChannelCreateInput,
@@ -40,6 +42,14 @@ import { createLogger } from './logger'
 const log = createLogger('渠道管理')
 
 const CONFIG_VERSION = 1
+
+/**
+ * 渠道配置降级只读登记表。
+ *
+ * channels.json 主备双双解析失败时，内存里只有一个空列表；写回会把 safeStorage
+ * 加密的 API Key 连同 .bak 一起抹掉，且无法从密文之外的任何地方恢复。
+ */
+const degradedChannelConfigs = createDegradedConfigRegistry()
 
 interface SafeStorageLike {
   isEncryptionAvailable: () => boolean
@@ -125,44 +135,58 @@ function migrateChannel(channel: Channel): { channel: Channel; changed: boolean 
 function readConfig(): ChannelsConfig {
   const configPath = getChannelsPath()
 
+  // 文件不存在是可信的首次运行；「存在但读不出来」才是不可信状态。
   if (!existsSync(configPath)) {
     return { version: CONFIG_VERSION, channels: [] }
   }
 
+  let parsed: ChannelsConfig
   try {
-    const raw = readFileSync(configPath, 'utf-8')
-    const parsed = JSON.parse(raw) as ChannelsConfig
-
-    let changed = false
-    const channels = (parsed.channels ?? []).map((channel) => {
-      const result = migrateChannel(channel)
-      changed = changed || result.changed
-      return result.channel
+    parsed = readJsonWithBackup(configPath, (raw) => {
+      const data = JSON.parse(raw) as Partial<ChannelsConfig>
+      if (!data || typeof data !== 'object' || !Array.isArray(data.channels)) {
+        throw new Error('channels 字段缺失或不是数组')
+      }
+      return { version: data.version ?? CONFIG_VERSION, channels: data.channels }
     })
-    const config = {
-      version: parsed.version ?? CONFIG_VERSION,
-      channels,
-    }
-    if (changed) {
-      writeConfig(config)
-    }
-    return config
   } catch (error) {
-    log.error('[渠道管理] 读取配置文件失败:', error)
+    degradeCorruptConfig(degradedChannelConfigs, { filePath: configPath, label: '渠道配置', error })
     return { version: CONFIG_VERSION, channels: [] }
   }
+
+  let changed = false
+  const channels = parsed.channels.map((channel) => {
+    const result = migrateChannel(channel)
+    changed = changed || result.changed
+    return result.channel
+  })
+  const config = {
+    version: parsed.version ?? CONFIG_VERSION,
+    channels,
+  }
+  if (changed) {
+    writeConfig(config)
+  }
+  return config
 }
 
 
 
 /**
  * 写入渠道配置文件
+ *
+ * 原子写 + 备份；配置处于降级只读状态时直接拒绝，避免用空列表覆盖加密凭证。
  */
 function writeConfig(config: ChannelsConfig): void {
   const configPath = getChannelsPath()
+  const degradedReason = degradedChannelConfigs.getDegradedReason(configPath)
+  if (degradedReason) {
+    log.error(`[渠道管理] 配置处于降级只读模式，已拒绝写入: ${degradedReason}`)
+    throw new Error(`渠道配置处于降级只读模式，已拒绝写入以避免 API Key 丢失（${degradedReason}）`)
+  }
 
   try {
-    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+    writeTextAtomicWithBackup(configPath, JSON.stringify(config, null, 2))
   } catch (error) {
     log.error('[渠道管理] 写入配置文件失败:', error)
     throw new Error('写入渠道配置失败')

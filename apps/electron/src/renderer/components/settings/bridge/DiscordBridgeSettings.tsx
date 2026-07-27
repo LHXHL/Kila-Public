@@ -1,4 +1,5 @@
-import * as React from 'react'
+import type * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { BridgeConfig } from '@kila/shared'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -8,6 +9,7 @@ import { SettingsRow } from '../primitives/SettingsRow'
 import { SettingsSecretInput } from '../primitives/SettingsSecretInput'
 import { SettingsSection } from '../primitives/SettingsSection'
 import { BridgeDefaultModelField } from './BridgeDefaultModelField'
+import { BridgeAllowlistNotice } from './BridgeAllowlistNotice'
 
 export function DiscordBridgeSettings({
   config,
@@ -32,23 +34,25 @@ export function DiscordBridgeSettings({
   hasSavedToken: boolean
   onRevealToken: () => Promise<string>
 }): React.ReactElement {
+  const { t } = useTranslation()
+
   return (
     <SettingsSection
-      title="Discord"
-      description="Discord 私聊和服务器/频道白名单入口。"
+      title={t('settingsBridge.common.channel.discord')}
+      description={t('settingsBridge.discord.description')}
       action={(
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => void onTest('discord', config)} disabled={saving || testing}>
-            {testing ? '测试中...' : '测试'}
+            {testing ? t('settingsBridge.common.testing') : t('settingsBridge.common.test')}
           </Button>
           <Button onClick={() => void onSave(config)} disabled={saving || testing}>
-            {saving ? '保存中...' : '保存'}
+            {saving ? t('settingsBridge.common.saving') : t('settingsBridge.common.save')}
           </Button>
         </div>
       )}
     >
       <SettingsCard>
-        <SettingsRow label="启用 Discord 远程渠道">
+        <SettingsRow label={t('settingsBridge.discord.enableLabel')}>
           <Switch
             checked={config.discord.enabled}
             onCheckedChange={(checked) => onChange({
@@ -60,7 +64,7 @@ export function DiscordBridgeSettings({
             })}
           />
         </SettingsRow>
-        <SettingsRow label="服务器频道要求 @ 提及机器人">
+        <SettingsRow label={t('settingsBridge.discord.requireMentionLabel')}>
           <Switch
             checked={config.discord.requireMention}
             onCheckedChange={(checked) => onChange({
@@ -76,16 +80,16 @@ export function DiscordBridgeSettings({
       <SettingsCard divided={false}>
         <SettingsSecretInput
           key={config.discord.botToken || 'discord-empty-secret'}
-          label="机器人令牌"
-          description="留空表示保留当前已保存的令牌。"
+          label={t('settingsBridge.common.botToken')}
+          description={t('settingsBridge.common.botTokenDescription')}
           value={tokenDraft}
           onChange={onTokenDraftChange}
-          placeholder="Discord 机器人令牌"
+          placeholder={t('settingsBridge.discord.botTokenPlaceholder')}
           hasSavedValue={hasSavedToken}
           onReveal={onRevealToken}
         />
         <BridgeDefaultModelField
-          description="该渠道新会话默认使用的模型；未设置时回退到总览配置。"
+          description={t('settingsBridge.common.channelDefaultModelDescription')}
           value={config.discord.defaultSession}
           onChange={(value) => onChange({
             ...config,
@@ -95,8 +99,10 @@ export function DiscordBridgeSettings({
             },
           })}
         />
+        <BridgeAllowlistNotice allowedCount={config.discord.allowedUserIds.length} />
         <SettingsInput
-          label="允许的用户 ID"
+          label={t('settingsBridge.common.allowedUserIdsLabel')}
+          description={t('settingsBridge.discord.allowedUserIdsDescription')}
           value={config.discord.allowedUserIds.join(', ')}
           onChange={(value) => onChange({
             ...config,
@@ -108,7 +114,7 @@ export function DiscordBridgeSettings({
           placeholder="2001, 2002"
         />
         <SettingsInput
-          label="允许的服务器 ID"
+          label={t('settingsBridge.discord.allowedGuildIdsLabel')}
           value={config.discord.allowedGuildIds.join(', ')}
           onChange={(value) => onChange({
             ...config,
@@ -120,7 +126,7 @@ export function DiscordBridgeSettings({
           placeholder="4001, 4002"
         />
         <SettingsInput
-          label="允许的频道 ID"
+          label={t('settingsBridge.discord.allowedChannelIdsLabel')}
           value={config.discord.allowedChannelIds.join(', ')}
           onChange={(value) => onChange({
             ...config,
@@ -132,7 +138,7 @@ export function DiscordBridgeSettings({
           placeholder="3001, 3002"
         />
         <SettingsInput
-          label="最大入站文件大小（字节）"
+          label={t('settingsBridge.common.maxInboundFileBytesLabel')}
           value={String(config.discord.maxInboundFileBytes)}
           onChange={(value) => onChange({
             ...config,

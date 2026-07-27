@@ -70,6 +70,9 @@ const baseConfig: BridgeConfig = {
     allowP2P: true,
     allowGroup: true,
     requireMention: true,
+    allowedOpenIds: [],
+    allowedChatIds: [],
+    maxInboundFileBytes: 20 * 1024 * 1024,
     defaultSession: {
       channelId: 'remote-channel',
       modelId: 'remote-model',
@@ -81,6 +84,7 @@ const baseConfig: BridgeConfig = {
     baseUrl: '',
     accountIds: [],
     allowedUserIds: [],
+    maxInboundFileBytes: 25 * 1024 * 1024,
     aggregateWindowMs: 1200,
     deferredOutboundTtlMs: 24 * 60 * 60 * 1000,
     contextTtlMs: 30 * 60 * 1000,

@@ -10,6 +10,7 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { Shield, ShieldAlert, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { allPendingPermissionRequestsAtom } from '@/atoms/agent-permission-atoms'
@@ -46,6 +47,7 @@ interface PermissionBannerProps {
 }
 
 export function PermissionBanner({ sessionId }: PermissionBannerProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const allRequests = useAtomValue(allPendingPermissionRequestsAtom)
   const requests = allRequests.get(sessionId) ?? []
   const [responding, setResponding] = React.useState(false)
@@ -85,7 +87,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
       })
     } catch (error) {
       console.error('[PermissionBanner] 响应失败:', error)
-      setResponseError(error instanceof Error ? error.message : '操作未提交，请重试')
+      setResponseError(error instanceof Error ? error.message : t('agent.permission.submitFailed'))
     } finally {
       setResponding(false)
     }
@@ -97,13 +99,15 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
   const remainingMs = typeof request.expiresAt === 'number' ? request.expiresAt - now : null
   const isExpired = remainingMs !== null && remainingMs <= 0
   const expiryHint = remainingMs !== null
-    ? (remainingMs > 0 ? `将在 ${formatRemaining(remainingMs)} 后自动拒绝` : '请求已过期，正在移除')
+    ? (remainingMs > 0
+      ? t('agent.permission.autoDenyIn', { time: formatRemaining(remainingMs) })
+      : t('agent.permission.expired'))
     : null
 
   return (
     <div
       role="region"
-      aria-label="权限确认"
+      aria-label={t('agent.permission.regionLabel')}
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget || event.defaultPrevented) return
@@ -120,7 +124,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           <IconComponent className={`size-4 ${iconColor}`} />
           <div className="flex flex-col">
             <span className="text-sm font-medium">
-              {isDangerous ? '危险操作需要确认' : '需要确认'}
+              {isDangerous ? t('agent.permission.dangerousTitle') : t('agent.permission.title')}
             </span>
             {expiryHint && (
               <span className="text-[11px] text-muted-foreground" aria-live="polite">
@@ -166,7 +170,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
       <div className="flex items-center justify-end gap-1.5 px-3 pb-2.5">
         {!isExpired && (
           <span className="text-[10px] text-muted-foreground/40 mr-auto">
-            {isDangerous ? '危险操作请点击按钮确认' : '聚焦卡片后按 Enter 允许'}
+            {isDangerous ? t('agent.permission.dangerousHint') : t('agent.permission.enterHint')}
           </span>
         )}
         <Button
@@ -177,7 +181,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           className="h-7 px-3 text-xs text-muted-foreground hover:text-destructive"
         >
           <X className="size-3 mr-1" />
-          拒绝
+          {t('agent.permission.deny')}
         </Button>
 
         <Button
@@ -187,7 +191,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           disabled={responding || isExpired}
           className="h-7 px-3 text-xs"
         >
-          本次会话总是允许
+          {t('agent.permission.alwaysAllow')}
         </Button>
 
         <Button
@@ -198,7 +202,7 @@ export function PermissionBanner({ sessionId }: PermissionBannerProps): React.Re
           className="h-7 px-3 text-xs"
         >
           <Check className="size-3 mr-1" />
-          允许
+          {t('agent.permission.allow')}
         </Button>
       </div>
     </div>

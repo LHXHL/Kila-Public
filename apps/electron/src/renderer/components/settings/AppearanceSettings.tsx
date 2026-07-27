@@ -4,6 +4,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { Copy, Download, FolderOpen, MoreHorizontal, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { DEFAULT_THEME_ID, getBuiltinTheme } from '@kila/shared'
 import type { ThemeDefinition, ThemeRecord } from '@kila/shared'
@@ -48,16 +49,7 @@ import { ThemeEditorDialog } from './theme/ThemeEditorDialog'
 import { ThemePreview } from './theme/ThemePreview'
 import { cloneAsCustomTheme } from './theme/theme-editor-utils'
 
-const THEME_OPTIONS = [
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-  { value: 'system', label: '跟随系统' },
-]
-
 const isMac = navigator.userAgent.includes('Mac')
-const ZOOM_HINT = isMac
-  ? '使用 ⌘+ 放大、⌘- 缩小、⌘0 恢复默认大小'
-  : '使用 Ctrl++ 放大、Ctrl+- 缩小、Ctrl+0 恢复默认大小'
 const FONT_SIZE_MIN = 10
 const FONT_SIZE_MAX = 32
 
@@ -85,6 +77,7 @@ function ThemeCard({
   onExport: () => void
   onDelete: () => void
 }): React.ReactElement {
+  const { t } = useTranslation()
   return (
     <div
       className={cn(
@@ -98,7 +91,7 @@ function ThemeCard({
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{record.theme.name}</span>
             {record.source === 'custom' && (
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">我的</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{t('settings.appearance.customBadge')}</span>
             )}
           </div>
           <div className="mt-0.5 line-clamp-2 min-h-8 text-xs text-muted-foreground">{record.theme.description}</div>
@@ -111,22 +104,22 @@ function ThemeCard({
             variant="ghost"
             size="icon-sm"
             className="absolute bottom-3 right-3 opacity-70 hover:opacity-100"
-            aria-label={`${record.theme.name}主题操作`}
+            aria-label={t('settings.appearance.themeActions', { name: record.theme.name })}
           >
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="z-[100] titlebar-no-drag">
           {record.source === 'custom' && (
-            <DropdownMenuItem onSelect={onEdit}><Pencil />编辑</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onEdit}><Pencil />{t('settings.appearance.edit')}</DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={onDuplicate}><Copy />复制并编辑</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onDuplicate}><Copy />{t('settings.appearance.duplicate')}</DropdownMenuItem>
           {record.source === 'custom' && (
             <>
-              <DropdownMenuItem onSelect={onExport}><Download />导出</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onExport}><Download />{t('settings.appearance.export')}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-                <Trash2 />删除
+                <Trash2 />{t('common.delete')}
               </DropdownMenuItem>
             </>
           )}
@@ -137,6 +130,7 @@ function ThemeCard({
 }
 
 export function AppearanceSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const [themeMode, setThemeMode] = useAtom(themeModeAtom)
   const [themeId, setThemeId] = useAtom(themeIdAtom)
   const [themeCatalog, setThemeCatalog] = useAtom(themeCatalogAtom)
@@ -149,6 +143,13 @@ export function AppearanceSettings(): React.ReactElement {
   const [editor, setEditor] = React.useState<EditorState | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<ThemeRecord | null>(null)
+
+  const themeOptions = React.useMemo(() => [
+    { value: 'light', label: t('settings.appearance.themeLight') },
+    { value: 'dark', label: t('settings.appearance.themeDark') },
+    { value: 'system', label: t('settings.appearance.themeSystem') },
+  ], [t])
+  const zoomHint = isMac ? t('settings.appearance.zoomHintMac') : t('settings.appearance.zoomHintWindows')
 
   const builtinThemes = themeCatalog.themes.filter((record) => record.source === 'builtin')
   const customThemes = themeCatalog.themes.filter((record) => record.source === 'custom')
@@ -171,31 +172,31 @@ export function AppearanceSettings(): React.ReactElement {
   const handleThemeChange = React.useCallback((value: string) => {
     const mode = value as ThemeMode
     setThemeMode(mode)
-    void updateThemeMode(mode).catch((error: unknown) => toast.error(error instanceof Error ? error.message : '主题模式保存失败'))
-  }, [setThemeMode])
+    void updateThemeMode(mode).catch((error: unknown) => toast.error(error instanceof Error ? error.message : t('settings.appearance.themeModeSaveFailed')))
+  }, [setThemeMode, t])
 
   const selectTheme = React.useCallback((nextThemeId: string) => {
     setThemeId(nextThemeId)
     void updateThemeId(nextThemeId).catch((error: unknown) => {
       setThemeId(DEFAULT_THEME_ID)
-      toast.error(error instanceof Error ? error.message : '主题切换失败')
+      toast.error(error instanceof Error ? error.message : t('settings.appearance.themeSwitchFailed'))
     })
-  }, [setThemeId])
+  }, [setThemeId, t])
 
   const openCreate = React.useCallback(() => {
     const base = getBuiltinTheme(DEFAULT_THEME_ID)
     setEditor({
       editing: false,
-      theme: cloneAsCustomTheme(base, '我的主题', existingIds),
+      theme: cloneAsCustomTheme(base, t('settings.appearance.newThemeName'), existingIds),
     })
-  }, [existingIds])
+  }, [existingIds, t])
 
   const openDuplicate = React.useCallback((record: ThemeRecord) => {
     setEditor({
       editing: false,
-      theme: cloneAsCustomTheme(record.theme, `${record.theme.name}副本`, existingIds),
+      theme: cloneAsCustomTheme(record.theme, t('settings.appearance.duplicateName', { name: record.theme.name }), existingIds),
     })
-  }, [existingIds])
+  }, [existingIds, t])
 
   const saveTheme = React.useCallback(async (theme: ThemeDefinition) => {
     if (!editor) return
@@ -207,13 +208,13 @@ export function AppearanceSettings(): React.ReactElement {
       setThemeCatalog(result.catalog)
       setEditor(null)
       selectTheme(result.theme.theme.id)
-      toast.success(editor.editing ? '主题已更新' : '主题已创建')
+      toast.success(editor.editing ? t('settings.appearance.themeUpdated') : t('settings.appearance.themeCreated'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '主题保存失败')
+      toast.error(error instanceof Error ? error.message : t('settings.appearance.themeSaveFailed'))
     } finally {
       setBusy(false)
     }
-  }, [editor, selectTheme, setThemeCatalog])
+  }, [editor, selectTheme, setThemeCatalog, t])
 
   const importTheme = React.useCallback(async () => {
     try {
@@ -221,19 +222,19 @@ export function AppearanceSettings(): React.ReactElement {
       if (imported.canceled || !imported.result) return
       setThemeCatalog(imported.result.catalog)
       selectTheme(imported.result.theme.theme.id)
-      toast.success(`已导入主题「${imported.result.theme.theme.name}」`)
+      toast.success(t('settings.appearance.themeImported', { name: imported.result.theme.theme.name }))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '主题导入失败')
+      toast.error(error instanceof Error ? error.message : t('settings.appearance.themeImportFailed'))
     }
-  }, [selectTheme, setThemeCatalog])
+  }, [selectTheme, setThemeCatalog, t])
 
   const exportTheme = React.useCallback(async (record: ThemeRecord) => {
     try {
-      if (await window.electronAPI.exportTheme(record.theme.id)) toast.success('主题已导出')
+      if (await window.electronAPI.exportTheme(record.theme.id)) toast.success(t('settings.appearance.themeExported'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '主题导出失败')
+      toast.error(error instanceof Error ? error.message : t('settings.appearance.themeExportFailed'))
     }
-  }, [])
+  }, [t])
 
   const deleteTheme = React.useCallback(async () => {
     if (!deleteTarget) return
@@ -243,13 +244,13 @@ export function AppearanceSettings(): React.ReactElement {
       setThemeCatalog(catalog)
       if (themeId === deleteTarget.theme.id) setThemeId(DEFAULT_THEME_ID)
       setDeleteTarget(null)
-      toast.success('主题已删除')
+      toast.success(t('settings.appearance.themeDeleted'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '主题删除失败')
+      toast.error(error instanceof Error ? error.message : t('settings.appearance.themeDeleteFailed'))
     } finally {
       setBusy(false)
     }
-  }, [deleteTarget, setThemeCatalog, setThemeId, themeId])
+  }, [deleteTarget, setThemeCatalog, setThemeId, t, themeId])
 
   const handleFontChange = React.useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value
@@ -299,39 +300,43 @@ export function AppearanceSettings(): React.ReactElement {
 
   return (
     <div className="space-y-6">
-      <SettingsSection title="外观设置" description="自定义应用的视觉风格">
+      <SettingsSection title={t('settings.appearance.title')} description={t('settings.appearance.description')}>
         <SettingsCard>
           <SettingsSegmentedControl
-            label="主题模式"
-            description="选择浅色、深色或跟随系统"
+            label={t('settings.appearance.theme')}
+            description={t('settings.appearance.themeDescription')}
             value={themeMode}
             onValueChange={handleThemeChange}
-            options={THEME_OPTIONS}
+            options={themeOptions}
           />
           <div className="space-y-5 px-4 py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className={LABEL_CLASS}>配色主题</div>
-                <div className={cn(DESCRIPTION_CLASS, 'mt-0.5')}>当前预览：{resolvedTheme === 'dark' ? '深色' : '浅色'}。选择后会同步到所有窗口。</div>
+                <div className={LABEL_CLASS}>{t('settings.appearance.colorTheme')}</div>
+                <div className={cn(DESCRIPTION_CLASS, 'mt-0.5')}>
+                  {t('settings.appearance.colorThemePreview', {
+                    mode: resolvedTheme === 'dark' ? t('settings.appearance.themeDark') : t('settings.appearance.themeLight'),
+                  })}
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => { void window.electronAPI.openThemesDirectory().catch((error: unknown) => toast.error(error instanceof Error ? error.message : '打开目录失败')) }}>
-                  <FolderOpen />主题目录
+                <Button variant="outline" size="sm" onClick={() => { void window.electronAPI.openThemesDirectory().catch((error: unknown) => toast.error(error instanceof Error ? error.message : t('settings.appearance.openDirectoryFailed'))) }}>
+                  <FolderOpen />{t('settings.appearance.themesDirectory')}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => { void importTheme() }}><Upload />导入</Button>
-                <Button size="sm" onClick={openCreate}><Plus />新建</Button>
+                <Button variant="outline" size="sm" onClick={() => { void importTheme() }}><Upload />{t('settings.appearance.import')}</Button>
+                <Button size="sm" onClick={openCreate}><Plus />{t('settings.appearance.create')}</Button>
               </div>
             </div>
 
             <div className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">内置主题</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('settings.appearance.builtinThemes')}</div>
               {renderThemeGrid(builtinThemes)}
             </div>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">我的主题</div>
-                <span className="text-xs text-muted-foreground">{customThemes.length} 个</span>
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('settings.appearance.myThemes')}</div>
+                <span className="text-xs text-muted-foreground">{t('settings.appearance.themeCount', { count: customThemes.length })}</span>
               </div>
               {customThemes.length > 0 ? renderThemeGrid(customThemes) : (
                 <button
@@ -340,27 +345,27 @@ export function AppearanceSettings(): React.ReactElement {
                   className="flex w-full flex-col items-center justify-center rounded-2xl bg-muted/25 px-6 py-10 text-center transition-colors hover:bg-muted/40"
                 >
                   <Plus className="mb-2 size-5 text-muted-foreground" />
-                  <span className="text-sm font-medium">创建第一个自定义主题</span>
-                  <span className="mt-1 text-xs text-muted-foreground">也可以导入 *.kila-theme.json 文件</span>
+                  <span className="text-sm font-medium">{t('settings.appearance.createFirstTheme')}</span>
+                  <span className="mt-1 text-xs text-muted-foreground">{t('settings.appearance.importHint')}</span>
                 </button>
               )}
             </div>
 
             {themeCatalog.issues.length > 0 && (
               <div className="rounded-xl bg-status-warning-soft p-3 text-xs text-status-warning-foreground">
-                <div className="font-medium">有 {themeCatalog.issues.length} 个主题文件未能加载</div>
+                <div className="font-medium">{t('settings.appearance.themeLoadIssues', { count: themeCatalog.issues.length })}</div>
                 {themeCatalog.issues.slice(0, 3).map((issue) => <div key={issue.fileName} className="mt-1">{issue.fileName}: {issue.message}</div>)}
               </div>
             )}
           </div>
-          <SettingsRow label="界面缩放" description={ZOOM_HINT} />
+          <SettingsRow label={t('settings.appearance.zoom')} description={zoomHint} />
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title="字体设置" description="自定义界面的字体和大小">
+      <SettingsSection title={t('settings.appearance.font')} description={t('settings.appearance.fontDescription')}>
         <SettingsCard>
           <div className="space-y-2 px-4 py-3">
-            <div className={LABEL_CLASS}>字体</div>
+            <div className={LABEL_CLASS}>{t('settings.appearance.fontFamily')}</div>
             <select
               value={fontFamily}
               onChange={handleFontChange}
@@ -371,13 +376,13 @@ export function AppearanceSettings(): React.ReactElement {
               )}
               style={fontFamily ? { fontFamily: `"${fontFamily}", system-ui, sans-serif` } : undefined}
             >
-              <option value="">系统默认</option>
+              <option value="">{t('settings.appearance.systemDefaultFont')}</option>
               {systemFonts.map((font) => <option key={font} value={font} style={{ fontFamily: `"${font}", system-ui, sans-serif` }}>{font}</option>)}
             </select>
-            <div className={DESCRIPTION_CLASS}>保留系统默认将使用操作系统字体。</div>
+            <div className={DESCRIPTION_CLASS}>{t('settings.appearance.fontFamilyDescription')}</div>
           </div>
           <div className="space-y-2 px-4 py-3">
-            <div className={LABEL_CLASS}>字体大小</div>
+            <div className={LABEL_CLASS}>{t('settings.appearance.fontSize')}</div>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -409,13 +414,13 @@ export function AppearanceSettings(): React.ReactElement {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open && !busy) setDeleteTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除主题“{deleteTarget?.theme.name}”？</AlertDialogTitle>
-            <AlertDialogDescription>主题文件将从 ~/.kila/themes 删除。若它是当前主题，Kila 会自动切换回默认主题。</AlertDialogDescription>
+            <AlertDialogTitle>{t('settings.appearance.deleteThemeTitle', { name: deleteTarget?.theme.name ?? '' })}</AlertDialogTitle>
+            <AlertDialogDescription>{t('settings.appearance.deleteThemeDescription')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction disabled={busy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={(event) => { event.preventDefault(); void deleteTheme() }}>
-              {busy ? '删除中…' : '删除主题'}
+              {busy ? t('settings.appearance.deleting') : t('settings.appearance.deleteTheme')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

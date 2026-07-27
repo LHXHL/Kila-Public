@@ -1,4 +1,5 @@
-import * as React from 'react'
+import type * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { DiffViewer, getLanguageDisplayName, resolveCodeLanguage } from '@/components/code-workbench'
 import { Button } from '@/components/ui/button'
 import type { GitDiffResult } from '@kila/shared'
@@ -17,13 +18,14 @@ export function GitDiffView({
   busy,
   onMutateHunk,
 }: GitDiffViewProps): React.ReactElement {
+  const { t } = useTranslation()
   const language = resolveCodeLanguage(diff.filePath)
 
   if (diff.hunks.length === 0) {
     if (!diff.diff) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
-          此文件没有可显示的文本 Diff。
+          {t('session.git.diffEmpty')}
         </div>
       )
     }
@@ -33,7 +35,7 @@ export function GitDiffView({
         <DiffViewer patch={diff.diff} language={language} />
         {diff.truncated && (
           <div className="mx-3 my-3 rounded-lg bg-status-warning-soft px-3 py-2 text-xs text-status-warning-foreground">
-            Diff 内容过大，当前仅展示前一部分。
+            {t('session.git.diffTruncated')}
           </div>
         )}
       </div>
@@ -62,7 +64,7 @@ export function GitDiffView({
                   disabled={busy}
                   onClick={() => onMutateHunk(hunk.index, 'stage')}
                 >
-                  暂存
+                  {t('session.git.hunkStage')}
                 </Button>
               ) : (
                 <Button
@@ -72,7 +74,7 @@ export function GitDiffView({
                   disabled={busy}
                   onClick={() => onMutateHunk(hunk.index, 'unstage')}
                 >
-                  取消暂存
+                  {t('session.git.hunkUnstage')}
                 </Button>
               )}
               {source === 'unstaged' && (
@@ -83,7 +85,7 @@ export function GitDiffView({
                   disabled={busy}
                   onClick={() => onMutateHunk(hunk.index, 'discard')}
                 >
-                  丢弃
+                  {t('session.git.hunkDiscard')}
                 </Button>
               )}
             </div>

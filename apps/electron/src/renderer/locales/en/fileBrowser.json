@@ -1,0 +1,82 @@
+{
+  "fileBrowser": {
+    "tree": {
+      "label": "Project files",
+      "loading": "Loading folder…",
+      "refreshing": "Refreshing folder…",
+      "empty": "This folder is empty",
+      "emptyFolder": "Empty folder",
+      "loadFailed": "Could not load this folder",
+      "childLoadFailed": "Could not load this subfolder",
+      "retry": "Retry"
+    },
+    "toolbar": {
+      "openInFileManager": "Open in file manager",
+      "openProjectInFileManager": "Open the project folder in the file manager",
+      "refresh": "Refresh file tree"
+    },
+    "contextMenu": {
+      "moreActions": "More actions for {{name}}",
+      "showInFolder": "Reveal in folder",
+      "move": "Move to…",
+      "moveSelected_one": "Move {{count}} item",
+      "moveSelected_other": "Move {{count}} items",
+      "rename": "Rename",
+      "delete": "Delete",
+      "deleteSelected_one": "Delete {{count}} item",
+      "deleteSelected_other": "Delete {{count}} items"
+    },
+    "rename": {
+      "duplicate": "An item with that name already exists",
+      "failed": "Rename failed"
+    },
+    "delete": {
+      "title": "Confirm delete",
+      "confirmMany_one": "Delete the <b>{{count}}</b> selected item?",
+      "confirmMany_other": "Delete the <b>{{count}}</b> selected items?",
+      "confirmOne": "Delete <b>{{name}}</b>?",
+      "includesChildren": "(including everything inside it)",
+      "irreversible": "This cannot be undone."
+    },
+    "dropZone": {
+      "hint": "Drop files here",
+      "description": "Available inside this session's project folder",
+      "selectTooltip": "Add files to this session's project folder",
+      "attachTooltip": "Switch this session's project folder",
+      "selectFiles": "Choose Files",
+      "attachFolder": "Attach Folder",
+      "reading": "Reading {{completed}}/{{total}}",
+      "saving_one": "Saving {{count}} file…",
+      "saving_other": "Saving {{count}} files…",
+      "uploaded_one": "Added {{count}} file",
+      "uploaded_other": "Added {{count}} files",
+      "uploadFailed": "File upload failed",
+      "folderUnsupported": "Dropping folders is not supported",
+      "folderUnsupportedHint": "Use the \"Attach Folder\" button instead"
+    },
+    "mention": {
+      "noMatch": "No matching files"
+    },
+    "preview": {
+      "selectTitle": "Select a file",
+      "selectDescription": "Click any file in the file tree and its inline preview appears here.",
+      "loading": "Loading preview…",
+      "unavailableTitle": "Preview unavailable",
+      "unavailableDescription": "This file has not been loaded into the preview panel yet.",
+      "failedTitle": "Preview failed",
+      "failedDescription": "Something went wrong while reading the file preview.",
+      "loadFailed": "Could not load the preview",
+      "retry": "Retry",
+      "openInWindow": "Open in a separate window",
+      "openFileInWindow": "Open {{name}} in a separate window",
+      "tooLargeTitle": "File too large",
+      "tooLargeDescription": "This file exceeds the inline preview size limit.",
+      "unsupportedTitle": "Inline preview not supported",
+      "unsupportedDescription": "Use the button in the top right to view it in a separate window.",
+      "codeContent": "Code content of {{path}}"
+    },
+    "codeViewer": {
+      "label": "Code content"
+    }
+  }
+}

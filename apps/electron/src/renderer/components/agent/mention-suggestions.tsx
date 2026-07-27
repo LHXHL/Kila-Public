@@ -6,6 +6,7 @@
  */
 
 import type React from 'react'
+import i18n from '@/lib/i18n'
 import { ReactRenderer } from '@tiptap/react'
 import type { SuggestionOptions } from '@tiptap/suggestion'
 import { Terminal, Wand2, Server } from 'lucide-react'
@@ -167,14 +168,17 @@ interface SlashCommandItem {
 
 type SlashMentionItem = SkillMentionItem | SlashCommandItem
 
-const SLASH_COMMANDS: SlashCommandItem[] = [
-  {
-    kind: 'command',
-    id: 'compact',
-    name: '/compact',
-    description: '压缩session历史以节省 token',
-  },
-]
+/** 内置斜杠命令；描述文案在调用时取，保证语言切换后即时生效 */
+function getSlashCommands(): SlashCommandItem[] {
+  return [
+    {
+      kind: 'command',
+      id: 'compact',
+      name: '/compact',
+      description: i18n.t('agent.mention.compactDescription'),
+    },
+  ]
+}
 
 const SKILL_SOURCE_ORDER: Record<GlobalSkillEntrySource, number> = {
   kila: 0,
@@ -216,7 +220,7 @@ export async function listEnabledSkillMentionItems(query = ''): Promise<SkillMen
 
 function listSlashMentionItems(query = ''): Promise<SlashMentionItem[]> {
   const normalizedQuery = query.toLowerCase()
-  const commandItems = SLASH_COMMANDS.filter((item) => (
+  const commandItems = getSlashCommands().filter((item) => (
     !normalizedQuery
     || item.name.toLowerCase().includes(normalizedQuery)
     || item.description.toLowerCase().includes(normalizedQuery)
@@ -265,7 +269,7 @@ export function createSkillMentionSuggestion(
   return createMentionSuggestion<SlashMentionItem>(
     {
       char: '/',
-      emptyText: '无匹配命令或 Skill',
+      emptyText: i18n.t('agent.mention.emptySkill'),
       fetchItems: async (_sessionId, q) => listSlashMentionItems(q),
       keyExtractor: (item) => item.id,
       renderItem: renderSkillMentionItem,
@@ -293,7 +297,7 @@ export function createMcpMentionSuggestion(
   return createMentionSuggestion<McpMentionItem>(
     {
       char: '#',
-      emptyText: '无匹配 MCP 服务',
+      emptyText: i18n.t('agent.mention.emptyMcp'),
       fetchItems: async (_sessionId, q) => {
         const caps = await window.electronAPI.getGlobalAgentCapabilities()
         return caps.mcpServers

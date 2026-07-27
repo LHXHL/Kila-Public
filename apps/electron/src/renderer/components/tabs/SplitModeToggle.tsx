@@ -6,6 +6,7 @@
 
 import * as React from 'react'
 import { useAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { splitLayoutAtom, setSplitMode } from '@/atoms/tab-atoms'
 import type { SplitMode } from '@/atoms/tab-atoms'
 import { cn } from '@/lib/utils'
@@ -59,14 +60,15 @@ function LayoutIcon({ mode, className }: { mode: SplitMode; className?: string }
   }
 }
 
-const MODES: { mode: SplitMode; label: string }[] = [
-  { mode: 'single', label: '单面板' },
-  { mode: 'horizontal-2', label: '左右分屏' },
-  { mode: 'vertical-2', label: '上下分屏' },
-  { mode: 'grid-4', label: '四格分屏' },
+const MODES: { mode: SplitMode; labelKey: string }[] = [
+  { mode: 'single', labelKey: 'tabs.splitMode.single' },
+  { mode: 'horizontal-2', labelKey: 'tabs.splitMode.horizontal2' },
+  { mode: 'vertical-2', labelKey: 'tabs.splitMode.vertical2' },
+  { mode: 'grid-4', labelKey: 'tabs.splitMode.grid4' },
 ]
 
 export function SplitModeToggle(): React.ReactElement {
+  const { t } = useTranslation()
   const [layout, setLayout] = useAtom(splitLayoutAtom)
   const [open, setOpen] = React.useState(false)
 
@@ -90,12 +92,12 @@ export function SplitModeToggle(): React.ReactElement {
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          <p>分屏模式</p>
+          <p>{t('tabs.splitMode.label')}</p>
         </TooltipContent>
       </Tooltip>
       <PopoverContent side="bottom" align="end" className="w-auto p-1.5">
         <div className="flex gap-1">
-          {MODES.map(({ mode, label }) => (
+          {MODES.map(({ mode, labelKey }) => (
             <Tooltip key={mode}>
               <TooltipTrigger asChild>
                 <Button
@@ -111,7 +113,7 @@ export function SplitModeToggle(): React.ReactElement {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>{label}</p>
+                <p>{t(labelKey)}</p>
               </TooltipContent>
             </Tooltip>
           ))}

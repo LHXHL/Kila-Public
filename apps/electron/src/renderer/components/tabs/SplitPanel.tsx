@@ -6,6 +6,7 @@
 
 import * as React from 'react'
 import { useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { splitLayoutAtom } from '@/atoms/tab-atoms'
 import { TabContent } from './TabContent'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,7 @@ export function SplitPanel({
   isFocused,
   showBorder,
 }: SplitPanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const setLayout = useSetAtom(splitLayoutAtom)
 
   const handleClick = React.useCallback(() => {
@@ -38,7 +40,7 @@ export function SplitPanel({
   return (
     <div
       role="region"
-      aria-label={`工作区 ${panelIndex + 1}${isFocused ? '，当前焦点' : ''}`}
+      aria-label={t(isFocused ? 'tabs.panel.labelFocused' : 'tabs.panel.label', { index: panelIndex + 1 })}
       className={cn(
         'min-h-0 min-w-0 overflow-hidden',
         showBorder && 'rounded-lg border border-border/60',
@@ -52,7 +54,7 @@ export function SplitPanel({
         <TabContent tabId={panel.activeTabId} />
       ) : (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          从侧边栏选择一个会话
+          {t('tabs.panel.empty')}
         </div>
       )}
     </div>

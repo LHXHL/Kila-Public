@@ -18,6 +18,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -32,21 +33,10 @@ import { useAttachmentImage } from '@/hooks/use-attachment-image'
 import { getElementFontSpec } from '@/lib/pretext/font-spec'
 import { normalizeMeasurementText } from '@/lib/pretext/measurement-text'
 import { measurePreWrapText } from '@/lib/pretext/text-layout'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { marked } from 'marked'
 import remend from 'remend'
-import {
-  CodeBlock,
-  useStreamQueue,
-  resolveBlockAnimationMeta,
-  rehypeStreamAnimated,
-  useStablePlugins,
-  isSamePlugins,
-} from '@kila/ui'
+import { CodeBlock, useStreamQueue, resolveBlockAnimationMeta, rehypeStreamAnimated, useStablePlugins, isSamePlugins } from '@kila/ui'
 import type { BlockInfo, StreamAnimatedOptions } from '@kila/ui'
 import type { Pluggable, PluggableList } from 'unified'
 import type { Options as MarkdownOptions } from 'react-markdown'
@@ -239,7 +229,7 @@ interface MessageResponseProps {
 }
 
 /** 稳定引用的插件数组，避免 react-markdown 每帧重建插件管线 */
-const REMARK_PLUGINS: any[] = [[remarkGfm, { singleTilde: false }], remarkMath]
+const REMARK_PLUGINS: PluggableList = [[remarkGfm, { singleTilde: false }], remarkMath]
 const REHYPE_PLUGINS = [rehypeKatex]
 
 // ===== Memo'd Markdown 子组件（稳定引用，避免 react-markdown 每帧重建组件映射） =====
@@ -471,6 +461,7 @@ interface UserMessageContentProps extends HTMLAttributes<HTMLDivElement> {
  */
 export const UserMessageContent = React.memo(
   function UserMessageContent({ children, className, attachmentsNode, basePath, ...props }: UserMessageContentProps): React.ReactElement {
+    const { t } = useTranslation()
     const [isExpanded, setIsExpanded] = React.useState(false)
     const [shouldCollapse, setShouldCollapse] = React.useState(false)
     const contentRef = React.useRef<HTMLDivElement | null>(null)
@@ -544,12 +535,12 @@ export const UserMessageContent = React.memo(
             {isExpanded ? (
               <>
                 <ChevronUp className="size-3" />
-                <span>收起</span>
+                <span>{t('common.collapse')}</span>
               </>
             ) : (
               <>
                 <ChevronDown className="size-3" />
-                <span>展开全部</span>
+                <span>{t('common.expandAll')}</span>
               </>
             )}
           </button>
@@ -574,6 +565,7 @@ function formatLoadingElapsed(ms: number): string {
 
 /** 等待首个 chunk 的加载动画 */
 export function MessageLoading({ className, startedAt, ...props }: MessageLoadingProps): React.ReactElement {
+  const { t } = useTranslation()
   const [elapsed, setElapsed] = React.useState(() => startedAt ? Date.now() - startedAt : 0)
 
   React.useEffect(() => {
@@ -590,7 +582,7 @@ export function MessageLoading({ className, startedAt, ...props }: MessageLoadin
   return (
     <div className={cn('mt-0 inline-flex items-center gap-2 text-muted-foreground/60', className)} {...props}>
       <Brain className="size-4 animate-pulse text-muted-foreground/70" />
-      <span className="text-xs font-normal text-muted-foreground">思考中...</span>
+      <span className="text-xs font-normal text-muted-foreground">{t('shell.message.thinking')}</span>
       {startedAt && elapsed >= 1000 && (
         <span className="text-xs font-normal text-muted-foreground/60 tabular-nums">
           ({formatLoadingElapsed(elapsed)})
@@ -606,13 +598,15 @@ type MessageStoppedProps = HTMLAttributes<HTMLDivElement>
 
 /** "已停止生成" 状态标记 */
 export function MessageStopped({ className, ...props }: MessageStoppedProps): React.ReactElement {
+  const { t } = useTranslation()
+
   return (
     <div
       className={cn('flex items-center gap-1.5 text-sm text-muted-foreground mt-2', className)}
       {...props}
     >
       <span className="size-2 rounded-full bg-muted-foreground/40" />
-      <span>已停止生成</span>
+      <span>{t('shell.message.stopped')}</span>
     </div>
   )
 }
@@ -666,6 +660,7 @@ interface MessageAttachmentImageProps {
 
 /** 图片附件展示（单图: max 500px，多图: 280px 方块） */
 function MessageAttachmentImage({ attachment, isSingle = false }: MessageAttachmentImageProps): React.ReactElement {
+  const { t } = useTranslation()
   const { imageSrc, loadState, retry, markError } = useAttachmentImage(
     attachment.localPath,
     attachment.mediaType,
@@ -683,7 +678,7 @@ function MessageAttachmentImage({ attachment, isSingle = false }: MessageAttachm
       <div
         className={cn('rounded-lg bg-muted/30 animate-pulse shrink-0', sizeClass)}
         role="status"
-        aria-label={`正在加载 ${attachment.filename}`}
+        aria-label={t('shell.message.loadingImage', { filename: attachment.filename })}
       />
     )
   }
@@ -692,13 +687,13 @@ function MessageAttachmentImage({ attachment, isSingle = false }: MessageAttachm
     return (
       <div className={cn('flex shrink-0 flex-col items-center justify-center gap-2 rounded-lg bg-destructive/5 px-3 text-center text-destructive/75', sizeClass)}>
         <XCircle className="size-5" />
-        <span className="line-clamp-2 text-xs">图片加载失败：{attachment.filename}</span>
+        <span className="line-clamp-2 text-xs">{t('shell.message.imageLoadFailed', { filename: attachment.filename })}</span>
         <div className="flex items-center gap-2">
           <button type="button" onClick={retry} className="rounded-md bg-background/70 px-2 py-1 text-xs text-foreground/70 hover:text-foreground">
-            重试
+            {t('common.retry')}
           </button>
           <button type="button" onClick={handleSave} className="rounded-md bg-background/70 px-2 py-1 text-xs text-foreground/70 hover:text-foreground">
-            另存为
+            {t('common.saveAs')}
           </button>
         </div>
       </div>
@@ -728,8 +723,8 @@ function MessageAttachmentImage({ attachment, isSingle = false }: MessageAttachm
         type="button"
         onClick={handleSave}
         className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-black/70"
-        aria-label="保存图片"
-        title="保存图片"
+        aria-label={t('shell.message.saveImage')}
+        title={t('shell.message.saveImage')}
       >
         <Download className="size-4" />
       </button>

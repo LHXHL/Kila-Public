@@ -1,3 +1,7 @@
+import { createLogger } from '../../logger'
+
+const log = createLogger('IM Bridge')
+
 export type SleepBlockerType = 'prevent-display-sleep'
 
 export interface SleepBlockerAdapter {
@@ -30,7 +34,7 @@ export class FeishuMirrorSleepBlocker {
     this.activeBlockerId = null
     if (this.adapter.isStarted(blockerId)) {
       this.adapter.stop(blockerId)
-      console.log('[飞书防休眠] 已关闭')
+      log.info('[IM Bridge][Feishu] 防休眠已关闭')
     }
   }
 
@@ -41,6 +45,6 @@ export class FeishuMirrorSleepBlocker {
     }
 
     this.activeBlockerId = this.adapter.start('prevent-display-sleep')
-    console.log('[飞书防休眠] 已启用，会话镜像期间阻止系统自动休眠')
+    log.info('[IM Bridge][Feishu] 防休眠已启用，会话镜像期间阻止系统自动休眠')
   }
 }

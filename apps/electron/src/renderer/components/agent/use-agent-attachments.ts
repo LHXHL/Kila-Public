@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { AgentPendingFile } from '@kila/shared'
 import { fileToBase64 } from '@/lib/file-utils'
@@ -53,6 +54,7 @@ function createPendingFile(input: {
 }
 
 export function useAgentAttachments(input: UseAgentAttachmentsInput): UseAgentAttachmentsResult {
+  const { t } = useTranslation()
   const {
     sessionId,
     pendingFiles,
@@ -109,10 +111,10 @@ export function useAgentAttachments(input: UseAgentAttachmentsInput): UseAgentAt
         }), base64)
       } catch (cause) {
         console.error('[Agent 附件] 添加失败:', cause)
-        toast.error(`添加附件失败：${file.name}`)
+        toast.error(t('agent.attachment.addFailed', { filename: file.name }))
       }
     }
-  }, [appendPendingFile])
+  }, [appendPendingFile, t])
 
   const handleOpenFileDialog = React.useCallback(async (): Promise<void> => {
     try {
@@ -134,9 +136,9 @@ export function useAgentAttachments(input: UseAgentAttachmentsInput): UseAgentAt
       }
     } catch (cause) {
       console.error('[Agent 附件] 文件选择失败:', cause)
-      toast.error('打开文件选择器失败')
+      toast.error(t('agent.attachment.openDialogFailed'))
     }
-  }, [appendPendingFile])
+  }, [appendPendingFile, t])
 
   const handleRemoveFile = React.useCallback((id: string): void => {
     setPendingFiles((previous) => {
@@ -191,18 +193,18 @@ export function useAgentAttachments(input: UseAgentAttachmentsInput): UseAgentAt
           nextDirectories = await window.electronAPI.attachDirectory({ sessionId, directoryPath })
         }
         onAttachedDirectoriesChange(nextDirectories)
-        showFolderNotice(`已附加 ${directoryPaths.length} 个文件夹`)
+        showFolderNotice(t('agent.attachment.folderAttached', { count: directoryPaths.length }))
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause)
         console.error('[Agent 附件] 拖拽附加文件夹失败:', cause)
-        showFolderNotice(`附加文件夹失败：${message}`)
+        showFolderNotice(t('agent.attachment.folderAttachFailed', { message }))
       }
     }
 
     if (regularFiles.length > 0) {
       await addFilesAsAttachments(regularFiles)
     }
-  }, [addFilesAsAttachments, attachedDirectories, onAttachedDirectoriesChange, sessionId, showFolderNotice])
+  }, [addFilesAsAttachments, attachedDirectories, onAttachedDirectoriesChange, sessionId, showFolderNotice, t])
 
   const dismissDragFolderNotice = React.useCallback((): void => {
     if (noticeTimerRef.current !== null) {

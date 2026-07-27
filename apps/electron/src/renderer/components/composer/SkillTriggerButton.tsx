@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAtomValue } from 'jotai'
 import { Settings, Wand2 } from 'lucide-react'
 import { workspaceCapabilitiesVersionAtom } from '@/atoms/agent-atoms'
@@ -24,6 +25,7 @@ export function SkillTriggerButton({
   onSelectSkill,
   onManageSkills,
 }: SkillTriggerButtonProps): React.ReactElement {
+  const { t } = useTranslation()
   const capabilitiesVersion = useAtomValue(workspaceCapabilitiesVersionAtom)
   const [skills, setSkills] = React.useState<SkillMentionItem[]>([])
   const [loading, setLoading] = React.useState(false)
@@ -43,11 +45,11 @@ export function SkillTriggerButton({
     } catch (error) {
       console.error('[SkillTriggerButton] 加载技能失败:', error)
       setSkills([])
-      setLoadError(error instanceof Error ? error.message : '技能列表加载失败')
+      setLoadError(error instanceof Error ? error.message : t('composer.skillsLoadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [capabilitiesVersion, loading])
+  }, [capabilitiesVersion, loading, t])
 
   return (
     <ToolbarHoverPopover
@@ -62,7 +64,7 @@ export function SkillTriggerButton({
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="技能"
+          aria-label={t('composer.skills')}
           className={cn(
             buttonClassName ?? 'size-[30px] rounded-lg',
             'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
@@ -76,7 +78,7 @@ export function SkillTriggerButton({
       {({ close }) => (
         <div className="flex max-h-[280px] flex-col">
           {loading ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground">加载中...</div>
+            <div className="px-3 py-4 text-xs text-muted-foreground">{t('common.loading')}</div>
           ) : loadError ? (
             <div role="alert" className="space-y-2 px-3 py-4 text-xs">
               <p className="text-destructive">{loadError}</p>
@@ -88,11 +90,11 @@ export function SkillTriggerButton({
                   void loadSkills()
                 }}
               >
-                重试
+                {t('common.retry')}
               </button>
             </div>
           ) : skills.length === 0 ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground">无可用技能</div>
+            <div className="px-3 py-4 text-xs text-muted-foreground">{t('composer.noSkills')}</div>
           ) : (
             <div className="max-h-[240px] overflow-y-auto py-1">
               {skills.map((skill) => (
@@ -121,7 +123,7 @@ export function SkillTriggerButton({
               }}
             >
               <Settings className="size-3" />
-              <span>管理技能库</span>
+              <span>{t('composer.manageSkills')}</span>
             </button>
           )}
         </div>

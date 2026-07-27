@@ -1,4 +1,5 @@
-import * as React from 'react'
+import type * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { BridgeConfig } from '@kila/shared'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -8,6 +9,7 @@ import { SettingsRow } from '../primitives/SettingsRow'
 import { SettingsSecretInput } from '../primitives/SettingsSecretInput'
 import { SettingsSection } from '../primitives/SettingsSection'
 import { BridgeDefaultModelField } from './BridgeDefaultModelField'
+import { BridgeAllowlistNotice } from './BridgeAllowlistNotice'
 
 export function TelegramBridgeSettings({
   config,
@@ -32,23 +34,25 @@ export function TelegramBridgeSettings({
   hasSavedToken: boolean
   onRevealToken: () => Promise<string>
 }): React.ReactElement {
+  const { t } = useTranslation()
+
   return (
     <SettingsSection
-      title="Telegram"
-      description="Telegram 私聊入口。"
+      title={t('settingsBridge.common.channel.telegram')}
+      description={t('settingsBridge.telegram.description')}
       action={(
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => void onTest('telegram', config)} disabled={saving || testing}>
-            {testing ? '测试中...' : '测试'}
+            {testing ? t('settingsBridge.common.testing') : t('settingsBridge.common.test')}
           </Button>
           <Button onClick={() => void onSave(config)} disabled={saving || testing}>
-            {saving ? '保存中...' : '保存'}
+            {saving ? t('settingsBridge.common.saving') : t('settingsBridge.common.save')}
           </Button>
         </div>
       )}
     >
       <SettingsCard>
-        <SettingsRow label="启用 Telegram 远程渠道">
+        <SettingsRow label={t('settingsBridge.telegram.enableLabel')}>
           <Switch
             checked={config.telegram.enabled}
             onCheckedChange={(checked) => onChange({
@@ -64,8 +68,8 @@ export function TelegramBridgeSettings({
       <SettingsCard divided={false}>
         <SettingsSecretInput
           key={config.telegram.botToken || 'telegram-empty-secret'}
-          label="机器人令牌"
-          description="留空表示保留当前已保存的令牌。"
+          label={t('settingsBridge.common.botToken')}
+          description={t('settingsBridge.common.botTokenDescription')}
           value={tokenDraft}
           onChange={onTokenDraftChange}
           placeholder="123456:AA..."
@@ -73,7 +77,7 @@ export function TelegramBridgeSettings({
           onReveal={onRevealToken}
         />
         <BridgeDefaultModelField
-          description="该渠道新会话默认使用的模型；未设置时回退到总览配置。"
+          description={t('settingsBridge.common.channelDefaultModelDescription')}
           value={config.telegram.defaultSession}
           onChange={(value) => onChange({
             ...config,
@@ -83,9 +87,10 @@ export function TelegramBridgeSettings({
             },
           })}
         />
+        <BridgeAllowlistNotice allowedCount={config.telegram.allowedUserIds.length} />
         <SettingsInput
-          label="允许的用户 ID"
-          description="逗号分隔的 Telegram 用户 ID 白名单。"
+          label={t('settingsBridge.common.allowedUserIdsLabel')}
+          description={t('settingsBridge.telegram.allowedUserIdsDescription')}
           value={config.telegram.allowedUserIds.join(', ')}
           onChange={(value) => onChange({
             ...config,
@@ -97,7 +102,7 @@ export function TelegramBridgeSettings({
           placeholder="1001, 1002"
         />
         <SettingsInput
-          label="最大入站文件大小（字节）"
+          label={t('settingsBridge.common.maxInboundFileBytesLabel')}
           value={String(config.telegram.maxInboundFileBytes)}
           onChange={(value) => onChange({
             ...config,

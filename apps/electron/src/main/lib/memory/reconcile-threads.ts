@@ -1,6 +1,7 @@
 import type { SessionMessage, SessionMeta } from '@kila/shared'
 import { getSessionMessages, listSessions } from '../session-manager'
 import { getMemoryRuntimeConfig, isNowledgeConfigured } from './config'
+import { asRecord } from './nowledge-payload'
 import { memoryStateStore } from './state-store'
 import type { MemoryDistillThreadMessage, NowledgeThreadState } from './types'
 
@@ -331,7 +332,7 @@ function createNowledgeThreadClient(): NowledgeThreadClient {
   async function request(pathname: string, options: {
     method: 'GET' | 'POST' | 'DELETE'
     body?: Record<string, unknown>
-  }): Promise<any> {
+  }): Promise<unknown> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), Math.max(config.nowledgeTimeoutMs, DEFAULT_TIMEOUT_MS))
 
@@ -370,20 +371,21 @@ function createNowledgeThreadClient(): NowledgeThreadClient {
         limit: String(input.limit),
         offset: String(input.offset),
       })
-      const response = await request(`/threads?${params.toString()}`, { method: 'GET' })
-      const rawThreads = Array.isArray(response.threads) ? response.threads : []
-      const pagination = typeof response.pagination === 'object' && response.pagination
-        ? response.pagination as Record<string, unknown>
-        : {}
+      const response = asRecord(await request(`/threads?${params.toString()}`, { method: 'GET' }))
+      const rawThreads = Array.isArray(response?.threads) ? response.threads : []
+      const pagination = asRecord(response?.pagination) ?? {}
       return {
         threads: rawThreads
-          .map((item: any) => ({
-            threadId: String(item.id ?? item.thread_id ?? '').trim(),
-            title: normalizeText(typeof item.title === 'string' ? item.title : undefined),
-            source: normalizeText(typeof item.source === 'string' ? item.source : undefined),
-            messageCount: Number(item.messages ?? item.message_count ?? 0),
-          }))
-          .filter((item: ReconcileRemoteThreadRecord) => item.threadId),
+          .map((raw): ReconcileRemoteThreadRecord => {
+            const item = asRecord(raw)
+            return {
+              threadId: String(item?.id ?? item?.thread_id ?? '').trim(),
+              title: normalizeText(typeof item?.title === 'string' ? item.title : undefined),
+              source: normalizeText(typeof item?.source === 'string' ? item.source : undefined),
+              messageCount: Number(item?.messages ?? item?.message_count ?? 0),
+            }
+          })
+          .filter((item) => Boolean(item.threadId)),
         hasMore: Boolean(pagination.has_more),
       }
     },

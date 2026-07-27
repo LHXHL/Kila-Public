@@ -6,8 +6,11 @@
  * 通过标准 MCP stdio 协议与 Agent runtime 通信。
  */
 
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import process from 'node:process'
 import type {
@@ -27,11 +30,146 @@ const execFileAsync = promisify(execFile)
 /** MCP 配置中 cua-driver 的固定 key */
 const CUA_DRIVER_MCP_KEY = 'cua-driver'
 
-/** 安装脚本 URL */
-const INSTALL_SCRIPT_URL_MACOS =
-  'https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh'
-const INSTALL_SCRIPT_URL_WINDOWS =
-  'https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.ps1'
+/**
+ * 安装脚本供应链锁定
+ *
+ * cua-driver 的官方安装脚本来自第三方仓库 trycua/cua。
+ * 直接 `curl | bash` / `irm | iex` 拉取 main 分支等于把第三方仓库的
+ * 任意一次 push 变成本机代码执行（Windows 上还会提升到管理员）。
+ *
+ * 因此这里做双重锁定（与 scripts/download-bash.ts 的 busybox 锁定同一范式）：
+ * 1. URL 锚定到具体 commit SHA，而不是 main 分支；
+ * 2. 下载后计算 SHA256 并与固定期望值比对，不匹配立即中止且绝不执行。
+ *
+ * 升级步骤（必须同时更新 SHA 与两个哈希）：
+ *   curl -s https://api.github.com/repos/trycua/cua/commits/main   # 取 commit SHA
+ *   curl -fsSL <锚定 URL> | shasum -a 256                          # 取脚本哈希
+ */
+const INSTALL_SCRIPT_COMMIT = 'df368a7698a07ec9ba7e10952d483457c22841ff'
+
+const INSTALL_SCRIPT_BASE_URL =
+  `https://raw.githubusercontent.com/trycua/cua/${INSTALL_SCRIPT_COMMIT}/libs/cua-driver/scripts`
+
+/** 脚本来源描述：URL + 期望 SHA256（空字符串表示未配置，拒绝安装） */
+export interface InstallScriptSource {
+  platform: 'macos' | 'windows'
+  url: string
+  /** 期望 SHA256（十六进制小写）；为空时拒绝安装 */
+  expectedSha256: string
+}
+
+/** 2026-07-26 核对：与 commit df368a7 的脚本内容一致 */
+export const INSTALL_SCRIPT_MACOS: InstallScriptSource = {
+  platform: 'macos',
+  url: `${INSTALL_SCRIPT_BASE_URL}/install.sh`,
+  expectedSha256: '52293f8683c6c41ef8df0bb17907f3bd9266314e04f7b0c8f3c4576e7ba139f7',
+}
+
+export const INSTALL_SCRIPT_WINDOWS: InstallScriptSource = {
+  platform: 'windows',
+  url: `${INSTALL_SCRIPT_BASE_URL}/install.ps1`,
+  expectedSha256: '85227ad5400240ccdcd8be18024ad871d1382d9e0b7f66dcce778e0ae4427f73',
+}
+
+/** 下载安装脚本的超时（毫秒） */
+const SCRIPT_DOWNLOAD_TIMEOUT_MS = 30_000
+
+/** 执行安装脚本的超时（毫秒） */
+const SCRIPT_EXEC_TIMEOUT_MS = 120_000
+
+/**
+ * 构造子进程的最小必要环境变量
+ *
+ * 不再整体透传 `process.env`：Electron 主进程环境里含有代理凭证、
+ * API Key 等敏感变量，没有必要交给第三方安装脚本或 MCP 子进程。
+ */
+function minimalChildEnv(extra: Record<string, string> = {}): Record<string, string> {
+  const passthroughKeys = [
+    // 通用
+    'PATH', 'Path', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'TEMP', 'TMP', 'SHELL',
+    // Windows
+    'SystemRoot', 'SystemDrive', 'windir', 'ComSpec', 'PATHEXT',
+    'USERPROFILE', 'USERNAME', 'HOMEDRIVE', 'HOMEPATH',
+    'LOCALAPPDATA', 'APPDATA', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramData',
+  ]
+
+  const env: Record<string, string> = {}
+  for (const key of passthroughKeys) {
+    const value = process.env[key]
+    if (typeof value === 'string') env[key] = value
+  }
+
+  return { ...env, ...extra }
+}
+
+/**
+ * 下载安装脚本并做 SHA256 校验
+ *
+ * 校验不通过（或未配置期望哈希）时抛出明确中文错误，绝不返回可执行内容。
+ */
+export async function fetchVerifiedInstallScript(source: InstallScriptSource): Promise<string> {
+  if (!source.expectedSha256) {
+    log.error(`[CuaDriver] 未配置 ${source.platform} 安装脚本的期望 SHA256，拒绝安装`)
+    throw new Error(
+      '未配置安装脚本的期望 SHA256 校验值，出于供应链安全考虑拒绝安装。'
+      + '请升级 Kila 或在 cua-driver-service.ts 中补齐锁定哈希。',
+    )
+  }
+
+  // 只记录来源与版本，不记录脚本内容
+  log.info(`[CuaDriver] 准备下载安装脚本 platform=${source.platform} commit=${INSTALL_SCRIPT_COMMIT} url=${source.url}`)
+
+  const response = await fetch(source.url, {
+    redirect: 'follow',
+    signal: AbortSignal.timeout(SCRIPT_DOWNLOAD_TIMEOUT_MS),
+  })
+  if (!response.ok) {
+    throw new Error(`下载安装脚本失败: HTTP ${response.status} ${response.statusText}`)
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer())
+  const actualSha256 = createHash('sha256').update(bytes).digest('hex')
+
+  if (actualSha256 !== source.expectedSha256) {
+    log.error(
+      `[CuaDriver] 安装脚本 SHA256 校验失败 platform=${source.platform} `
+      + `期望=${source.expectedSha256} 实际=${actualSha256}`,
+    )
+    throw new Error(
+      '安装脚本校验失败，已中止安装。\n'
+      + `  期望 SHA256: ${source.expectedSha256}\n`
+      + `  实际 SHA256: ${actualSha256}\n`
+      + '脚本内容与锁定版本不一致，可能是上游变更或供应链投毒。'
+      + '请勿手动绕过，等待 Kila 更新锁定哈希后再安装。',
+    )
+  }
+
+  log.info(`[CuaDriver] 安装脚本 SHA256 校验通过 platform=${source.platform}`)
+  return bytes.toString('utf-8')
+}
+
+/**
+ * 将脚本落盘到独占临时目录，交给回调执行，结束后无条件清理
+ *
+ * 相比 `bash -c <脚本内容>` / `irm | iex`：
+ * - 脚本内容不再经过命令行拼接，消除引号与注入面
+ * - 只有通过哈希校验的内容才会落盘
+ */
+async function withTempScript<T>(
+  filename: string,
+  content: string,
+  run: (scriptPath: string) => Promise<T>,
+): Promise<T> {
+  const dir = mkdtempSync(join(tmpdir(), 'kila-cua-install-'))
+  const scriptPath = join(dir, filename)
+
+  try {
+    writeFileSync(scriptPath, content, { encoding: 'utf-8', mode: 0o700 })
+    return await run(scriptPath)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
 
 /**
  * 获取当前平台标识
@@ -87,7 +225,7 @@ async function findBinary(): Promise<{ path: string; version: string }> {
 
       const { stdout } = await execFileAsync(cmd, ['--version'], {
         timeout: 5000,
-        env: { ...process.env },
+        env: minimalChildEnv(),
         // Windows 隐藏终端闪烁
         windowsHide: true,
       })
@@ -120,7 +258,7 @@ async function resolveToAbsolutePath(cmd: string): Promise<string> {
     const whichCmd = process.platform === 'win32' ? 'where' : 'which'
     const { stdout } = await execFileAsync(whichCmd, [cmd], {
       timeout: 5000,
-      env: { ...process.env },
+      env: minimalChildEnv(),
       windowsHide: true,
     })
     const resolved = stdout.trim().split('\n')[0]?.trim()
@@ -205,17 +343,16 @@ export async function installCuaDriver(): Promise<CuaDriverInstallResult> {
   log.info('[CuaDriver] 开始安装...')
 
   try {
-    // 异步下载安装脚本，避免阻塞 Electron 主进程
-    const { stdout: scriptContent } = await execFileAsync('curl', ['-fsSL', INSTALL_SCRIPT_URL_MACOS], {
-      timeout: 30000,
-      env: { ...process.env },
-    })
+    // 下载 + SHA256 校验：校验不通过会抛错，绝不执行
+    const scriptContent = await fetchVerifiedInstallScript(INSTALL_SCRIPT_MACOS)
 
-    // 异步执行安装脚本
-    await execFileAsync('bash', ['-c', scriptContent.toString()], {
-      timeout: 120000,
-      env: { ...process.env },
-    })
+    // 校验通过的脚本落盘后执行，不再把内容拼进 `bash -c`
+    await withTempScript('install.sh', scriptContent, (scriptPath) =>
+      execFileAsync('bash', [scriptPath], {
+        timeout: SCRIPT_EXEC_TIMEOUT_MS,
+        env: minimalChildEnv(),
+      }),
+    )
 
     // 安装后重新检测
     const detection = await detectCuaDriver()
@@ -253,20 +390,24 @@ async function installCuaDriverWindows(): Promise<CuaDriverInstallResult> {
   log.info('[CuaDriver] Windows 开始安装...')
 
   try {
-    const psCommand = `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm '${INSTALL_SCRIPT_URL_WINDOWS}' | iex`
+    // 下载 + SHA256 校验：替代原先的 `irm <URL> | iex`
+    const scriptContent = await fetchVerifiedInstallScript(INSTALL_SCRIPT_WINDOWS)
 
-    // 使用 PowerShell 执行安装脚本
-    await execFileAsync('powershell.exe', [
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      psCommand,
-    ], {
-      timeout: 120000,
-      env: { ...process.env },
-      windowsHide: true,
-    })
+    // 校验通过的脚本落盘后用 -File 执行，参数以数组传递，无字符串拼接
+    await withTempScript('install.ps1', scriptContent, (scriptPath) =>
+      execFileAsync('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+      ], {
+        timeout: SCRIPT_EXEC_TIMEOUT_MS,
+        env: minimalChildEnv(),
+        windowsHide: true,
+      }),
+    )
 
     // 安装后重新检测（安装脚本可能需要一点时间完成 junction 创建）
     await new Promise((resolve) => setTimeout(resolve, 2000))
@@ -329,14 +470,12 @@ export async function testCuaDriverConnection(): Promise<{ success: boolean; mes
     const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js')
 
-    const client = new Client({ name: 'Kila-test', version: '0.1.0' }) as any
+    const client = new Client({ name: 'Kila-test', version: '0.1.0' })
     const transport = new StdioClientTransport({
       command: detection.binaryPath,
       args: ['mcp'],
-      env: {
-        ...process.env,
-        CUA_DRIVER_MCP_MODE: '1',
-      } as Record<string, string>,
+      // MCP 子进程同样只给最小必要环境，不透传代理凭证与 API Key
+      env: minimalChildEnv({ CUA_DRIVER_MCP_MODE: '1' }),
       stderr: 'inherit',
     })
 
@@ -347,7 +486,7 @@ export async function testCuaDriverConnection(): Promise<{ success: boolean; mes
 
     await Promise.race([client.connect(transport), timeoutPromise])
 
-    const tools = await (client as any).listTools()
+    const tools = await client.listTools()
 
     await client.close()
 
@@ -427,7 +566,7 @@ async function ensureWindowsAutostart(binaryPath: string): Promise<void> {
     const { stdout: statusOutput } = await execFileAsync(
       binaryPath,
       ['autostart', 'status'],
-      { timeout: 5000, env: { ...process.env }, windowsHide: true },
+      { timeout: 5000, env: minimalChildEnv(), windowsHide: true },
     )
     if (statusOutput.toLowerCase().includes('registered')) {
       log.info('[CuaDriver] Windows autostart 已注册')
@@ -439,18 +578,30 @@ async function ensureWindowsAutostart(binaryPath: string): Promise<void> {
 
   try {
     log.info('[CuaDriver] 正在注册 Windows autostart（可能弹出 UAC）...')
-    // 通过 PowerShell 以管理员权限运行 autostart enable
-    const psCommand = `& "${binaryPath}" autostart enable; exit $LASTEXITCODE`
+    // 二进制路径经环境变量传入，不拼进命令字符串；参数以 PowerShell 数组传递。
+    // 原实现把路径拼进单引号字符串再 -Verb RunAs 提权，路径含引号即可注入管理员命令。
+    const psCommand = [
+      '$exe = $env:KILA_CUA_DRIVER_BIN;',
+      'if (-not (Test-Path -LiteralPath $exe)) { exit 2 };',
+      "$p = Start-Process -FilePath $exe -ArgumentList 'autostart','enable' -Verb RunAs -Wait -PassThru;",
+      'exit $p.ExitCode',
+    ].join(' ')
+
     const { stdout, stderr } = await execFileAsync(
       'powershell.exe',
       [
         '-NoProfile',
+        '-NonInteractive',
         '-ExecutionPolicy',
         'Bypass',
         '-Command',
-        `Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command','${psCommand}' -Verb RunAs -Wait`,
+        psCommand,
       ],
-      { timeout: 30000, env: { ...process.env }, windowsHide: true },
+      {
+        timeout: 30000,
+        env: minimalChildEnv({ KILA_CUA_DRIVER_BIN: binaryPath }),
+        windowsHide: true,
+      },
     )
     log.info(`[CuaDriver] Windows autostart 注册完成 stdout=${stdout.trim()} stderr=${stderr.trim()}`)
   } catch (error) {

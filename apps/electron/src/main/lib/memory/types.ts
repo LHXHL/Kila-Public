@@ -54,10 +54,6 @@ export interface MemoryMergeDuplicatesInput {
   duplicateUris: string[]
 }
 
-export interface QueuedMemoryWriteView extends MemoryWriteInput {
-  sourceSessionId: string
-}
-
 export interface WorkingMemory {
   scope: WorkingMemoryScope
   projectPath?: string
@@ -68,7 +64,9 @@ export interface WorkingMemory {
 export interface MemoryProviderStatus {
   mode: MemoryProviderMode
   activeProvider: MemoryProviderMode
+  /** @deprecated 本地 Markdown 存储已移除，恒为 false；待下个 minor 版本连同 IPC 契约一起删除 */
   localReady: boolean
+  /** @deprecated 本地 Markdown 存储已移除，恒为空字符串；待下个 minor 版本连同 IPC 契约一起删除 */
   memoryDirectory: string
   nowledgeEnabled: boolean
   nowledgeConfigured: boolean

@@ -1,6 +1,12 @@
 import { randomBytes } from 'node:crypto'
-import type { BridgePermissionPrompt, BridgeChannelType, PermissionRequest } from '@kila/shared'
+import type {
+  BridgeAdapterCapabilities,
+  BridgePermissionPrompt,
+  BridgeChannelType,
+  PermissionRequest,
+} from '@kila/shared'
 import type { PermissionResolution } from '../agent-permission-service'
+import type { BridgeSenderIdentity, SenderAllowlistDecision } from './security/sender-allowlist'
 
 interface PendingPermissionPrompt extends BridgePermissionPrompt {
   resolved: boolean
@@ -16,6 +22,13 @@ interface PermissionBridgeDeps {
     alwaysAllow: boolean,
   ) => PermissionResolution | null
   dispatchPrompt: (prompt: BridgePermissionPrompt) => Promise<void>
+  /** 审批人身份校验；与入站消息共用同一份白名单真相源 */
+  isActorAllowed?: (
+    channelType: BridgeChannelType,
+    identity: BridgeSenderIdentity,
+  ) => SenderAllowlistDecision
+  /** 渠道的审批能力；desktop_only 表示该渠道无法远程审批 */
+  getApprovalMode?: (channelType: BridgeChannelType) => BridgeAdapterCapabilities['approvalMode']
 }
 
 export interface HandlePermissionRequestInput {
@@ -25,12 +38,26 @@ export interface HandlePermissionRequestInput {
 }
 
 export interface ResolvePermissionActionInput {
+  channelType: BridgeChannelType
   callbackToken: string
   endpointKey: string
+  userId?: string
+  chatId?: string
   behavior: 'allow' | 'deny'
   alwaysAllow: boolean
   now?: number
 }
+
+export interface PermissionActionResult {
+  ok: boolean
+  message: string
+  sessionId?: string
+}
+
+const UNSUPPORTED_ALWAYS_ALLOW_MESSAGE =
+  '远程渠道不支持“总是允许”：这会把危险工具永久写进白名单。请改用“允许一次”，或在 Kila 桌面端处理。'
+const UNAUTHORIZED_ACTOR_MESSAGE = '你没有权限处理这条审批请求。'
+const DESKTOP_ONLY_DENY_MESSAGE = '该远程渠道不支持审批交互，权限请求已按默认拒绝处理，请在 Kila 桌面端继续。'
 
 export class PermissionBridge {
   private readonly pending = new Map<string, PendingPermissionPrompt>()
@@ -60,18 +87,30 @@ export class PermissionBridge {
       resolved: false,
     }
 
+    // 无法远程审批的渠道（如飞书）必须“默认拒绝”，而不是挂着等超时或被全放行绕过
+    const approvalMode = this.deps.getApprovalMode?.(input.channelType) ?? 'interactive'
+    if (approvalMode === 'desktop_only') {
+      prompt.resolved = true
+      this.deps.respondToPermission(prompt.requestId, 'deny', false)
+      await this.deps.dispatchPrompt(prompt)
+      return prompt
+    }
+
     this.pending.set(prompt.callbackToken, prompt)
     await this.deps.dispatchPrompt(prompt)
     return prompt
   }
 
   resolveTextApproval(input: {
+    channelType: BridgeChannelType
     approvalCode: string
     endpointKey: string
+    userId?: string
+    chatId?: string
     behavior: 'allow' | 'deny'
     alwaysAllow: boolean
     now?: number
-  }): { ok: boolean; message: string; sessionId?: string } {
+  }): PermissionActionResult {
     const code = input.approvalCode.trim().toUpperCase()
     const prompt = Array.from(this.pending.values()).find((item) => item.approvalCode === code)
     if (!prompt) {
@@ -79,15 +118,18 @@ export class PermissionBridge {
     }
 
     return this.resolveAction({
+      channelType: input.channelType,
       callbackToken: prompt.callbackToken,
       endpointKey: input.endpointKey,
+      userId: input.userId,
+      chatId: input.chatId,
       behavior: input.behavior,
       alwaysAllow: input.alwaysAllow,
       now: input.now,
     })
   }
 
-  resolveAction(input: ResolvePermissionActionInput): { ok: boolean; message: string; sessionId?: string } {
+  resolveAction(input: ResolvePermissionActionInput): PermissionActionResult {
     const prompt = this.pending.get(input.callbackToken)
     if (!prompt) {
       return { ok: false, message: '权限操作不存在或已失效。' }
@@ -105,7 +147,21 @@ export class PermissionBridge {
       return { ok: false, message: '权限操作已过期。' }
     }
 
-    const resolution = this.deps.respondToPermission(prompt.requestId, input.behavior, input.alwaysAllow)
+    // 身份校验：Discord/Telegram 的审批按钮任何人都能点，必须在此拦住非授权用户
+    const actorDecision = this.deps.isActorAllowed?.(input.channelType, {
+      userId: input.userId,
+      chatId: input.chatId,
+    })
+    if (actorDecision && !actorDecision.allowed) {
+      return { ok: false, message: actorDecision.message ?? UNAUTHORIZED_ACTOR_MESSAGE }
+    }
+
+    // 远程渠道禁止 alwaysAllow：一次误点会把危险工具永久加进白名单
+    if (input.alwaysAllow) {
+      return { ok: false, message: UNSUPPORTED_ALWAYS_ALLOW_MESSAGE }
+    }
+
+    const resolution = this.deps.respondToPermission(prompt.requestId, input.behavior, false)
     if (!resolution) {
       this.pending.delete(input.callbackToken)
       return { ok: false, message: '权限请求不存在。' }
@@ -120,3 +176,9 @@ export class PermissionBridge {
     }
   }
 }
+
+export const PERMISSION_BRIDGE_MESSAGES = {
+  unsupportedAlwaysAllow: UNSUPPORTED_ALWAYS_ALLOW_MESSAGE,
+  unauthorizedActor: UNAUTHORIZED_ACTOR_MESSAGE,
+  desktopOnlyDeny: DESKTOP_ONLY_DENY_MESSAGE,
+} as const

@@ -1,0 +1,34 @@
+{
+  "tabs": {
+    "home": {
+      "greeting": "{{greeting}}, {{name}}",
+      "defaultName": "there",
+      "openSessionHint": "Open a session to get started.",
+      "lunarDate": "Lunar {{date}}",
+      "locationUnset": "Location not set",
+      "localTimeZone": "Local time zone"
+    },
+    "greeting": {
+      "lateNight": "Working late",
+      "morning": "Good morning",
+      "midday": "Good day",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "splitMode": {
+      "label": "Split Mode",
+      "single": "Single pane",
+      "horizontal2": "Split left / right",
+      "vertical2": "Split top / bottom",
+      "grid4": "Four-pane split"
+    },
+    "panel": {
+      "label": "Workspace {{index}}",
+      "labelFocused": "Workspace {{index}}, focused",
+      "empty": "Select a session from the sidebar"
+    },
+    "content": {
+      "missingTab": "This tab no longer exists"
+    }
+  }
+}

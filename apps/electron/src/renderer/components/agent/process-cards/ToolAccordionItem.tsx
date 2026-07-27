@@ -8,6 +8,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, ChevronDown, Loader2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -43,6 +44,7 @@ function FoldablePayloadBlock({
   content: unknown
   className: string
 }): React.ReactElement {
+  const { t, i18n } = useTranslation()
   const [expanded, setExpanded] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
   const preview = React.useMemo(
@@ -65,11 +67,11 @@ function FoldablePayloadBlock({
   const handleCopy = (): void => {
     void copyPlainText(normalizePayloadText(content)).then(() => {
       setCopied(true)
-      toast.success('完整输出已复制')
+      toast.success(t('agent.tool.fullOutputCopied'))
       window.setTimeout(() => setCopied(false), 1500)
     }).catch((error) => {
       console.error('[ToolAccordionItem] 复制完整输出失败:', error)
-      toast.error('复制完整输出失败，请重试')
+      toast.error(t('agent.tool.copyFullOutputFailed'))
     })
   }
 
@@ -85,15 +87,18 @@ function FoldablePayloadBlock({
             className="font-medium text-muted-foreground transition-colors hover:text-foreground"
             style={PROCESS_TONE_STYLE}
           >
-            {expanded ? '收起行预览' : `展开 ${hiddenLineCount} 行`}
+            {expanded ? t('agent.tool.collapseLines') : t('agent.tool.expandLines', { count: hiddenLineCount })}
           </button>
         )}
         <button type="button" className="text-muted-foreground hover:text-foreground hover:underline" onClick={handleCopy}>
-          {copied ? '已复制完整输出' : '复制完整输出'}
+          {copied ? t('agent.tool.fullOutputCopiedLabel') : t('agent.tool.copyFullOutput')}
         </button>
         {hasMore && (
           <span className="text-muted-foreground/70">
-            界面预览已省略 {preview.truncatedCharCount.toLocaleString('zh-CN')} 字符，可复制完整输出
+            {t('agent.tool.previewOmittedChars', {
+              count: preview.truncatedCharCount,
+              chars: preview.truncatedCharCount.toLocaleString(i18n.language),
+            })}
           </span>
         )}
       </div>
@@ -104,6 +109,7 @@ function FoldablePayloadBlock({
 // ===== InlineImage =====
 
 function InlineImage({ attachment }: { attachment: { localPath: string; filename: string; mediaType: string } }): React.ReactElement {
+  const { t } = useTranslation()
   const { imageSrc, loadState, retry, markError } = useAttachmentImage(
     attachment.localPath,
     attachment.mediaType,
@@ -120,7 +126,7 @@ function InlineImage({ attachment }: { attachment: { localPath: string; filename
       <div
         className="size-[200px] rounded-lg bg-muted/30 animate-pulse shrink-0"
         role="status"
-        aria-label={`正在加载 ${attachment.filename}`}
+        aria-label={t('agent.attachment.loading', { filename: attachment.filename })}
       />
     )
   }
@@ -129,13 +135,13 @@ function InlineImage({ attachment }: { attachment: { localPath: string; filename
     return (
       <div className="flex size-[200px] shrink-0 flex-col items-center justify-center gap-2 rounded-lg bg-destructive/5 px-3 text-center text-destructive/75">
         <XCircle className="size-5" />
-        <span className="line-clamp-2 text-[11px]">图片加载失败：{attachment.filename}</span>
+        <span className="line-clamp-2 text-[11px]">{t('agent.attachment.loadFailed', { filename: attachment.filename })}</span>
         <div className="flex items-center gap-2">
           <button type="button" onClick={retry} className="rounded-md bg-background/70 px-2 py-1 text-[10px] text-foreground/70 hover:text-foreground">
-            重试
+            {t('common.retry')}
           </button>
           <button type="button" onClick={handleSave} className="rounded-md bg-background/70 px-2 py-1 text-[10px] text-foreground/70 hover:text-foreground">
-            另存为
+            {t('agent.attachment.saveAs')}
           </button>
         </div>
       </div>
@@ -153,8 +159,8 @@ function InlineImage({ attachment }: { attachment: { localPath: string; filename
         type="button"
         onClick={handleSave}
         className="absolute bottom-1.5 right-1.5 p-1 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-black/70"
-        aria-label="保存图片"
-        title="保存图片"
+        aria-label={t('agent.attachment.saveImage')}
+        title={t('agent.attachment.saveImage')}
       >
         <Download className="size-3" />
       </button>
@@ -237,6 +243,7 @@ export function ToolAccordionItem({
   backgroundTask,
   sessionPath,
 }: ToolAccordionItemProps): React.ReactElement {
+  const { t } = useTranslation()
   const activity = React.useMemo(() => backgroundTask
     ? { ...entry.activity, intent: backgroundTask.intent ?? entry.activity.intent, isBackground: true }
     : entry.activity, [backgroundTask, entry.activity])
@@ -301,14 +308,14 @@ export function ToolAccordionItem({
             )}
             {Object.keys(activity.input).length > 0 && (
               <FoldablePayloadBlock
-                label="输入"
+                label={t('agent.tool.input')}
                 content={activity.input}
                 className="overflow-x-auto rounded-md border border-border/20 bg-muted/10 p-2 text-[11px] text-foreground/68"
               />
             )}
             {renderedResult && (
               <FoldablePayloadBlock
-                label="结果"
+                label={t('agent.tool.result')}
                 content={renderedResult}
                 className={cn(
                   'overflow-x-auto rounded-md border p-2 text-[11px]',

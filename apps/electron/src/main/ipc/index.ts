@@ -35,11 +35,14 @@ import { registerCuaDriverHandlers } from './cua-driver-ipc'
 import { registerQuickTaskHandlers } from './quick-task-ipc'
 import { initializeProjectRunChangesTracking } from '../lib/project-run-changes'
 
+import { createLogger } from '../lib/logger'
+
+const log = createLogger('IPC')
 /**
  * 注册 IPC 处理器
  */
 export function registerIpcHandlers(): void {
-  console.log('[IPC] 正在注册 IPC 处理器...')
+  log.info('[IPC] 正在注册 IPC 处理器...')
   initializeProjectRunChangesTracking()
 
   // 共享事件转发：Bridge 状态变更
@@ -98,7 +101,7 @@ export function registerIpcHandlers(): void {
   registerCuaDriverHandlers()
   registerQuickTaskHandlers()
 
-  console.log('[IPC] IPC 处理器注册完成')
+  log.info('[IPC] IPC 处理器注册完成')
 
   // 注册更新 IPC 处理器
   registerUpdaterIpc()

@@ -7,6 +7,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAtomValue } from 'jotai'
 import { Gauge } from 'lucide-react'
 import { agentContextStatusAtomFamily } from '@/atoms/agent-context-atoms'
@@ -45,6 +46,7 @@ export function ContextUsageIndicator({
   buttonClassName = 'size-[30px] rounded-lg',
   iconClassName = 'size-5',
 }: ContextUsageIndicatorProps) {
+  const { t } = useTranslation()
   const contextStatus = useAtomValue(agentContextStatusAtomFamily(sessionId))
 
   const hasData = typeof contextStatus.inputTokens === 'number' && contextStatus.inputTokens > 0
@@ -76,7 +78,7 @@ export function ContextUsageIndicator({
             iconColor,
             !hasData && 'opacity-40',
           )}
-          aria-label={hasData ? `上下文已使用 ${Math.round(percent)}%` : '暂无上下文数据'}
+          aria-label={hasData ? t('composer.contextUsed', { percent: Math.round(percent) }) : t('composer.noContextData')}
         >
           <Gauge className={iconClassName} />
         </button>
@@ -91,7 +93,7 @@ export function ContextUsageIndicator({
                 {percent.toFixed(1)}%
               </span>
               {contextStatus.isCompacting && (
-                <span className={`text-[10px] ${getStatusToneClasses('warning').text}`}>压缩中</span>
+                <span className={`text-[10px] ${getStatusToneClasses('warning').text}`}>{t('composer.compacting')}</span>
               )}
             </div>
             <div className="mt-1">
@@ -111,7 +113,7 @@ export function ContextUsageIndicator({
 
           {/* 来源 */}
           <div className="text-[10px] text-muted-foreground/50">
-            {contextStatus.source === 'live' ? 'API 实际用量' : '字符估算'}
+            {contextStatus.source === 'live' ? t('composer.usageLive') : t('composer.usageEstimated')}
           </div>
         </div>
       )}

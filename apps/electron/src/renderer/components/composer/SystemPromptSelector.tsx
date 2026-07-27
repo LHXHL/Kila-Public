@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { ScrollText } from 'lucide-react'
 import type { CustomSystemPrompt } from '@kila/shared'
 import { useSessionSystemPromptPreference } from '@/hooks/useSessionPreferences'
@@ -15,6 +16,7 @@ export function SystemPromptSelector({
   buttonClassName,
   iconClassName,
 }: SystemPromptSelectorProps = {}): React.ReactElement {
+  const { t } = useTranslation()
   const [systemPromptId, setSystemPromptId] = useSessionSystemPromptPreference()
   const [prompts, setPrompts] = React.useState<CustomSystemPrompt[]>([])
   const [loaded, setLoaded] = React.useState(false)
@@ -39,7 +41,7 @@ export function SystemPromptSelector({
 
   const activePrompt = prompts.find((p) => p.id === systemPromptId)
   const hasOverride = Boolean(systemPromptId)
-  const tooltipText = activePrompt ? `提示词：${activePrompt.name}` : '提示词：默认'
+  const tooltipText = activePrompt ? t('composer.systemPromptLabel', { name: activePrompt.name }) : t('composer.systemPromptDefaultLabel')
 
   return (
     <ToolbarHoverPopover
@@ -69,7 +71,7 @@ export function SystemPromptSelector({
       {({ close }) => (
         <div className="space-y-1 p-2">
           <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            提示词
+            {t('composer.systemPrompt')}
           </div>
 
           <button
@@ -83,7 +85,7 @@ export function SystemPromptSelector({
               !hasOverride ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50',
             )}
           >
-            <span className="min-w-0 flex-1 truncate">默认</span>
+            <span className="min-w-0 flex-1 truncate">{t('common.default')}</span>
           </button>
 
           {prompts.map((prompt) => {

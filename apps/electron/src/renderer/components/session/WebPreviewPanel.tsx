@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, Play, RotateCw, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +36,7 @@ function readWebviewNavigationState(webview: KilaWebviewElement | null) {
 }
 
 export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const {
     session,
     state,
@@ -112,13 +114,20 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
       syncNavigation()
     }
 
-    const handleFailLoad = (event: any) => {
+    /** Electron webview 的 did-fail-load 事件负载（仅取用到的字段） */
+    interface WebviewFailLoadEvent {
+      errorCode?: number
+      errorDescription?: string
+    }
+
+    const handleFailLoad = (event: WebviewFailLoadEvent) => {
+      // -3 是 ERR_ABORTED，用户主动取消导航时会触发，不算失败
       if (event?.errorCode === -3) return
       setSessionWebPreviewState((prev) => ({
         ...prev,
         isLoading: false,
         serverStatus: prev.serverBaseUrl ? 'error' : prev.serverStatus,
-        lastError: event?.errorDescription || '网页加载失败',
+        lastError: event?.errorDescription || t('session.webPreview.loadFailed'),
       }))
     }
 
@@ -137,7 +146,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
       webviewNode.removeEventListener('did-navigate-in-page', syncNavigation)
       webviewNode.removeEventListener('did-fail-load', handleFailLoad)
     }
-  }, [setSessionWebPreviewState, webviewNode])
+  }, [setSessionWebPreviewState, t, webviewNode])
 
   const handleSubmit = React.useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -146,13 +155,13 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
     if (!nextUrl) {
       setSessionWebPreviewState((prev) => ({
         ...prev,
-        lastError: '只支持 http / https 地址',
+        lastError: t('session.webPreview.invalidUrl'),
       }))
       return
     }
 
     void openUrlInSessionBrowser(nextUrl)
-  }, [openUrlInSessionBrowser, setSessionWebPreviewState, state.draftUrl])
+  }, [openUrlInSessionBrowser, setSessionWebPreviewState, state.draftUrl, t])
 
   const handleStart = React.useCallback(async () => {
     const info = await startSessionWebPreviewServer()
@@ -195,12 +204,12 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             <Globe className="size-4 text-foreground/70" />
           </div>
           <div>
-            <div className="text-sm font-medium text-foreground">网页预览</div>
-            <div className="text-[11px] text-muted-foreground">点击 Start 启动本地预览服务，或直接输入 http / https 地址。</div>
+            <div className="text-sm font-medium text-foreground">{t('session.webPreview.title')}</div>
+            <div className="text-[11px] text-muted-foreground">{t('session.webPreview.subtitle')}</div>
           </div>
         </div>
 
-        <form aria-label="网页预览导航" className="flex flex-wrap items-center gap-2" onSubmit={handleSubmit}>
+        <form aria-label={t('session.webPreview.navigation')} className="flex flex-wrap items-center gap-2" onSubmit={handleSubmit}>
           <Button
             type="button"
             variant="outline"
@@ -208,7 +217,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             className="h-8 gap-1.5 rounded-lg px-3 text-xs"
             onClick={() => { void handleStart() }}
             disabled={state.serverStatus === 'starting'}
-            aria-label="启动本地预览服务"
+            aria-label={t('session.webPreview.start')}
           >
             <Play className="size-3.5" />
             <span>Start</span>
@@ -221,7 +230,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             className="h-8 gap-1.5 rounded-lg px-3 text-xs"
             onClick={handleStop}
             disabled={state.serverStatus === 'idle' && !state.serverBaseUrl}
-            aria-label="停止本地预览服务"
+            aria-label={t('session.webPreview.stop')}
           >
             <Square className="size-3.5" />
             <span>Stop</span>
@@ -234,7 +243,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             className="h-8 w-8 rounded-lg"
             onClick={handleBack}
             disabled={!state.canGoBack}
-            aria-label="后退"
+            aria-label={t('session.webPreview.back')}
           >
             <ArrowLeft className="size-3.5" />
           </Button>
@@ -246,7 +255,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             className="h-8 w-8 rounded-lg"
             onClick={handleForward}
             disabled={!state.canGoForward}
-            aria-label="前进"
+            aria-label={t('session.webPreview.forward')}
           >
             <ArrowRight className="size-3.5" />
           </Button>
@@ -258,7 +267,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             className="h-8 w-8 rounded-lg"
             onClick={handleReload}
             disabled={!state.currentUrl}
-            aria-label="刷新网页"
+            aria-label={t('session.webPreview.reload')}
           >
             <RotateCw className={`size-3.5 ${state.isLoading ? 'animate-spin' : ''}`} />
           </Button>
@@ -273,8 +282,8 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
                 lastError: null,
               }))
             }}
-            placeholder="Enter URL or start a preview server..."
-            aria-label="预览地址"
+            placeholder={t('session.webPreview.urlPlaceholder')}
+            aria-label={t('session.webPreview.urlLabel')}
             className="h-8 min-w-[180px] flex-1 rounded-lg border-border/55 bg-background/75 px-3 text-xs"
           />
 
@@ -285,7 +294,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
             className="h-8 w-8 rounded-lg"
             onClick={handleOpenExternal}
             disabled={!state.currentUrl}
-            aria-label="在外部浏览器打开"
+            aria-label={t('session.webPreview.openExternal')}
           >
             <ExternalLink className="size-3.5" />
           </Button>
@@ -296,7 +305,7 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
         )}
         {!state.lastError && state.serverBaseUrl && (
           <div className="mt-2 text-[11px] text-muted-foreground">
-            本地预览服务运行中：{state.serverBaseUrl}
+            {t('session.webPreview.serverRunning', { url: state.serverBaseUrl })}
           </div>
         )}
       </div>
@@ -314,11 +323,11 @@ export function WebPreviewPanel({ sessionId }: WebPreviewPanelProps): React.Reac
           <div className="flex h-full items-center justify-center px-6">
             <div className="flex max-w-[280px] flex-col items-center gap-2 text-center text-muted-foreground">
               <Globe className="size-8" />
-              <div className="text-sm font-medium text-foreground">输入 URL 或点击 Start 启动本地预览服务</div>
+              <div className="text-sm font-medium text-foreground">{t('session.webPreview.emptyTitle')}</div>
               <div className="text-xs leading-5">
                 {projectPath
-                  ? '打开 HTML 文件时会自动预览，Start 也可以手动打开当前会话项目目录的本地预览服务。'
-                  : '当前会话还没有可用的项目目录。'}
+                  ? t('session.webPreview.emptyWithProject')
+                  : t('session.webPreview.emptyWithoutProject')}
               </div>
             </div>
           </div>

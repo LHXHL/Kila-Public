@@ -1,4 +1,5 @@
 import type {
+  BridgeAdapterCapabilities,
   BridgeChannelStatus,
   BridgeTestResult,
   FeishuBotBridgeStatus,
@@ -15,6 +16,7 @@ import type {
   BridgePermissionPromptMessage,
 } from './base-adapter'
 import { FeishuAdapter } from './feishu-adapter'
+import { FEISHU_CAPABILITIES } from './adapter-capabilities'
 
 interface FeishuMultiAdapterDeps {
   getConfig: () => FeishuBridgeConfig
@@ -31,6 +33,8 @@ function splitEndpointKey(endpointKey?: string): { botId?: string } {
 
 export class FeishuMultiAdapter extends BaseImAdapter {
   readonly channelType = 'feishu' as const
+  /** 与单 Bot adapter 保持一致：飞书无远程审批 UI，权限请求默认拒绝 */
+  readonly capabilities: BridgeAdapterCapabilities = FEISHU_CAPABILITIES
   private readonly adapters = new Map<string, FeishuAdapter>()
   private readonly unsubs = new Map<string, Array<() => void>>()
 

@@ -1,0 +1,14 @@
+{
+  "tools": {
+    "builtinTools": "Built-in Tools",
+    "enabledMcp": "Enabled MCP",
+    "noMcp": "No MCP servers enabled",
+    "manageTools": "Manage Tools",
+    "needsConfig": "Setup required",
+    "loading": "Loading...",
+    "tools": "Tools",
+    "loadingMcp": "Loading MCP…",
+    "capabilitiesLoadFailed": "Failed to load capabilities",
+    "toggleFailed": "Failed to update tool"
+  }
+}

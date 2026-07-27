@@ -7,9 +7,6 @@
 
 import { atom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
-import {
-  agentRunningSessionIdsAtom,
-} from './agent-atoms'
 
 // ===== 类型定义 =====
 
@@ -47,75 +44,6 @@ export interface SplitLayoutState {
   panels: SplitPanel[]
   /** 当前焦点面板索引 */
   focusedPanelIndex: number
-}
-
-/** Tab 持久化数据（保存到 settings.json） */
-export interface PersistedTabState {
-  tabs: TabItem[]
-  splitLayout: SplitLayoutState
-}
-
-const SPLIT_MODES = new Set<SplitMode>(['single', 'horizontal-2', 'vertical-2', 'grid-4'])
-
-interface RestorableTabState {
-  tabs: Array<{
-    id: string
-    type: string
-    sessionId: string
-    title: string
-  }>
-  splitLayout: {
-    mode: string
-    panels: Array<{ index: number; activeTabId: string | null }>
-    focusedPanelIndex: number
-  }
-}
-
-export function restorePersistedTabState(
-  persisted: RestorableTabState | undefined,
-  validSessionIds: ReadonlySet<string>,
-): PersistedTabState | null {
-  if (!persisted || !Array.isArray(persisted.tabs)) return null
-
-  const seenSessionIds = new Set<string>()
-  const tabs = persisted.tabs.flatMap((tab): TabItem[] => {
-    if (tab?.type !== 'agent' || typeof tab.sessionId !== 'string' || !validSessionIds.has(tab.sessionId)) return []
-    if (seenSessionIds.has(tab.sessionId)) return []
-    seenSessionIds.add(tab.sessionId)
-    return [{
-      id: tab.sessionId,
-      type: 'agent',
-      sessionId: tab.sessionId,
-      title: typeof tab.title === 'string' && tab.title.trim() ? tab.title : '新会话',
-    }]
-  })
-  if (tabs.length === 0) return null
-
-  const rawMode = persisted.splitLayout?.mode
-  const mode: SplitMode = SPLIT_MODES.has(rawMode as SplitMode) ? rawMode as SplitMode : 'single'
-  const panelCount = mode === 'grid-4' ? 4 : mode === 'single' ? 1 : 2
-  const tabIds = new Set(tabs.map((tab) => tab.id))
-  const assignedTabIds = new Set<string>()
-  const panels = Array.from({ length: panelCount }, (_, index): SplitPanel => {
-    const candidate = persisted.splitLayout?.panels?.[index]?.activeTabId ?? null
-    const activeTabId = candidate && tabIds.has(candidate) && !assignedTabIds.has(candidate)
-      ? candidate
-      : null
-    if (activeTabId) assignedTabIds.add(activeTabId)
-    return { index, activeTabId }
-  })
-  const rawFocusedIndex = Number.isFinite(persisted.splitLayout?.focusedPanelIndex)
-    ? persisted.splitLayout.focusedPanelIndex
-    : 0
-  const focusedPanelIndex = Math.max(0, Math.min(rawFocusedIndex, panels.length - 1))
-  if (panels.every((panel) => panel.activeTabId === null)) {
-    panels[focusedPanelIndex] = { ...panels[focusedPanelIndex]!, activeTabId: tabs[0]!.id }
-  }
-
-  return {
-    tabs,
-    splitLayout: { mode, panels, focusedPanelIndex },
-  }
 }
 
 // ===== 默认值 =====
@@ -160,17 +88,6 @@ export const activeTabAtom = atom<TabItem | null>((get) => {
   const activeId = get(activeTabIdAtom)
   if (!activeId) return null
   return get(tabsAtom).find((t) => t.id === activeId) ?? null
-})
-
-/** 标签是否在流式输出中（派生，从现有流式 atoms 计算） */
-export const tabStreamingMapAtom = atom<Map<string, boolean>>((get) => {
-  const tabs = get(tabsAtom)
-  const agentRunning = get(agentRunningSessionIdsAtom)
-  const map = new Map<string, boolean>()
-  for (const tab of tabs) {
-    map.set(tab.id, agentRunning.has(tab.sessionId))
-  }
-  return map
 })
 
 // ===== 操作函数 =====
@@ -278,19 +195,6 @@ export function focusTab(
   return { ...layout, panels: newPanels }
 }
 
-/** 重排标签顺序 */
-export function reorderTabs(
-  tabs: TabItem[],
-  fromIndex: number,
-  toIndex: number,
-): TabItem[] {
-  if (fromIndex === toIndex) return tabs
-  const newTabs = [...tabs]
-  const [moved] = newTabs.splice(fromIndex, 1)
-  newTabs.splice(toIndex, 0, moved!)
-  return newTabs
-}
-
 /** 更新标签标题 */
 export function updateTabTitle(
   tabs: TabItem[],
@@ -300,17 +204,6 @@ export function updateTabTitle(
   return tabs.map((t) =>
     t.sessionId === sessionId ? { ...t, title } : t
   )
-}
-
-/** 更新标签 runtime 类型 */
-export function updateTabType(
-  tabs: TabItem[],
-  sessionId: string,
-  type: TabType,
-): TabItem[] {
-  return tabs.map((tab) => (
-    tab.sessionId === sessionId ? { ...tab, type } : tab
-  ))
 }
 
 /** 设置分屏模式 */

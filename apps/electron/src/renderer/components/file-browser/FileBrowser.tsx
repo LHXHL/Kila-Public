@@ -12,6 +12,7 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   Folder,
   FolderOpen,
@@ -68,6 +69,7 @@ export function FileBrowser({
   onEntrySelect,
   onEntryPreview,
 }: FileBrowserProps): React.ReactElement {
+  const { t } = useTranslation()
   const [entries, setEntries] = React.useState<FileEntry[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -104,14 +106,14 @@ export function FileBrowser({
       setEntries(items)
     } catch (err) {
       if (loadRequestIdRef.current !== requestId) return
-      const msg = err instanceof Error ? err.message : '加载失败'
+      const msg = err instanceof Error ? err.message : t('fileBrowser.tree.loadFailed')
       setError(msg)
       setEntries([])
     } finally {
       if (loadRequestIdRef.current !== requestId) return
       setLoading(false)
     }
-  }, [rootPath])
+  }, [rootPath, t])
 
   React.useEffect(() => {
     setSelectedPaths(new Set())
@@ -172,7 +174,7 @@ export function FileBrowser({
       const siblings = await window.electronAPI.listDirectory(parentDir)
       const conflict = siblings.some((s) => s.name === newName && s.path !== filePath)
       if (conflict) {
-        return '同名文件已存在'
+        return t('fileBrowser.rename.duplicate')
       }
     } catch {
       // 无法列出目录，跳过检查
@@ -185,9 +187,9 @@ export function FileBrowser({
       setSelectedPaths(new Set())
       return null
     } catch (err) {
-      return err instanceof Error ? err.message : '重命名失败'
+      return err instanceof Error ? err.message : t('fileBrowser.rename.failed')
     }
-  }, [loadRoot])
+  }, [loadRoot, t])
 
   /** 触发删除（支持多选） */
   const handleRequestDelete = React.useCallback((entry: FileEntry) => {
@@ -245,7 +247,7 @@ export function FileBrowser({
   }, [rootPath])
 
   const fileTree = (
-    <div role="tree" aria-label="项目文件" aria-multiselectable="true" className="px-1.5 py-1" onClick={handleBackgroundClick}>
+    <div role="tree" aria-label={t('fileBrowser.tree.label')} aria-multiselectable="true" className="px-1.5 py-1" onClick={handleBackgroundClick}>
       {error && (
         <div className="px-3 py-2 text-xs text-destructive">
           <div className="flex items-center justify-between gap-2">
@@ -257,7 +259,7 @@ export function FileBrowser({
               className="h-6 px-2 text-[11px]"
               onClick={() => { void loadRoot() }}
             >
-              重试
+              {t('fileBrowser.tree.retry')}
             </Button>
           </div>
         </div>
@@ -265,18 +267,18 @@ export function FileBrowser({
       {!error && loading && entries.length === 0 && (
         <div className="flex items-center justify-center px-3 py-8 text-xs text-muted-foreground">
           <Loader2 className="mr-2 size-3.5 animate-spin" />
-          正在加载目录...
+          {t('fileBrowser.tree.loading')}
         </div>
       )}
       {!error && !loading && entries.length === 0 && (
         <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-          目录为空
+          {t('fileBrowser.tree.empty')}
         </div>
       )}
       {!error && loading && entries.length > 0 && (
         <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" />
-          正在刷新目录...
+          {t('fileBrowser.tree.refreshing')}
         </div>
       )}
       {entries.map((entry) => (
@@ -317,8 +319,8 @@ export function FileBrowser({
             size="icon"
             className="h-7 w-7 flex-shrink-0"
             onClick={() => window.electronAPI.openFile(rootPath).catch(console.error)}
-            title="在 Finder 中打开"
-            aria-label="在文件管理器中打开项目目录"
+            title={t('fileBrowser.toolbar.openInFileManager')}
+            aria-label={t('fileBrowser.toolbar.openProjectInFileManager')}
           >
             <ExternalLink className="size-3.5" />
           </Button>
@@ -329,7 +331,7 @@ export function FileBrowser({
             className="h-7 w-7 flex-shrink-0"
             onClick={loadRoot}
             disabled={loading}
-            aria-label="刷新文件树"
+            aria-label={t('fileBrowser.toolbar.refresh')}
           >
             <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
           </Button>
@@ -347,23 +349,23 @@ export function FileBrowser({
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogTitle>{t('fileBrowser.delete.title')}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteCount > 1 ? (
-                <>确定要删除选中的 <strong>{deleteCount}</strong> 个项目吗？</>
+                <Trans i18nKey="fileBrowser.delete.confirmMany" count={deleteCount} components={{ b: <strong /> }} />
               ) : (
                 <>
-                  确定要删除 <strong>{deleteTarget?.name}</strong> 吗？
-                  {deleteTarget?.isDirectory && '（包含所有子文件）'}
+                  <Trans i18nKey="fileBrowser.delete.confirmOne" values={{ name: deleteTarget?.name ?? '' }} components={{ b: <strong /> }} />
+                  {deleteTarget?.isDirectory && t('fileBrowser.delete.includesChildren')}
                 </>
-              )}
-              此操作不可撤销。
+              )}{' '}
+              {t('fileBrowser.delete.irreversible')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -412,6 +414,7 @@ function FileTreeItem({
   onRefresh,
   onEntryPreview,
 }: FileTreeItemProps): React.ReactElement {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = React.useState(false)
   const [children, setChildren] = React.useState<FileEntry[]>([])
   const [childrenLoaded, setChildrenLoaded] = React.useState(false)
@@ -450,7 +453,7 @@ function FileTreeItem({
         setExpanded(true)
       } catch (err) {
         console.error('[FileTreeItem] 加载子目录失败:', err)
-        setChildrenError(err instanceof Error ? err.message : '子目录加载失败')
+        setChildrenError(err instanceof Error ? err.message : t('fileBrowser.tree.childLoadFailed'))
       } finally {
         setChildrenLoading(false)
       }
@@ -671,7 +674,7 @@ function FileTreeItem({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label={`更多操作：${entry.name}`}
+                  aria-label={t('fileBrowser.contextMenu.moreActions', { name: entry.name })}
                   className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent/70"
                 >
                   <MoreHorizontal className="size-3.5" />
@@ -684,7 +687,7 @@ function FileTreeItem({
                     onSelect={() => onShowInFolder(entry)}
                   >
                     <FolderSearch />
-                    在文件夹中显示
+                    {t('fileBrowser.contextMenu.showInFolder')}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -693,7 +696,7 @@ function FileTreeItem({
                   onSelect={() => { void onMove(entry) }}
                 >
                   <FolderInput />
-                  {selectedCount > 1 ? `移动选中 (${selectedCount})` : '移动到...'}
+                  {selectedCount > 1 ? t('fileBrowser.contextMenu.moveSelected', { count: selectedCount }) : t('fileBrowser.contextMenu.move')}
                 </DropdownMenuItem>
                 {selectedCount === 1 && (
                   <DropdownMenuItem
@@ -701,7 +704,7 @@ function FileTreeItem({
                     onSelect={() => onStartRename(entry)}
                   >
                     <Pencil />
-                    重命名
+                    {t('fileBrowser.contextMenu.rename')}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator className="my-0.5" />
@@ -710,7 +713,7 @@ function FileTreeItem({
                   onSelect={() => onDelete(entry)}
                 >
                   <Trash2 />
-                  {selectedCount > 1 ? `删除选中 (${selectedCount})` : '删除'}
+                  {selectedCount > 1 ? t('fileBrowser.contextMenu.deleteSelected', { count: selectedCount }) : t('fileBrowser.contextMenu.delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -722,7 +725,7 @@ function FileTreeItem({
       {childrenError && (
         <div role="alert" className="flex items-center gap-2 py-1 text-[11px] text-destructive" style={{ paddingLeft: paddingLeft + 24 }}>
           <span className="truncate">{childrenError}</span>
-          <button type="button" className="text-primary hover:underline" onClick={() => { void toggleDir() }}>重试</button>
+          <button type="button" className="text-primary hover:underline" onClick={() => { void toggleDir() }}>{t('fileBrowser.tree.retry')}</button>
         </div>
       )}
       {expanded && children.length === 0 && childrenLoaded && (
@@ -730,7 +733,7 @@ function FileTreeItem({
           className="text-[11px] text-muted-foreground/50 py-1"
           style={{ paddingLeft: paddingLeft + 24 }}
         >
-          空文件夹
+          {t('fileBrowser.tree.emptyFolder')}
         </div>
       )}
       {expanded && children.map((child) => (

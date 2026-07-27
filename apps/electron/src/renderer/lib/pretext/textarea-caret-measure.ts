@@ -54,6 +54,10 @@ export interface CaretCoordinates {
 export function getTextareaCaretCoords(element: HTMLTextAreaElement, position = element.selectionStart): CaretCoordinates | null {
   if (!isBrowser) return null
 
+  /** camelCase 的 CSS 属性名转 kebab-case，供 setProperty 使用 */
+  const toKebabCase = (prop: string): string =>
+    prop.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+
   if (!mirrorDiv) {
     mirrorDiv = document.createElement('div')
     mirrorDiv.id = 'input-textarea-caret-position-mirror-div'
@@ -76,8 +80,8 @@ export function getTextareaCaretCoords(element: HTMLTextAreaElement, position = 
   properties.forEach((prop) => {
     const val = computed[prop as keyof CSSStyleDeclaration]
     if (val !== undefined && val !== null) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      style[prop as any] = String(val)
+      // CSSStyleDeclaration 的具名属性都是只读签名，逐个赋值只能走 setProperty
+      style.setProperty(toKebabCase(prop), String(val))
     }
   })
 

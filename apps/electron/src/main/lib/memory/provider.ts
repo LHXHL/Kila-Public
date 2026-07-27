@@ -35,7 +35,8 @@ export interface MemoryProvider {
   captureThread(input: MemoryThreadCaptureInput): Promise<void>
   getWorkingMemory(input: WorkingMemoryInput): Promise<WorkingMemory | null>
   setWorkingMemory(input: WorkingMemoryUpdateInput): Promise<WorkingMemory>
-  patchWorkingMemory?(input: WorkingMemoryPatchInput): Promise<WorkingMemory>
+  /** 必选：Manager 不再保留「provider 没有 patch 就本地拼接」的兜底实现，避免两份 patch 行为不一致 */
+  patchWorkingMemory(input: WorkingMemoryPatchInput): Promise<WorkingMemory>
   searchThreads?(input: MemoryThreadSearchInput): Promise<MemoryThreadSearchResult[]>
   fetchThread?(input: MemoryThreadFetchInput): Promise<MemoryThreadFetchResult | null>
   deleteThread?(threadId: string, options?: { cascadeDeleteMemories?: boolean }): Promise<boolean>

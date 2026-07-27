@@ -1,5 +1,6 @@
 import { existsSync, openSync, readFileSync, closeSync, readSync, statSync } from 'node:fs'
 import type {
+  AgentEvent,
   RecordTokenUsageInput,
   TokenUsageDailyStat,
   TokenUsageModelStat,
@@ -19,11 +20,33 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const MIN_DAYS = 1
 const MAX_DAYS = 365
 
+type CompactCompleteEvent = Extract<AgentEvent, { type: 'compact_complete' }>
+
+/**
+ * 用量来源。
+ *
+ * - assistant：Agent 回复本身的模型调用
+ * - compaction：上下文压缩生成摘要的那次模型调用（长会话里可能是几万 token）
+ */
+export type TokenUsageKind = 'assistant' | 'compaction'
+
+const TOKEN_USAGE_KINDS: ReadonlySet<string> = new Set<TokenUsageKind>(['assistant', 'compaction'])
+
+/**
+ * 落盘用的 usage 记录。
+ *
+ * `kind` 只存在于本地 JSONL：压缩摘要是一次**额外**的模型调用，必须和 assistant 回复分开去重，
+ * 否则两条恰好同毫秒、同 token 数的记录会被互相吃掉。历史记录没有该字段，读取时按 assistant 处理。
+ */
+export interface PersistedTokenUsageRecord extends TokenUsageRecord {
+  kind?: TokenUsageKind
+}
+
 interface TokenUsageCache {
   path: string
   lastReadOffset: number
   lastModifiedMs: number
-  records: TokenUsageRecord[]
+  records: PersistedTokenUsageRecord[]
 }
 
 const tokenUsageCaches = new Map<string, TokenUsageCache>()
@@ -84,13 +107,20 @@ function mergeIntoTotals(totals: TokenUsageTotals, record: TokenUsageRecord): vo
   totals.cacheHitRate = cacheTotal > 0 ? totals.cacheReadTokens / cacheTotal : 0
 }
 
-function normalizeTokenUsageRecord(input: TokenUsageRecord): TokenUsageRecord {
+function normalizeTokenUsageKind(value: unknown): TokenUsageKind | undefined {
+  return typeof value === 'string' && TOKEN_USAGE_KINDS.has(value)
+    ? (value as TokenUsageKind)
+    : undefined
+}
+
+function normalizeTokenUsageRecord(input: PersistedTokenUsageRecord): PersistedTokenUsageRecord {
   const inputTokens = toNonNegativeNumber(input.inputTokens)
   const outputTokens = toNonNegativeNumber(input.outputTokens)
   const cacheReadTokens = toNonNegativeNumber(input.cacheReadTokens)
   const cacheCreationTokens = toNonNegativeNumber(input.cacheCreationTokens)
   const totalTokens = toNonNegativeNumber(input.totalTokens)
     || inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens
+  const kind = normalizeTokenUsageKind(input.kind)
 
   return {
     sessionId: input.sessionId,
@@ -104,6 +134,7 @@ function normalizeTokenUsageRecord(input: TokenUsageRecord): TokenUsageRecord {
     cacheCreationTokens,
     totalTokens,
     costUsd: toNonNegativeNumber(input.costUsd),
+    ...(kind ? { kind } : {}),
   }
 }
 
@@ -121,18 +152,20 @@ function estimateRecordCostUsd(record: TokenUsageRecord, channelBaseUrl?: string
   })
 }
 
-function withEstimatedCost(record: TokenUsageRecord): TokenUsageRecord {
+function withEstimatedCost(record: PersistedTokenUsageRecord): PersistedTokenUsageRecord {
   const costUsd = estimateRecordCostUsd(record)
   if (costUsd <= 0 || costUsd === record.costUsd) return record
   return { ...record, costUsd }
 }
 
-function createUsageDedupeKey(record: TokenUsageRecord): string {
+function createUsageDedupeKey(record: PersistedTokenUsageRecord): string {
   return [
     record.sessionId,
     record.channelId ?? '',
     record.provider ?? '',
     record.modelId,
+    // 压缩摘要是独立的模型调用，绝不能与 assistant 回复互相去重覆盖。
+    record.kind ?? 'assistant',
     record.recordedAt,
     record.inputTokens,
     record.outputTokens,
@@ -170,12 +203,12 @@ function resolveUsageGroup(record: TokenUsageRecord): {
   }
 }
 
-function parseRecord(rawLine: string): TokenUsageRecord | null {
+function parseRecord(rawLine: string): PersistedTokenUsageRecord | null {
   const line = rawLine.trim()
   if (!line) return null
 
   try {
-    const parsed = JSON.parse(line) as Partial<TokenUsageRecord>
+    const parsed = JSON.parse(line) as Partial<PersistedTokenUsageRecord>
     if (typeof parsed.sessionId !== 'string' || !parsed.sessionId.trim()) {
       return null
     }
@@ -195,13 +228,14 @@ function parseRecord(rawLine: string): TokenUsageRecord | null {
       cacheCreationTokens: toNonNegativeNumber(parsed.cacheCreationTokens),
       totalTokens: toNonNegativeNumber(parsed.totalTokens),
       costUsd: toNonNegativeNumber(parsed.costUsd),
+      kind: normalizeTokenUsageKind(parsed.kind),
     })
   } catch {
     return null
   }
 }
 
-export function recordTokenUsage(record: TokenUsageRecord): TokenUsageRecord {
+export function recordTokenUsage(record: PersistedTokenUsageRecord): PersistedTokenUsageRecord {
   const normalized = normalizeTokenUsageRecord(record)
   const path = getTokenUsageWritePath(normalized.recordedAt)
   appendTextDurably(path, `${JSON.stringify(normalized)}\n`)
@@ -219,7 +253,12 @@ export function recordTokenUsage(record: TokenUsageRecord): TokenUsageRecord {
   return normalized
 }
 
-export function recordTokenUsageFromCompleteEvent(input: RecordTokenUsageInput): TokenUsageRecord {
+/**
+ * 把一次模型调用的 usage 归一化成待落盘记录。
+ *
+ * assistant 回复与压缩摘要共用同一条价格解析路径，保证 costUsd 口径一致。
+ */
+function buildUsageRecord(input: RecordTokenUsageInput, kind: TokenUsageKind): PersistedTokenUsageRecord {
   const usage = {
     inputTokens: toNonNegativeNumber(input.usage.inputTokens),
     outputTokens: toNonNegativeNumber(input.usage.outputTokens),
@@ -227,20 +266,24 @@ export function recordTokenUsageFromCompleteEvent(input: RecordTokenUsageInput):
     cacheCreationTokens: toNonNegativeNumber(input.usage.cacheCreationTokens),
   }
   const modelId = input.modelId?.trim() || 'unknown'
+  // 调用方未显式传入渠道信息时（如压缩链路只握有 channelId），回落到渠道配置解析价格。
+  const channel = input.channelId ? getChannelById(input.channelId) : undefined
+  const provider = input.provider ?? channel?.provider
+  const channelBaseUrl = input.channelBaseUrl ?? channel?.baseUrl
   const rawCostUsd = toNonNegativeNumber(input.usage.costUsd)
   const estimatedCostUsd = rawCostUsd > 0
     ? rawCostUsd
     : estimateTokenUsageCostUsd({
-      channelProvider: input.provider,
-      channelBaseUrl: input.channelBaseUrl,
+      channelProvider: provider,
+      channelBaseUrl,
       modelId,
       ...usage,
     })
 
-  return recordTokenUsage({
+  return {
     sessionId: input.sessionId,
     channelId: input.channelId,
-    provider: input.provider,
+    provider,
     modelId,
     recordedAt: input.recordedAt ?? Date.now(),
     inputTokens: usage.inputTokens,
@@ -253,7 +296,25 @@ export function recordTokenUsageFromCompleteEvent(input: RecordTokenUsageInput):
       + usage.cacheReadTokens
       + usage.cacheCreationTokens,
     costUsd: estimatedCostUsd,
-  })
+    kind,
+  }
+}
+
+export function recordTokenUsageFromCompleteEvent(input: RecordTokenUsageInput): TokenUsageRecord {
+  return recordTokenUsage(buildUsageRecord(input, 'assistant'))
+}
+
+/**
+ * 记录上下文压缩摘要那次 LLM 调用的用量。
+ *
+ * 压缩是一次真实的模型调用，此前完全没进统计；这里按 `kind: 'compaction'` 单独落盘，
+ * 既不会与 assistant 用量互相覆盖，也不会被 assistant 的去重键吃掉。
+ * usage 为空（Pi 未提供或全为 0）时不落盘，避免污染 requestCount。
+ */
+export function recordCompactionTokenUsage(input: RecordTokenUsageInput): TokenUsageRecord | null {
+  const record = buildUsageRecord(input, 'compaction')
+  if (record.totalTokens <= 0) return null
+  return recordTokenUsage(record)
 }
 
 export function getTokenUsageStats(daysInput: number, nowDate = new Date()): TokenUsageStats {
@@ -448,8 +509,28 @@ function readTokenUsageRecordsCached(startMs: number, endMs: number): TokenUsage
   return records
 }
 
+/**
+ * 单次压缩的稳定标识。
+ *
+ * 刻意不含 messageId / createdAt：同一次压缩曾经同时落在 assistant 消息与 status 消息里，
+ * 两份的 messageId 和毫秒时间戳都不同，只有事件内容本身可比。
+ * summaryText 只取长度，避免把大段摘要塞进 Set。
+ */
+function createCompactionDedupeKey(sessionId: string, event: CompactCompleteEvent): string {
+  return [
+    sessionId,
+    event.reason ?? '',
+    event.firstKeptEntryId ?? '',
+    event.tokensBefore ?? '',
+    event.estimatedTokensAfter ?? '',
+    event.summaryText?.length ?? 0,
+    event.willRetry === undefined ? '' : String(event.willRetry),
+  ].join('|')
+}
+
 function getCompactionStats(sessionIds: string[], startMs: number, nowMs: number): TokenUsageStats['compaction'] {
   const seenSessionIds = new Set(sessionIds)
+  const seenCompactionKeys = new Set<string>()
   let count = 0
   let tokensBefore = 0
   let summaryChars = 0
@@ -460,6 +541,11 @@ function getCompactionStats(sessionIds: string[], startMs: number, nowMs: number
       if (message.createdAt < startMs || message.createdAt > nowMs) continue
       for (const event of message.events ?? []) {
         if (event.type !== 'compact_complete') continue
+        // 防御性去重：历史 JSONL 里同一次压缩可能存在两份副本，重复计数会让整页统计翻倍。
+        const dedupeKey = createCompactionDedupeKey(sessionId, event)
+        if (seenCompactionKeys.has(dedupeKey)) continue
+        seenCompactionKeys.add(dedupeKey)
+
         count += 1
         if (typeof event.tokensBefore === 'number') tokensBefore += event.tokensBefore
         if (event.summaryText) summaryChars += event.summaryText.length

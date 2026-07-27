@@ -1,4 +1,6 @@
-import * as React from 'react'
+import type * as React from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import {
   BookOpen,
   Brain,
@@ -11,21 +13,23 @@ import { cn } from '@/lib/utils'
 import type { MemoryRecallTraceItem, MemoryRunTrace } from '@kila/shared'
 
 const ITEM_PRESENTATION = {
-  memory: { label: '长期记忆', Icon: FileText },
-  thread: { label: '相关会话', Icon: MessageSquareText },
-  notebook: { label: '笔记', Icon: BookOpen },
+  memory: { labelKey: 'agent.memory.longTerm', Icon: FileText },
+  thread: { labelKey: 'agent.memory.relatedSession', Icon: MessageSquareText },
+  notebook: { labelKey: 'agent.memory.notebook', Icon: BookOpen },
 } as const
 
-function getProviderLabel(item: MemoryRecallTraceItem): string {
+function getProviderLabel(item: MemoryRecallTraceItem, t: TFunction): string {
   if (item.provider === 'nowledge') return 'Nowledge'
-  if (item.provider === 'local') return '本地'
-  return '记忆来源'
+  if (item.provider === 'local') return t('agent.memory.providerLocalShort')
+  return t('agent.memory.providerUnknown')
 }
 
 function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactElement {
-  const { Icon, label } = ITEM_PRESENTATION[item.kind]
+  const { t } = useTranslation()
+  const { Icon, labelKey } = ITEM_PRESENTATION[item.kind]
+  const label = t(labelKey)
   const metadata = [
-    getProviderLabel(item),
+    getProviderLabel(item, t),
     item.source,
     item.category,
   ].filter(Boolean)
@@ -42,7 +46,7 @@ function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactEleme
             <span className="shrink-0 rounded-md bg-background/70 px-1.5 py-0.5 text-[9px] text-muted-foreground">{label}</span>
           </span>
           <span className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-[11px] leading-4 text-muted-foreground">
-            {item.content || '未返回可展示的内容片段'}
+            {item.content || t('agent.memory.emptyContent')}
           </span>
         </span>
         <ChevronDown className="mt-1 size-3 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
@@ -58,8 +62,8 @@ function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactEleme
           ))}
         </div>
         <div className="rounded-lg bg-background/70 px-3 py-2 text-xs leading-5 text-foreground shadow-sm">
-          <p className="whitespace-pre-wrap break-words">{item.content || '未返回可展示的内容片段'}</p>
-          {item.truncated && <p className="mt-2 text-[10px] text-muted-foreground">内容较长，这里仅展示召回时保存的前 1600 个字符。</p>}
+          <p className="whitespace-pre-wrap break-words">{item.content || t('agent.memory.emptyContent')}</p>
+          {item.truncated && <p className="mt-2 text-[10px] text-muted-foreground">{t('agent.memory.truncatedNote')}</p>}
         </div>
         <p className="break-all font-mono text-[9px] leading-4 text-muted-foreground/70">{item.id}</p>
       </div>
@@ -68,28 +72,29 @@ function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactEleme
 }
 
 export function MemoryRecallDetails({ trace }: { trace: MemoryRunTrace }): React.ReactElement {
+  const { t } = useTranslation()
   const items = trace.recallItems ?? []
   const recalledCount = trace.recalledMemoryCount + trace.relatedThreadCount + trace.notebookCount
   const workingMemoryLabels = [
-    trace.usedGlobalWorkingMemory ? '全局' : null,
-    trace.usedProjectWorkingMemory ? '项目' : null,
+    trace.usedGlobalWorkingMemory ? t('agent.memory.scopeGlobal') : null,
+    trace.usedProjectWorkingMemory ? t('agent.memory.scopeProject') : null,
   ].filter((value): value is string => Boolean(value))
 
   return (
     <div className="flex max-h-[min(68vh,32rem)] flex-col">
       <div className="shrink-0 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-3">
-          <h4 className="text-sm font-semibold text-foreground">本轮记忆召回</h4>
-          <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{recalledCount} 项</span>
+          <h4 className="text-sm font-semibold text-foreground">{t('agent.memory.recallTitle')}</h4>
+          <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">{t('agent.memory.itemCount', { count: recalledCount })}</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-          <span className="rounded-md bg-muted/60 px-2 py-1">长期记忆 {trace.recalledMemoryCount}</span>
-          <span className="rounded-md bg-muted/60 px-2 py-1">相关会话 {trace.relatedThreadCount}</span>
-          <span className="rounded-md bg-muted/60 px-2 py-1">笔记 {trace.notebookCount}</span>
+          <span className="rounded-md bg-muted/60 px-2 py-1">{t('agent.memory.longTerm')} {trace.recalledMemoryCount}</span>
+          <span className="rounded-md bg-muted/60 px-2 py-1">{t('agent.memory.relatedSession')} {trace.relatedThreadCount}</span>
+          <span className="rounded-md bg-muted/60 px-2 py-1">{t('agent.memory.notebook')} {trace.notebookCount}</span>
         </div>
         {workingMemoryLabels.length > 0 && (
           <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-            <span>工作记忆</span>
+            <span>{t('agent.memory.workingMemory')}</span>
             {workingMemoryLabels.map((label) => (
               <span key={label} className="rounded-md bg-primary/10 px-2 py-0.5 text-foreground/75">{label}</span>
             ))}
@@ -106,11 +111,11 @@ export function MemoryRecallDetails({ trace }: { trace: MemoryRunTrace }): React
           </div>
         ) : recalledCount > 0 ? (
           <div className="rounded-xl bg-muted/35 px-4 py-5 text-center text-xs leading-5 text-muted-foreground">
-            旧记录未保存召回详情。
+            {t('agent.memory.legacyNoDetails')}
           </div>
         ) : (
           <div className="rounded-xl bg-muted/35 px-4 py-5 text-center text-xs leading-5 text-muted-foreground">
-            本轮没有召回内容。
+            {t('agent.memory.emptyRecall')}
           </div>
         )}
       </div>
@@ -118,27 +123,30 @@ export function MemoryRecallDetails({ trace }: { trace: MemoryRunTrace }): React
   )
 }
 
-export function getMemoryWriteLabel(trace: MemoryRunTrace): string | null {
-  if (trace.incognito) return '只读'
+export function getMemoryWriteLabel(trace: MemoryRunTrace, t: TFunction): string | null {
+  if (trace.incognito) return t('agent.memory.readOnly')
   if (trace.writeStatus === 'queued') return null
-  if (trace.writeStatus === 'failed') return '整理失败'
+  if (trace.writeStatus === 'failed') return t('agent.memory.writeFailed')
   if (trace.writeStatus === 'written' && (trace.writtenMemoryCount ?? 0) > 0) {
-    return `新增 ${trace.writtenMemoryCount} 条`
+    return t('agent.memory.written', { count: trace.writtenMemoryCount ?? 0 })
   }
   return null
 }
 
 export function MemoryTraceBadge({ trace }: { trace?: MemoryRunTrace }): React.ReactElement | null {
+  const { t } = useTranslation()
   if (!trace) return null
 
-  const providerLabel = trace.provider === 'nowledge' ? 'Nowledge + 本地' : '本地记忆'
+  const providerLabel = trace.provider === 'nowledge'
+    ? t('agent.memory.providerNowledge')
+    : t('agent.memory.providerLocal')
   const recalledCount = trace.recalledMemoryCount + trace.relatedThreadCount + trace.notebookCount
   const statusLabel = trace.recallStatus === 'error'
-    ? '召回失败，已降级'
+    ? t('agent.memory.recallError')
     : trace.recallStatus === 'disabled'
-      ? '未启用记忆'
-      : `召回 ${recalledCount} 项`
-  const writeLabel = getMemoryWriteLabel(trace)
+      ? t('agent.memory.recallDisabled')
+      : t('agent.memory.recalled', { count: recalledCount })
+  const writeLabel = getMemoryWriteLabel(trace, t)
 
   return (
     <Popover>
@@ -147,9 +155,11 @@ export function MemoryTraceBadge({ trace }: { trace?: MemoryRunTrace }): React.R
           type="button"
           className={cn(
             'group mt-2 inline-flex items-center gap-1.5 rounded-lg bg-muted/45 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
-            (trace.recallStatus === 'error' || trace.writeStatus === 'failed') && 'text-amber-600 dark:text-amber-400',
+            (trace.recallStatus === 'error' || trace.writeStatus === 'failed') && 'text-status-warning',
           )}
-          aria-label={`${[providerLabel, statusLabel, writeLabel].filter(Boolean).join('，')}，点击查看召回详情`}
+          aria-label={t('agent.memory.badgeAria', {
+            summary: [providerLabel, statusLabel, writeLabel].filter(Boolean).join('，'),
+          })}
         >
           <Brain className="size-3" aria-hidden="true" />
           <span>{providerLabel}</span>

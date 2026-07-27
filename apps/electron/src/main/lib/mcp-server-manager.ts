@@ -10,31 +10,43 @@ import { Client } from '@modelcontextprotocol/sdk/client'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import type { McpServerEntry, WorkspaceMcpConfig } from '@kila/shared'
-import { getGlobalAgentConfigDir, getGlobalAgentMcpPath } from './config-paths'
-import { getGlobalAgentMcpConfig, saveGlobalAgentMcpConfig } from './global-agent-config-manager'
-import { validateMcpServer, type McpValidationResult } from './mcp-validator'
+import { getGlobalAgentConfigDir } from './config-paths'
+import { getGlobalAgentMcpConfig } from './global-agent-config-manager'
+import {
+  prepareCuaWindowsLaunchArgs,
+  shouldPrepareCuaWindowsLaunch,
+} from './mcp-cua-windows-args'
+import { buildMcpConnectionSignature, isCustomMcpRegistryKey } from './mcp-server-entry'
+import { validateMcpServer } from './mcp-validator'
 import { createLogger } from './logger'
 
 const log = createLogger('MCP Manager')
 
+/** 关闭连接的兜底超时：卡死的服务器不能拖住应用退出 */
+const CLOSE_TIMEOUT_MS = 5000
+
 // ===== 类型 =====
 
-type McpTransport =
-  | InstanceType<typeof StdioClientTransport>
-  | InstanceType<typeof StreamableHTTPClientTransport>
-  | InstanceType<typeof SSEClientTransport>
+/**
+ * MCP 传输通道的结构化接口。
+ *
+ * 真实 SDK 的三种 transport 都有 `close(): Promise<void>`，测试替身也只需实现它。
+ * 用结构化类型而不是具体类联合，是为了让连接工厂可注入。
+ */
+export interface McpTransportLike {
+  close: () => Promise<void>
+}
 
-interface McpToolDescriptor {
+export interface McpToolDescriptor {
   name: string
   title?: string
   description?: string
   inputSchema?: Record<string, unknown>
 }
 
-interface McpToolCallResult {
+export interface McpToolCallResult {
   content?: Array<Record<string, unknown>>
   structuredContent?: Record<string, unknown>
   isError?: boolean
@@ -42,7 +54,7 @@ interface McpToolCallResult {
   _meta?: Record<string, unknown>
 }
 
-interface McpClientLike {
+export interface McpClientLike {
   listTools: (params?: { cursor?: string }) => Promise<{
     tools: McpToolDescriptor[]
     nextCursor?: string
@@ -53,15 +65,22 @@ interface McpClientLike {
   }) => Promise<McpToolCallResult>
 }
 
-interface McpServerConnection {
-  client: McpClientLike
+/** 运行时客户端：在 McpClientLike 之上补齐连接生命周期方法 */
+export interface McpRuntimeClient extends McpClientLike {
+  connect: (transport: McpTransportLike) => Promise<void>
   close: () => Promise<void>
 }
 
-interface McpServerConnectOptions {
-  name: string
-  entry: McpServerEntry
+/** 创建 transport 时的上下文；serverName 仅用于日志（环境变量过滤清单） */
+export interface McpTransportCreateOptions {
   baseDir?: string
+  serverName?: string
+}
+
+/** 连接工厂：生产环境走 MCP SDK，测试可注入假客户端断言 close 行为 */
+export interface McpConnectionFactory {
+  createClient: () => McpRuntimeClient
+  createTransport: (entry: McpServerEntry, options: McpTransportCreateOptions) => McpTransportLike
 }
 
 // ===== Session 错误检测（参考 deepchat） =====
@@ -102,12 +121,50 @@ function resolveCommand(command: string, baseDir?: string): string {
 }
 
 /**
- * 创建 stdio 传输时合并系统环境变量
- * 参考 deepchat 做法：非 node 命令保留全部 process.env，
- * 自定义 env 追加到已有环境变量上而不是覆盖。
+ * 疑似凭证的环境变量名模式。
+ *
+ * stdio MCP 服务器是第三方进程，直接继承宿主机全部 process.env
+ * 会把用户 shell 里的 AWS / GitHub / npm token 和 Kila 注入的凭证一并交出去。
+ * 这里采用「拒绝名单」而不是「白名单」：既堵住明显的凭证泄漏，
+ * 又不会因为漏配某个开发变量而让大量 MCP 服务器直接起不来。
+ * 服务器如果确实需要某个 token，用户在该服务器的 env 里显式声明即可（显式配置在过滤之后应用）。
  */
-function buildStdioEnv(entry: McpServerEntry): Record<string, string> {
-  const env: Record<string, string> = { ...process.env } as Record<string, string>
+const SECRET_ENV_PATTERN = /(^|_)(API_?KEY|ACCESS_?KEY|SECRET_?KEY|PRIVATE_?KEY|SECRET|SECRETS|TOKEN|PASSWORD|PASSWD|CREDENTIAL|CREDENTIALS|SESSION_?KEY)(_|$)/i
+
+/** 记录过的服务器名，避免每次重连都重复打印同一份过滤清单 */
+const reportedEnvFilterServers = new Set<string>()
+
+export function isSecretEnvName(name: string): boolean {
+  return SECRET_ENV_PATTERN.test(name)
+}
+
+/**
+ * 创建 stdio 传输时构建子进程环境变量
+ *
+ * 保留常规开发环境（PATH / HOME / NODE_* 等）以兼容主流 MCP 服务器，
+ * 但剔除疑似凭证的变量；用户自定义 env 在过滤之后追加，可覆盖任何被过滤项。
+ */
+function buildStdioEnv(entry: McpServerEntry, serverName?: string): Record<string, string> {
+  const env: Record<string, string> = {}
+  const filteredNames: string[] = []
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value !== 'string') continue
+    if (isSecretEnvName(key)) {
+      filteredNames.push(key)
+      continue
+    }
+    env[key] = value
+  }
+
+  // 只记录变量名，绝不记录值
+  if (filteredNames.length > 0 && serverName && !reportedEnvFilterServers.has(serverName)) {
+    reportedEnvFilterServers.add(serverName)
+    log.info(
+      `[MCP] 服务器 ${serverName} 的子进程环境已过滤 ${filteredNames.length} 个疑似凭证变量: `
+      + `${filteredNames.sort().join(', ')}（如确需使用，请在该服务器配置的 env 中显式声明）`,
+    )
+  }
 
   // 补充用户自定义环境变量
   if (entry.env) {
@@ -134,15 +191,15 @@ function buildStdioEnv(entry: McpServerEntry): Record<string, string> {
 
 function createMcpTransport(
   entry: McpServerEntry,
-  options: { baseDir?: string } = {},
-): McpTransport {
+  options: McpTransportCreateOptions = {},
+): McpTransportLike {
   const { baseDir } = options
 
   if (entry.type === 'stdio') {
     return new StdioClientTransport({
       command: resolveCommand(entry.command ?? '', baseDir),
       args: entry.args,
-      env: buildStdioEnv(entry),
+      env: buildStdioEnv(entry, options.serverName),
       cwd: baseDir,
       stderr: 'inherit',
     })
@@ -189,6 +246,12 @@ async function withTimeout<T>(
   }
 }
 
+/** 生产环境连接工厂：MCP SDK Client + 真实 transport */
+export const defaultMcpConnectionFactory: McpConnectionFactory = {
+  createClient: () => new Client({ name: 'Kila', version: '0.1.0' }) as unknown as McpRuntimeClient,
+  createTransport: (entry, options) => createMcpTransport(entry, options),
+}
+
 // ===== 单个 MCP 客户端 =====
 
 /**
@@ -196,11 +259,8 @@ async function withTimeout<T>(
  * 参考 deepchat McpClient 模式：连接保持、按需重连、工具缓存
  */
 export class McpServerClient {
-  private client: McpClientLike & {
-    close: () => Promise<void>
-    connect: (transport: McpTransport) => Promise<void>
-  } | null = null
-  private transport: McpTransport | null = null
+  private client: McpRuntimeClient | null = null
+  private transport: McpTransportLike | null = null
   private isConnected = false
   private connectionTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -216,6 +276,7 @@ export class McpServerClient {
     readonly serverName: string,
     readonly entry: McpServerEntry,
     readonly baseDir?: string,
+    private readonly factory: McpConnectionFactory = defaultMcpConnectionFactory,
   ) {}
 
   async connect(): Promise<void> {
@@ -230,11 +291,11 @@ export class McpServerClient {
         ? Math.max(1, this.entry.timeout ?? 30) * 1000
         : 30000
 
-      this.client = new Client({ name: 'Kila', version: '0.1.0' }) as unknown as McpClientLike & {
-        close: () => Promise<void>
-        connect: (transport: McpTransport) => Promise<void>
-      }
-      this.transport = createMcpTransport(this.entry, { baseDir: this.baseDir })
+      this.client = this.factory.createClient()
+      this.transport = this.factory.createTransport(this.entry, {
+        baseDir: this.baseDir,
+        serverName: this.serverName,
+      })
 
       await withTimeout(
         this.client.connect(this.transport),
@@ -248,13 +309,15 @@ export class McpServerClient {
     } catch (error) {
       log.warn(`[MCP] 连接服务器 ${this.serverName} 失败:`, error)
       this.lastError = error instanceof Error ? error.message : String(error)
-      this.cleanupResources()
+      // withTimeout 超时不会取消底层 connect：stdio 子进程可能已经拉起，
+      // 这里必须真正关闭 client / transport，否则每次连接失败都留下孤儿进程。
+      await this.closeAndCleanup()
       throw error
     }
   }
 
   async disconnect(): Promise<void> {
-    if (!this.isConnected || !this.client) return
+    if (!this.client && !this.transport) return
     try {
       await this.internalDisconnect()
     } catch (error) {
@@ -263,8 +326,46 @@ export class McpServerClient {
   }
 
   private async internalDisconnect(): Promise<void> {
-    this.cleanupResources()
+    await this.closeAndCleanup()
     log.info(`[MCP] 已断开服务器 ${this.serverName}`)
+  }
+
+  /**
+   * 真正关闭连接再清理引用
+   *
+   * 旧实现只把 client / transport 置 null，SDK 的 close 从未被调用，
+   * stdio 类型每次禁用或重载 MCP 都会留下持有管道的孤儿子进程，
+   * 应用退出时的 shutdown 同样杀不掉它们。
+   */
+  private async closeAndCleanup(): Promise<void> {
+    const client = this.client
+    const transport = this.transport
+    this.cleanupResources()
+
+    if (client) {
+      try {
+        // Client.close() 会连带关闭 transport 并回收 stdio 子进程
+        await withTimeout(
+          client.close(),
+          CLOSE_TIMEOUT_MS,
+          `关闭 MCP 服务器超时: ${this.serverName}`,
+        )
+        return
+      } catch (error) {
+        log.warn(`[MCP] 关闭服务器 ${this.serverName} 客户端失败，改为直接关闭传输通道:`, error)
+      }
+    }
+
+    if (!transport) return
+    try {
+      await withTimeout(
+        transport.close(),
+        CLOSE_TIMEOUT_MS,
+        `关闭 MCP 传输通道超时: ${this.serverName}`,
+      )
+    } catch (error) {
+      log.warn(`[MCP] 关闭服务器 ${this.serverName} 传输通道失败:`, error)
+    }
   }
 
   private cleanupResources(): void {
@@ -375,151 +476,24 @@ export class McpServerClient {
     return 'MCP 工具执行失败'
   }
 
+  /**
+   * 调用工具前的参数预检
+   *
+   * 目前只有 cua-driver 在 Windows 上需要（模型常把 macOS bundle id 丢给 Windows），
+   * 具体规则见 mcp-cua-windows-args.ts。
+   */
   private async prepareToolArguments(
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<{ ok: true; args: Record<string, unknown> } | { ok: false; error: string }> {
-    if (toolName !== 'launch_app' || process.platform !== 'win32' || this.serverName !== 'cua-driver') {
+    if (!shouldPrepareCuaWindowsLaunch(this.serverName, toolName)) {
       return { ok: true, args }
     }
 
-    return this.prepareCuaWindowsLaunchArgs(args)
-  }
+    const client = this.client
+    if (!client) return { ok: true, args }
 
-  private async prepareCuaWindowsLaunchArgs(
-    args: Record<string, unknown>,
-  ): Promise<{ ok: true; args: Record<string, unknown> } | { ok: false; error: string }> {
-    const normalizedArgs = { ...args }
-    const bundleId = this.readStringArg(normalizedArgs.bundle_id)
-    const name = this.readStringArg(normalizedArgs.name)
-
-    if (bundleId && !bundleId.includes('!') && this.isWindowsPathLike(bundleId)) {
-      delete normalizedArgs.bundle_id
-      if (!this.readStringArg(normalizedArgs.path) && !this.readStringArg(normalizedArgs.launch_path)) {
-        normalizedArgs.path = bundleId
-      }
-      return { ok: true, args: normalizedArgs }
-    }
-
-    if (
-      this.readStringArg(normalizedArgs.path) ||
-      this.readStringArg(normalizedArgs.launch_path) ||
-      this.readStringArg(normalizedArgs.aumid) ||
-      (bundleId && bundleId.includes('!')) ||
-      this.hasUrlLaunchTargets(normalizedArgs)
-    ) {
-      return { ok: true, args: normalizedArgs }
-    }
-
-    const target = bundleId || name
-    if (!target) {
-      return { ok: true, args: normalizedArgs }
-    }
-
-    const apps = await this.listCuaWindowsApps()
-    if (!apps) {
-      return {
-        ok: false,
-        error: 'Unable to validate the Windows app target before launching. Call list_apps first, then retry with a Windows name, path, launch_path, or aumid.',
-      }
-    }
-
-    if (!this.matchesCuaWindowsApp(apps, target)) {
-      return {
-        ok: false,
-        error: `Windows app target '${target}' was not found. Call list_apps first and use a Windows app name, path, launch_path, or aumid. Do not use macOS bundle ids on Windows.`,
-      }
-    }
-
-    return { ok: true, args: normalizedArgs }
-  }
-
-  private readStringArg(value: unknown): string | undefined {
-    return typeof value === 'string' && value.trim() ? value.trim() : undefined
-  }
-
-  private isWindowsPathLike(value: string): boolean {
-    return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith('\\\\') || /[\\/]/.test(value)
-  }
-
-  private hasUrlLaunchTargets(args: Record<string, unknown>): boolean {
-    return Array.isArray(args.urls) && args.urls.some((item) => this.readStringArg(item))
-  }
-
-  private async listCuaWindowsApps(): Promise<Array<Record<string, unknown>> | null> {
-    if (!this.client) return null
-
-    try {
-      const result = await this.client.callTool({
-        name: 'list_apps',
-        arguments: {},
-      })
-      if (
-        result.structuredContent &&
-        typeof result.structuredContent === 'object' &&
-        Array.isArray((result.structuredContent as { apps?: unknown }).apps)
-      ) {
-        return (result.structuredContent as { apps: Array<Record<string, unknown>> }).apps
-      }
-
-      const parsed = this.parseToolResultJsonObject(result.content)
-      if (parsed && Array.isArray(parsed.apps)) {
-        return parsed.apps as Array<Record<string, unknown>>
-      }
-    } catch (error) {
-      log.warn('[MCP] Failed to preflight CUA Windows launch target:', error)
-    }
-    return null
-  }
-
-  private parseToolResultJsonObject(content: unknown): Record<string, unknown> | null {
-    const text = Array.isArray(content)
-      ? content
-          .map((item) => item && typeof item === 'object' && 'text' in item
-            ? String((item as { text?: unknown }).text ?? '')
-            : '')
-          .join('\n')
-      : typeof content === 'string'
-        ? content
-        : ''
-    if (!text.trim()) return null
-
-    try {
-      const parsed = JSON.parse(text)
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
-    } catch {
-      return null
-    }
-  }
-
-  private matchesCuaWindowsApp(apps: Array<Record<string, unknown>>, target: string): boolean {
-    const normalizedTarget = this.normalizeWindowsAppIdentifier(target)
-    return apps.some((app) => {
-      const candidates = [app.name, app.bundle_id, app.launch_path, app.path, app.aumid].flatMap(
-        (value) => this.windowsAppIdentifierCandidates(value),
-      )
-      return candidates.some(
-        (candidate) =>
-          candidate === normalizedTarget ||
-          candidate.includes(normalizedTarget) ||
-          normalizedTarget.includes(candidate),
-      )
-    })
-  }
-
-  private windowsAppIdentifierCandidates(value: unknown): string[] {
-    const raw = this.readStringArg(value)
-    if (!raw) return []
-
-    const normalized = this.normalizeWindowsAppIdentifier(raw)
-    const basename = raw.split(/[\\/]/).pop()
-    return basename && basename !== raw
-      ? [normalized, this.normalizeWindowsAppIdentifier(basename)]
-      : [normalized]
-  }
-
-  private normalizeWindowsAppIdentifier(value: string): string {
-    return value.trim().replace(/^"|"$/g, '').toLowerCase()
+    return prepareCuaWindowsLaunchArgs(args, (params) => client.callTool(params))
   }
 
   /**
@@ -538,8 +512,8 @@ export class McpServerClient {
       log.warn(`[MCP] 服务器 ${this.serverName} 检测到 session 错误，准备重启连接...`)
       this.isRecovering = true
       try {
-        this.cleanupResources()
-        this.cachedTools = null
+        // 必须真正关闭旧连接，否则 stdio 子进程会随每次 session 恢复不断堆积
+        await this.closeAndCleanup()
         this.hasRestarted = true
       } finally {
         this.isRecovering = false
@@ -550,10 +524,22 @@ export class McpServerClient {
 
 // ===== 服务器管理器（单例） =====
 
+/** 客户端工厂：测试注入假客户端，生产环境创建真实长连接客户端 */
+export type McpServerClientFactory = (
+  serverName: string,
+  entry: McpServerEntry,
+  baseDir?: string,
+) => McpServerClient
+
 export class McpServerManager {
   private clients = new Map<string, McpServerClient>()
   private lastErrors = new Map<string, string>()
   private initialized = false
+
+  constructor(
+    private readonly createServerClient: McpServerClientFactory =
+    (serverName, entry, baseDir) => new McpServerClient(serverName, entry, baseDir),
+  ) {}
 
   /**
    * 初始化：连接所有 enabled 的全局 MCP 服务器
@@ -588,22 +574,55 @@ export class McpServerManager {
     log.info(`[MCP] 全局 MCP 服务器初始化完成，已连接 ${this.clients.size} 个服务器`)
   }
 
-  /** 启动并连接单个服务器 */
+  /** 启动并连接单个全局服务器 */
   async startServer(name: string, entry: McpServerEntry, baseDir?: string): Promise<void> {
-    // 如果已经在运行，直接返回
-    if (this.clients.has(name)) {
-      const existing = this.clients.get(name)!
+    await this.startServerAs({ registryKey: name, serverName: name, entry, baseDir })
+  }
+
+  /**
+   * 以指定注册键启动服务器
+   *
+   * session 级自定义服务器需要把「注册键」与「展示用服务器名」分开：
+   * 前者带 custom: 前缀，保证 reload 不会把它当成全局配置里被移除的条目；
+   * 后者决定工具标签和重名降级前缀。
+   */
+  private async startServerAs(options: {
+    registryKey: string
+    serverName: string
+    entry: McpServerEntry
+    baseDir?: string
+  }): Promise<McpServerClient> {
+    const existing = this.clients.get(options.registryKey)
+    if (existing) {
       if (existing.isRunning()) {
-        return
+        return existing
       }
-      // 存在但断开了，重新连接
-      this.clients.delete(name)
+      // 存在但已断开：先真正关闭旧连接再重建，直接丢弃引用会漏掉 transport
+      await this.stopServer(options.registryKey)
     }
 
-    const client = new McpServerClient(name, entry, baseDir)
+    const client = this.createServerClient(options.serverName, options.entry, options.baseDir)
     await client.connect()
-    this.clients.set(name, client)
-    this.lastErrors.delete(name)
+    this.clients.set(options.registryKey, client)
+    this.lastErrors.delete(options.registryKey)
+    return client
+  }
+
+  /**
+   * 按需启动 session 级自定义 MCP 服务器
+   *
+   * 旧实现在 pi-tools-bridge 里直接 new McpServerClient 并 connect，
+   * 客户端只存在局部变量、不进连接池，而 bundle 的 dispose 又是空实现，
+   * 于是每轮发送都新建一条连接且永不回收。现在统一登记进连接池，
+   * 既能跨轮复用，也能在 shutdown 时被一起关闭。
+   */
+  async ensureCustomServer(options: {
+    registryKey: string
+    serverName: string
+    entry: McpServerEntry
+    baseDir?: string
+  }): Promise<McpServerClient> {
+    return this.startServerAs(options)
   }
 
   /** 停止单个服务器 */
@@ -636,41 +655,71 @@ export class McpServerManager {
     return this.lastErrors.get(name) ?? this.clients.get(name)?.getLast() ?? undefined
   }
 
-  /** 配置变更时重新加载：停止被移除/禁用的服务器，启动新增的 */
+  /**
+   * 配置变更时重新加载
+   *
+   * 停止被移除 / 被禁用 / 连接参数已变更的服务器，再启动缺失的服务器。
+   * 旧实现只比对「是否存在、是否启用」，改了已启用服务器的 command/args/env/url
+   * 之后不会重连，用户必须重启应用才能生效；现在按连接指纹做结构化对比。
+   */
   async reload(config: WorkspaceMcpConfig): Promise<void> {
     const servers = config.servers ?? {}
-    const configuredNames = new Set(Object.keys(servers))
     const globalAgentDir = getGlobalAgentConfigDir()
 
-    // 停止被移除或禁用的服务器
-    for (const name of this.clients.keys()) {
-      const entry = servers[name]
-      if (!configuredNames.has(name) || entry?.enabled === false) {
-        log.info(`[MCP] 配置变更，停止服务器 ${name}`)
-        await this.stopServer(name)
+    // 复制键快照，避免在遍历过程中删除条目
+    for (const registryKey of [...this.clients.keys()]) {
+      // session 级自定义连接不受全局配置控制，跳过以免被误停
+      if (isCustomMcpRegistryKey(registryKey)) continue
+
+      const entry = servers[registryKey]
+      if (!entry || entry.enabled === false) {
+        log.info(`[MCP] 配置变更，停止服务器 ${registryKey}`)
+        await this.stopServer(registryKey)
+        continue
+      }
+
+      const client = this.clients.get(registryKey)
+      if (client && buildMcpConnectionSignature(client.entry) !== buildMcpConnectionSignature(entry)) {
+        log.info(`[MCP] 服务器 ${registryKey} 连接参数变更，重新连接`)
+        await this.stopServer(registryKey)
       }
     }
 
-    // 启动新增的服务器
+    // 启动新增或需要重连的服务器
     for (const [name, entry] of Object.entries(servers)) {
       if (!entry.enabled || this.clients.has(name)) continue
 
       try {
         const validation = await validateMcpServer(name, entry)
-        if (!validation.valid) continue
+        if (!validation.valid) {
+          log.warn(`[MCP] 跳过无效服务器 ${name}: ${validation.reason ?? 'unknown'}`)
+          continue
+        }
         await this.startServer(name, entry, globalAgentDir)
       } catch (error) {
         log.warn(`[MCP] 重新加载服务器 ${name} 失败:`, error)
+        this.lastErrors.set(name, error instanceof Error ? error.message : String(error))
       }
     }
   }
 
-  /** 关闭所有连接（应用退出时调用） */
+  /**
+   * 关闭所有连接（应用退出时调用）
+   *
+   * 必须等所有 close 真正完成后再清空连接池：提前 clear 会丢掉客户端引用，
+   * 未关闭的 stdio 子进程就再也没人能回收。
+   */
   async shutdown(): Promise<void> {
-    log.info('[MCP] 正在关闭所有连接...')
-    const results = await Promise.allSettled(
-      Array.from(this.clients.values()).map((c) => c.disconnect()),
-    )
+    const entries = [...this.clients.entries()]
+    log.info(`[MCP] 正在关闭所有连接，共 ${entries.length} 个...`)
+
+    const results = await Promise.allSettled(entries.map(([, client]) => client.disconnect()))
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        log.warn(`[MCP] 关闭服务器 ${entries[index]?.[0] ?? 'unknown'} 失败:`, result.reason)
+      }
+    })
+
     this.clients.clear()
     this.lastErrors.clear()
     this.initialized = false
@@ -697,193 +746,3 @@ export class McpServerManager {
 // ===== 单例导出 =====
 
 export const mcpServerManager = new McpServerManager()
-
-// ===== 向后兼容：给 getMcpAgentTools 用的适配器 =====
-
-/**
- * 从 McpServerManager 获取已连接的工具
- * 不再 per-turn 创建连接，只从长连接池获取工具定义
- */
-export async function getMcpAgentToolsFromManager(options: {
-  cwd?: string
-  customMcpServers?: Record<string, unknown>
-}): Promise<{
-  tools: import('@earendil-works/pi-agent-core').AgentTool<any>[]
-  dispose: () => Promise<void>
-}> {
-  const { normalizeMcpServerEntry, normalizeCustomMcpServers } = await import('./pi-tools-bridge')
-
-  const globalServers = getGlobalAgentMcpConfig().servers ?? {}
-  const customServers = normalizeCustomMcpServers(options.customMcpServers)
-  const usedNames = new Set<string>()
-  const tools: import('@earendil-works/pi-agent-core').AgentTool<any>[] = []
-
-  // 从全局服务器获取工具
-  for (const [name, entry] of Object.entries(globalServers)) {
-    if (!entry.enabled) continue
-    const client = mcpServerManager.getClient(name)
-    if (!client?.isRunning()) continue
-
-    try {
-      const serverTools = await client.listTools()
-      tools.push(
-        ...serverTools.map((tool) => createMcpAgentToolFromClient(name, tool, client, usedNames)),
-      )
-    } catch (error) {
-      log.warn(`[MCP] 从服务器 ${name} 获取工具失败:`, error)
-    }
-  }
-
-  // 从自定义服务器获取工具（也走 manager，但自定义服务器可能未预连接）
-  for (const [name, entry] of Object.entries(customServers)) {
-    if (!entry.enabled) continue
-
-    let client = mcpServerManager.getClient(name)
-    if (!client) {
-      // 自定义服务器按需创建并连接
-      const baseDir = options.cwd
-      client = new McpServerClient(name, entry as McpServerEntry, baseDir)
-      try {
-        await client.connect()
-        mcpServerManager.getClient // just to confirm type
-        // 不加入 manager 的 clients map，但我们可以直接用它
-      } catch (error) {
-        log.warn(`[MCP] 自定义服务器 ${name} 连接失败，已跳过:`, error)
-        continue
-      }
-    }
-
-    try {
-      const serverTools = await client.listTools()
-      tools.push(
-        ...serverTools.map((tool) => createMcpAgentToolFromClient(name, tool, client, usedNames)),
-      )
-    } catch (error) {
-      log.warn(`[MCP] 从自定义服务器 ${name} 获取工具失败:`, error)
-    }
-  }
-
-  return {
-    tools,
-    // dispose 不再做任何事，连接由 manager 长期管理
-    dispose: async () => {},
-  }
-}
-
-function createMcpAgentToolFromClient(
-  serverName: string,
-  tool: McpToolDescriptor,
-  client: McpServerClient,
-  usedNames: Set<string>,
-): import('@earendil-works/pi-agent-core').AgentTool<any> {
-  const visibleName = ensureUniqueToolName(tool.name, serverName, usedNames)
-  const parameters = tool.inputSchema && tool.inputSchema.type === 'object'
-    ? tool.inputSchema
-    : { type: 'object' }
-
-  return {
-    name: visibleName,
-    label: `${serverName} / ${tool.title ?? tool.name}`,
-    description: tool.description
-      ? `[MCP:${serverName}] ${tool.description}`
-      : `[MCP:${serverName}] ${tool.name}`,
-    parameters: parameters as never,
-    execute: async (_toolCallId, params) => {
-      const result = await client.callTool(tool.name, params as Record<string, unknown>)
-
-      if (result.isError) {
-        throw new Error(buildMcpErrorMessage(result))
-      }
-
-      return {
-        content: normalizeMcpToolContent(result),
-        details: {
-          serverName,
-          toolName: tool.name,
-          ...(result.structuredContent && { structuredContent: result.structuredContent }),
-          ...(result._meta && { meta: result._meta }),
-        },
-      }
-    },
-  }
-}
-
-function ensureUniqueToolName(
-  toolName: string,
-  serverName: string,
-  usedNames: Set<string>,
-): string {
-  if (!usedNames.has(toolName)) {
-    usedNames.add(toolName)
-    return toolName
-  }
-
-  let candidate = `${serverName}__${toolName}`
-  let counter = 2
-  while (usedNames.has(candidate)) {
-    candidate = `${serverName}__${toolName}_${counter}`
-    counter++
-  }
-  usedNames.add(candidate)
-  return candidate
-}
-
-type TextContent = { type: 'text'; text: string }
-type ImageContent = { type: 'image'; data: string; mimeType: string }
-
-function createMcpTextResult(text: string): TextContent {
-  return { type: 'text', text }
-}
-
-function stringifyFallback(value: unknown): string {
-  if (typeof value === 'string') return value
-  try { return JSON.stringify(value, null, 2) } catch { return String(value) }
-}
-
-function normalizeMcpToolContent(result: McpToolCallResult): Array<TextContent | ImageContent> {
-  const normalized: Array<TextContent | ImageContent> = []
-
-  for (const item of result.content ?? []) {
-    if (item.type === 'text' && typeof item.text === 'string') {
-      normalized.push({ type: 'text', text: item.text })
-      continue
-    }
-    if (item.type === 'image' && typeof item.data === 'string' && typeof item.mimeType === 'string') {
-      normalized.push({ type: 'image', data: item.data, mimeType: item.mimeType })
-      continue
-    }
-    if (item.type === 'resource' && item.resource && typeof item.resource === 'object') {
-      const resource = item.resource as Record<string, unknown>
-      if (typeof resource.text === 'string') {
-        normalized.push(createMcpTextResult(resource.text))
-      } else if (typeof resource.uri === 'string') {
-        normalized.push(createMcpTextResult(`[MCP resource] ${resource.uri}`))
-      }
-      continue
-    }
-    if (item.type === 'resource_link') {
-      const name = typeof item.name === 'string' ? item.name : 'resource'
-      const uri = typeof item.uri === 'string' ? item.uri : ''
-      normalized.push(createMcpTextResult(`[MCP resource link] ${name}${uri ? `: ${uri}` : ''}`))
-      continue
-    }
-    if (item.type === 'audio' && typeof item.mimeType === 'string') {
-      normalized.push(createMcpTextResult(`[MCP audio] ${item.mimeType}`))
-    }
-  }
-
-  if (normalized.length > 0) return normalized
-  if (result.structuredContent) return [createMcpTextResult(stringifyFallback(result.structuredContent))]
-  if (typeof result.toolResult !== 'undefined') return [createMcpTextResult(stringifyFallback(result.toolResult))]
-
-  return [createMcpTextResult('MCP 工具已执行，但没有返回可显示内容。')]
-}
-
-function buildMcpErrorMessage(result: McpToolCallResult): string {
-  const content = normalizeMcpToolContent(result)
-  const text = content
-    .filter((item): item is { type: 'text'; text: string } => item.type === 'text' && typeof item.text === 'string')
-    .map((item) => item.text)
-    .join('\n')
-  return text || 'MCP 工具执行失败'
-}

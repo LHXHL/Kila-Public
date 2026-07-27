@@ -1,0 +1,36 @@
+{
+  "shell": {
+    "resizeSidebar": "调整侧边栏宽度",
+    "agentToolsUpdated": "Agent 工具已更新",
+    "quickTask": {
+      "title": "快速任务",
+      "placeholder": "描述要完成的任务…",
+      "clickToRemove": "点击移除",
+      "selectProject": "选择项目",
+      "browseProject": "选择其他项目",
+      "tempProject": "临时项目",
+      "run": "执行",
+      "running": "提交中"
+    },
+    "conversation": {
+      "emptyTitle": "暂无消息",
+      "emptyDescription": "在下方输入框开始会话"
+    },
+    "message": {
+      "thinking": "思考中...",
+      "stopped": "已停止生成",
+      "loadingImage": "正在加载 {{filename}}",
+      "imageLoadFailed": "图片加载失败：{{filename}}",
+      "saveImage": "保存图片"
+    },
+    "minimap": {
+      "outline": "会话大纲",
+      "openOutline": "打开会话大纲",
+      "emptyMessage": "(空消息)"
+    },
+    "richLink": {
+      "localFile": "本地文件"
+    },
+    "mermaidLoading": "正在加载 Mermaid 图表…"
+  }
+}

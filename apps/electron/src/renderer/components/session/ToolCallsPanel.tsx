@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import {
   normalizeAgentToolName,
   sessionMessageToLegacyAgentMessage,
@@ -9,7 +10,7 @@ import {
 import { AlertTriangle, ChevronRight, Clock3, ImageIcon, Loader2, RefreshCw, Wrench } from 'lucide-react'
 import {
   agentMessageRefreshAtom,
-  agentStreamingStatesAtom,
+  agentSessionStreamStateAtomFamily,
   getActivityStatus,
   type ActivityStatus,
   type ToolActivity,
@@ -38,19 +39,20 @@ interface ToolCallsPanelProps {
 
 const TOOL_CALL_PARTIAL_RESULT_MAX_CHARS = 48_000
 
-export function getVisibleStatusLabel(status: ActivityStatus): string | null {
+/** 需要展示的状态文案 key；completed 不显示 chip，返回 null */
+export function getVisibleStatusLabelKey(status: ActivityStatus): string | null {
   switch (status) {
     case 'running':
-      return '运行中'
+      return 'session.toolCalls.status.running'
     case 'completed':
       return null
     case 'error':
-      return '失败'
+      return 'session.toolCalls.status.error'
     case 'backgrounded':
-      return '后台中'
+      return 'session.toolCalls.status.backgrounded'
     case 'pending':
     default:
-      return '等待中'
+      return 'session.toolCalls.status.pending'
   }
 }
 
@@ -183,10 +185,11 @@ export function buildSessionToolCallActivities(
 }
 
 export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const refreshMap = useAtomValue(agentMessageRefreshAtom)
-  const streamingStates = useAtomValue(agentStreamingStatesAtom)
   const refreshVersion = refreshMap.get(sessionId) ?? 0
-  const streamState = streamingStates.get(sessionId)
+  // 只订阅本会话流式状态，避免其他会话流式时整表变更拖动本面板重渲染
+  const streamState = useAtomValue(agentSessionStreamStateAtomFamily(sessionId))
   const [persistedMessages, setPersistedMessages] = React.useState<AgentMessage[]>([])
   const [expandedMap, setExpandedMap] = React.useState<Record<string, boolean>>({})
   const [loading, setLoading] = React.useState(true)
@@ -222,14 +225,14 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
         if (cancelled) return
         console.error('[ToolCallsPanel] 加载会话消息失败:', error)
         setPersistedMessages([])
-        setLoadError(error instanceof Error ? error.message : '工具调用加载失败')
+        setLoadError(error instanceof Error ? error.message : t('session.toolCalls.loadFailed'))
         setLoading(false)
       })
 
     return () => {
       cancelled = true
     }
-  }, [retryVersion, sessionId, refreshVersion])
+  }, [retryVersion, sessionId, refreshVersion, t])
 
   const toolActivities = React.useMemo(
     () => buildSessionToolCallActivities(persistedMessages, streamState?.processEvents),
@@ -242,7 +245,7 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
   )
 
   if (loading && orderedActivities.length === 0) {
-    return <div role="status" className="flex h-full items-center justify-center gap-2 px-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在加载工具调用…</div>
+    return <div role="status" className="flex h-full items-center justify-center gap-2 px-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t('session.toolCalls.loading')}</div>
   }
 
   if (loadError && orderedActivities.length === 0) {
@@ -250,9 +253,9 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
       <div role="alert" className="flex h-full items-center justify-center px-6">
         <div className="flex max-w-[280px] flex-col items-center gap-3 text-center">
           <AlertTriangle className="size-7 text-destructive" />
-          <div className="text-sm font-medium text-foreground">工具调用加载失败</div>
+          <div className="text-sm font-medium text-foreground">{t('session.toolCalls.loadFailed')}</div>
           <div className="text-xs text-muted-foreground">{loadError}</div>
-          <button type="button" className="flex items-center gap-1.5 text-xs text-primary hover:underline" onClick={() => setRetryVersion((value) => value + 1)}><RefreshCw className="size-3.5" />重试</button>
+          <button type="button" className="flex items-center gap-1.5 text-xs text-primary hover:underline" onClick={() => setRetryVersion((value) => value + 1)}><RefreshCw className="size-3.5" />{t('session.toolCalls.retry')}</button>
         </div>
       </div>
     )
@@ -265,9 +268,9 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
           <div className="flex size-10 items-center justify-center rounded-full bg-muted/35 text-foreground/75">
             <Wrench className="size-5" />
           </div>
-          <div className="text-sm font-medium text-foreground">还没有工具调用</div>
+          <div className="text-sm font-medium text-foreground">{t('session.toolCalls.emptyTitle')}</div>
           <div className="text-xs leading-5">
-            当 Agent 运行搜索、读写文件、执行命令或调用 MCP 时，这里会显示详细记录。
+            {t('session.toolCalls.emptyDescription')}
           </div>
         </div>
       </div>
@@ -286,6 +289,7 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
             const status = getActivityStatus(activity)
             const inputSummary = getInputSummary(activity.toolName, activity.input)
             const isOpen = expandedMap[activity.toolUseId] ?? status === 'running'
+            const statusLabelKey = getVisibleStatusLabelKey(status)
 
             return (
               <Collapsible
@@ -318,9 +322,9 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
                         description={inputSummary || activity.toolName}
                         metadata={(
                           <>
-                            {getVisibleStatusLabel(status) && (
+                            {statusLabelKey && (
                               <EntityMetadataChip tone={getStatusTone(status)}>
-                                {getVisibleStatusLabel(status)}
+                                {t(statusLabelKey)}
                               </EntityMetadataChip>
                             )}
                             {activity.elapsedSeconds != null && activity.elapsedSeconds > 0 && (
@@ -360,7 +364,7 @@ export function ToolCallsPanel({ sessionId }: ToolCallsPanelProps): React.ReactE
                         </PayloadBlock>
 
                         <PayloadBlock label={activity.isError ? 'Error' : 'Result'} tone={activity.isError ? 'danger' : 'neutral'}>
-                          {formatPayloadPreview(activity.result ?? activity.partialResult) || (activity.done ? '无文本结果' : '运行中...')}
+                          {formatPayloadPreview(activity.result ?? activity.partialResult) || (activity.done ? t('session.toolCalls.noTextResult') : t('session.toolCalls.running'))}
                         </PayloadBlock>
                       </div>
                     </CollapsibleContent>

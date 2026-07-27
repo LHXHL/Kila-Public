@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { FolderOpen, GitBranch, Globe, Wrench, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AgentSidePanelToolId } from '@/atoms/agent-atoms'
@@ -21,15 +22,16 @@ interface SessionSidePanelProps {
 
 interface SessionSidePanelToolDefinition {
   id: AgentSidePanelToolId
-  label: string
+  /** 文案 key，渲染时才翻译，切换语言即时生效 */
+  labelKey: string
   icon: React.ComponentType<{ className?: string }>
 }
 
 const SESSION_SIDE_PANEL_TOOLS: SessionSidePanelToolDefinition[] = [
-  { id: 'files', label: '文件工作台', icon: FolderOpen },
-  { id: 'web', label: '网页预览', icon: Globe },
-  { id: 'tools', label: '工具调用', icon: Wrench },
-  { id: 'git', label: 'Git 状态', icon: GitBranch },
+  { id: 'files', labelKey: 'session.sidePanel.files', icon: FolderOpen },
+  { id: 'web', labelKey: 'session.sidePanel.web', icon: Globe },
+  { id: 'tools', labelKey: 'session.sidePanel.tools', icon: Wrench },
+  { id: 'git', labelKey: 'session.sidePanel.git', icon: GitBranch },
 ]
 
 const TOOL_PANEL_COMPONENTS: Record<AgentSidePanelToolId, React.ComponentType<{ sessionId: string }>> = {
@@ -42,6 +44,7 @@ const TOOL_PANEL_COMPONENTS: Record<AgentSidePanelToolId, React.ComponentType<{ 
 const SIDEPANEL_CLOSE_ANIMATION_MS = 180
 
 export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const sidePanelActiveToolMap = useAtomValue(agentSidePanelActiveToolMapAtom)
   const sidePanelCloseRequestMap = useAtomValue(agentSidePanelCloseRequestMapAtom)
   const setSidePanelActiveToolMap = useSetAtom(agentSidePanelActiveToolMapAtom)
@@ -166,7 +169,7 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="调整右侧栏宽度"
+          aria-label={t('session.sidePanel.resize')}
           aria-valuemin={SESSION_SIDE_PANEL_WIDTH_MIN}
           aria-valuemax={SESSION_SIDE_PANEL_WIDTH_MAX}
           aria-valuenow={Math.round(panelWidth)}
@@ -188,12 +191,12 @@ export function SessionSidePanel({ sessionId }: SessionSidePanelProps): React.Re
           >
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium leading-none text-foreground/74">
-                {activeTool?.label ?? '工具'}
+                {activeTool ? t(activeTool.labelKey) : t('session.sidePanel.fallbackTitle')}
               </div>
             </div>
             <button
               type="button"
-              aria-label="关闭右侧栏"
+              aria-label={t('session.sidePanel.close')}
               className="flex size-8 items-center justify-center rounded-lg text-muted-foreground/52 transition-colors duration-150 hover:bg-muted/45 hover:text-foreground/72"
               onClick={handleClose}
             >

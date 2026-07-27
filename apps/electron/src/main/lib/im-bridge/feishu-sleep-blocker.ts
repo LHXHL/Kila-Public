@@ -2,6 +2,9 @@ import { powerSaveBlocker } from 'electron'
 import { FeishuMirrorSleepBlocker } from './feishu/sleep-blocker'
 import type { SleepBlockerAdapter, SleepBlockerType } from './feishu/sleep-blocker'
 import { imBridgeConfigManager } from './config-manager'
+import { createLogger } from '../logger'
+
+const log = createLogger('IM Bridge')
 
 const electronSleepBlocker: SleepBlockerAdapter = {
   start: (type: SleepBlockerType): number => powerSaveBlocker.start(type),
@@ -17,7 +20,7 @@ export function syncFeishuMirrorSleepBlocker(): void {
   try {
     blocker.sync(imBridgeConfigManager.getConfig().feishu.sessionMirror)
   } catch (error) {
-    console.error('[飞书防休眠] 同步状态失败:', error)
+    log.error('[IM Bridge][Feishu] 防休眠同步状态失败', error)
   }
 }
 
@@ -25,6 +28,6 @@ export function stopFeishuMirrorSleepBlocker(): void {
   try {
     blocker.stop()
   } catch (error) {
-    console.error('[飞书防休眠] 关闭失败:', error)
+    log.error('[IM Bridge][Feishu] 防休眠关闭失败', error)
   }
 }

@@ -7,20 +7,14 @@
  */
 
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
-import {
-  getProjectProfileConfigPath,
-  getProjectProfilePath,
-} from './config-paths'
+import { getProjectProfilePath } from './config-paths'
 
 export interface ProjectProfile {
   id: string
   projectPath: string
   rootPath: string
-}
-interface ProjectProfileConfig {
-  // reserved for future project-bound hidden settings
 }
 
 function normalizeProjectPath(projectPath: string): string {
@@ -50,24 +44,4 @@ export function deleteProjectProfile(profileId: string): void {
   if (existsSync(profilePath)) {
     rmSync(profilePath, { recursive: true, force: true })
   }
-}
-
-function readProjectProfileConfig(profileId: string): ProjectProfileConfig {
-  const configPath = getProjectProfileConfigPath(profileId)
-
-  if (!existsSync(configPath)) {
-    return {}
-  }
-
-  try {
-    const raw = readFileSync(configPath, 'utf-8')
-    return JSON.parse(raw) as ProjectProfileConfig
-  } catch {
-    return {}
-  }
-}
-
-function writeProjectProfileConfig(profileId: string, config: ProjectProfileConfig): void {
-  const configPath = getProjectProfileConfigPath(profileId)
-  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
 }

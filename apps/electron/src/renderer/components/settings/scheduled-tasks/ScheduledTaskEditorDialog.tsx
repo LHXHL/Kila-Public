@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type {
   BridgeBinding,
   AgentToolInfo,
@@ -23,12 +25,17 @@ import { Button } from '@/components/ui/button'
 import { OverlayScrollbarArea } from '@/components/ui/overlay-scrollbar'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { SettingsSelect } from '../primitives/SettingsSelect'
-import { ModelSelector } from '@/components/composer/ModelSelector'
-import { PermissionModeSelector } from '@/components/agent/PermissionModeSelector'
 import { ScheduledTaskScheduleEditor } from './ScheduledTaskScheduleEditor'
+import { ScheduledTaskRuntimeFields } from './ScheduledTaskRuntimeFields'
+import { ScheduledTaskResultFields } from './ScheduledTaskResultFields'
+import { FieldGroup, SectionCard } from './editor-primitives'
+import {
+  describeEditorDelivery,
+  describeVerifiers,
+  hasVerifier,
+  readFileVerifierPath,
+} from './editor-delivery'
 import { cn } from '@/lib/utils'
 
 interface ScheduledTaskEditorDialogProps {
@@ -45,136 +52,25 @@ interface ScheduledTaskEditorDialogProps {
   onSubmit: (value: ScheduledTaskCreateInput | ScheduledTaskUpdateInput, taskId?: string) => Promise<void>
 }
 
-const THINKING_OPTIONS: Array<{ value: ThinkingLevel; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'XHigh' },
-]
+const NO_SESSION_VALUE = '__none__'
 
 function toToolSelection(tools: AgentToolInfo[], enabledToolIds: string[] | undefined): string[] {
   if (enabledToolIds?.length) return enabledToolIds
   return tools.filter((tool) => tool.enabled).map((tool) => tool.meta.id)
 }
 
-function describeSchedule(schedule: ScheduledTask['schedule']): string {
+/** 摘要行的调度描述，比列表页更短 */
+function describeSummarySchedule(t: TFunction, schedule: ScheduledTask['schedule']): string {
   switch (schedule.kind) {
     case 'every':
-      return `every ${schedule.minutes} min`
+      return t('settingsTasks.editor.summary.everyMinutes', { count: schedule.minutes })
     case 'cron':
       return schedule.expr
     case 'at':
-      return 'single shot'
+      return t('settingsTasks.editor.summary.singleShot')
     case 'loop':
-      return 'loop'
+      return t('settingsTasks.editor.summary.loop')
   }
-}
-
-function describeDelivery(delivery: ScheduledTaskDelivery, bindings: BridgeBinding[]): string {
-  if (delivery.kind === 'none') return '不投递'
-  const targets = getDeliveryTargets(delivery)
-  if (targets.length === 0) return '不投递'
-  if (targets.length === 1) {
-    const target = targets[0]!
-    const binding = bindings.find((item) => item.endpointKey === target.endpointKey)
-    return binding ? `${binding.displayName || binding.endpointKey} · ${binding.channelType}` : `${target.endpointKey} · ${target.channelType}`
-  }
-  return `${targets.length} 个远程渠道目标`
-}
-
-function getDeliveryTargets(delivery: ScheduledTaskDelivery): Array<{ endpointKey: string; channelType: BridgeBinding['channelType'] }> {
-  if (delivery.kind === 'bridge_binding') {
-    return [{ endpointKey: delivery.endpointKey, channelType: delivery.channelType }]
-  }
-  if (delivery.kind === 'bridge_bindings') {
-    return delivery.targets
-  }
-  return []
-}
-
-function setDeliveryTarget(delivery: ScheduledTaskDelivery, binding: BridgeBinding, enabled: boolean): ScheduledTaskDelivery {
-  const nextTargets = getDeliveryTargets(delivery)
-    .filter((target) => target.endpointKey !== binding.endpointKey)
-  if (enabled) {
-    nextTargets.push({
-      endpointKey: binding.endpointKey,
-      channelType: binding.channelType,
-    })
-  }
-  if (nextTargets.length === 0) return { kind: 'none' }
-  return {
-    kind: 'bridge_bindings',
-    targets: nextTargets,
-    failurePolicy: delivery.kind === 'bridge_bindings' ? delivery.failurePolicy : 'all',
-  }
-}
-
-function hasVerifier(verifiers: ScheduledTaskResultVerifier[], kind: ScheduledTaskResultVerifier['kind']): boolean {
-  return verifiers.some((verifier) => verifier.kind === kind)
-}
-
-function readFileVerifierPath(verifiers: ScheduledTaskResultVerifier[]): string {
-  const verifier = verifiers.find((item) => item.kind === 'file_exists')
-  return verifier?.kind === 'file_exists' ? verifier.path : ''
-}
-
-function describeVerifiers(verifiers: ScheduledTaskResultVerifier[]): string {
-  if (verifiers.length === 0) return '无校验'
-  return verifiers.map((verifier) => {
-    switch (verifier.kind) {
-      case 'reply_non_empty':
-        return 'reply'
-      case 'bridge_delivery_success':
-        return 'bridge'
-      case 'file_exists':
-        return `file:${verifier.path}`
-    }
-  }).join(' · ')
-}
-
-function FieldGroup({
-  label,
-  description,
-  children,
-}: {
-  label: string
-  description?: string
-  children: React.ReactNode
-}): React.ReactElement {
-  return (
-    <div className="space-y-2.5">
-      <div>
-        <Label className="text-sm font-medium text-foreground">{label}</Label>
-        {description && (
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {description}
-          </p>
-        )}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description: string
-  children: React.ReactNode
-}): React.ReactElement {
-  return (
-    <section className="border-t border-border/50 pt-5 first:border-t-0 first:pt-0">
-      <div>
-        <h3 className="text-base font-semibold text-foreground">{title}</h3>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-      </div>
-      <div className="mt-4 space-y-4">{children}</div>
-    </section>
-  )
 }
 
 export function ScheduledTaskEditorDialog({
@@ -190,6 +86,7 @@ export function ScheduledTaskEditorDialog({
   onClose,
   onSubmit,
 }: ScheduledTaskEditorDialogProps): React.ReactElement {
+  const { t } = useTranslation()
   const taskSessionId = task?.executionTarget.kind === 'single_session'
     ? task.executionTarget.sessionId
     : null
@@ -244,7 +141,9 @@ export function ScheduledTaskEditorDialog({
       return
     }
 
-    setName(draftSeed?.name ?? (seedSession ? `定时任务 · ${seedSession.title}` : '新定时任务'))
+    setName(draftSeed?.name || (seedSession
+      ? t('settingsTasks.editor.defaultNameFromSession', { title: seedSession.title })
+      : t('settingsTasks.editor.defaultName')))
     setPrompt(draftSeed?.prompt ?? '')
     setSchedule(draftSeed?.schedule ?? { kind: 'every', minutes: 5 })
     setRunMode(seedSession ? 'single_session' : 'new_session')
@@ -267,7 +166,7 @@ export function ScheduledTaskEditorDialog({
     setPermissionModeOverride('auto')
     setAiCanExit(false)
     setNotifyOnMissedRun(false)
-  }, [defaultChannelId, defaultModelId, draftSeed, foregroundSession, open, seedSession, task, tools])
+  }, [defaultChannelId, defaultModelId, draftSeed, foregroundSession, open, seedSession, t, task, tools])
 
   React.useEffect(() => {
     if (!open) return
@@ -282,14 +181,16 @@ export function ScheduledTaskEditorDialog({
     }
   }, [open, schedule.kind, task])
 
-  const summaryName = name.trim() || '未命名任务'
-  const summaryPrompt = prompt.trim() || '将在这里显示任务 prompt 摘要，方便在保存前快速核对任务全貌。'
-  const summaryRunMode = runMode === 'single_session' ? '连续会话' : '新建会话'
-  const summaryModel = modelSelection?.modelId ?? '未选择模型'
-  const summaryTools = selectedToolIds.length > 0 ? `${selectedToolIds.length} 个工具` : '未选择工具'
-  const summaryVerifiers = describeVerifiers(resultVerifiers)
-  const selectedDeliveryTargets = getDeliveryTargets(delivery)
-  const selectedDeliveryEndpointKeys = new Set(selectedDeliveryTargets.map((target) => target.endpointKey))
+  const summaryName = name.trim() || t('settingsTasks.editor.untitledTask')
+  const summaryPrompt = prompt.trim() || t('settingsTasks.editor.promptSummaryPlaceholder')
+  const summaryRunMode = runMode === 'single_session'
+    ? t('settingsTasks.runMode.singleSession')
+    : t('settingsTasks.runMode.newSession')
+  const summaryModel = modelSelection?.modelId ?? t('settingsTasks.editor.noModel')
+  const summaryTools = selectedToolIds.length > 0
+    ? t('settingsTasks.editor.toolCount', { count: selectedToolIds.length })
+    : t('settingsTasks.editor.noTools')
+  const summaryVerifiers = describeVerifiers(t, resultVerifiers)
 
   const toggleVerifier = React.useCallback((kind: ScheduledTaskResultVerifier['kind'], enabled: boolean): void => {
     setResultVerifiers((prev) => {
@@ -313,7 +214,7 @@ export function ScheduledTaskEditorDialog({
 
   const submit = React.useCallback(async (): Promise<void> => {
     if (!modelSelection?.channelId) {
-      throw new Error('请选择模型')
+      throw new Error(t('settingsTasks.editor.selectModelError'))
     }
 
     const executionTarget = runMode === 'single_session'
@@ -381,6 +282,7 @@ export function ScheduledTaskEditorDialog({
     schedule,
     selectedToolIds,
     singleSessionId,
+    t,
     task?.id,
     thinkingLevel,
     verificationFilePath,
@@ -393,10 +295,10 @@ export function ScheduledTaskEditorDialog({
           <DialogHeader className="border-b border-border/60 px-6 py-5">
             <div className="pr-10">
               <DialogTitle className="text-2xl font-semibold tracking-tight">
-                {task ? '编辑定时任务' : '新建定时任务'}
+                {task ? t('settingsTasks.editor.editTitle') : t('settingsTasks.editor.createTitle')}
               </DialogTitle>
               <DialogDescription className="mt-2 max-w-3xl text-sm leading-6">
-                配置任务内容、执行时间、目标会话和结果处理。
+                {t('settingsTasks.editor.description')}
               </DialogDescription>
             </div>
           </DialogHeader>
@@ -406,7 +308,7 @@ export function ScheduledTaskEditorDialog({
             options={{ overflow: { x: 'hidden', y: 'scroll' } }}
           >
             <section className="border-b border-border/50 pb-5">
-              <div className="text-xs font-medium text-muted-foreground">任务摘要</div>
+              <div className="text-xs font-medium text-muted-foreground">{t('settingsTasks.editor.summaryHeading')}</div>
 
               <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 max-w-3xl">
@@ -420,7 +322,7 @@ export function ScheduledTaskEditorDialog({
 
                 {seedSession && (
                   <div className="border-l border-border/60 pl-4 text-sm text-muted-foreground">
-                    <div className="font-medium text-foreground">来源会话</div>
+                    <div className="font-medium text-foreground">{t('settingsTasks.editor.sourceSession')}</div>
                     <div className="mt-1">{seedSession.title}</div>
                     <div className="text-xs">{seedSession.project.name}</div>
                   </div>
@@ -429,12 +331,12 @@ export function ScheduledTaskEditorDialog({
 
               <dl className="mt-4 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
                 {[
-                  ['执行时间', describeSchedule(schedule)],
-                  ['会话模式', summaryRunMode],
-                  ['模型', summaryModel],
-                  ['投递', describeDelivery(delivery, bindings)],
-                  ['工具', summaryTools],
-                  ['校验', summaryVerifiers],
+                  [t('settingsTasks.editor.summary.schedule'), describeSummarySchedule(t, schedule)],
+                  [t('settingsTasks.editor.summary.runMode'), summaryRunMode],
+                  [t('settingsTasks.editor.summary.model'), summaryModel],
+                  [t('settingsTasks.editor.summary.delivery'), describeEditorDelivery(t, delivery, bindings)],
+                  [t('settingsTasks.editor.summary.tools'), summaryTools],
+                  [t('settingsTasks.editor.summary.verification'), summaryVerifiers],
                 ].map(([label, value]) => (
                   <div key={label} className="flex min-w-0 gap-2">
                     <dt className="shrink-0 text-muted-foreground">{label}</dt>
@@ -447,33 +349,36 @@ export function ScheduledTaskEditorDialog({
             <div className="mt-6 grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
               <div className="space-y-5">
                 <SectionCard
-                  title="任务内容"
-                  description="任务名称与 prompt 定义了这个后台流程的身份和预期输出。"
+                  title={t('settingsTasks.editor.content.title')}
+                  description={t('settingsTasks.editor.content.description')}
                 >
-                  <FieldGroup label="名称">
+                  <FieldGroup label={t('settingsTasks.editor.content.nameLabel')}>
                     <Input value={name} onChange={(event) => setName(event.target.value)} />
                   </FieldGroup>
 
-                  <FieldGroup label="Prompt" description="这里的内容会在每次触发时发送给 Agent。">
+                  <FieldGroup
+                    label={t('settingsTasks.editor.content.promptLabel')}
+                    description={t('settingsTasks.editor.content.promptDescription')}
+                  >
                     <Textarea
                       rows={10}
                       value={prompt}
                       onChange={(event) => setPrompt(event.target.value)}
-                      placeholder="输入定时触发时发送给 Agent 的内容"
+                      placeholder={t('settingsTasks.editor.content.promptPlaceholder')}
                     />
                   </FieldGroup>
                 </SectionCard>
 
                 <SectionCard
-                  title="执行时间"
-                  description="可以选择固定间隔、cron、一次性触发或 loop 持续自治。"
+                  title={t('settingsTasks.editor.schedule.title')}
+                  description={t('settingsTasks.editor.schedule.description')}
                 >
                   <ScheduledTaskScheduleEditor value={schedule} onChange={setSchedule} />
                 </SectionCard>
 
                 <SectionCard
-                  title="目标会话与投递"
-                  description="新建会话适合周期性报告；连续会话适合长期上下文演进。"
+                  title={t('settingsTasks.editor.target.title')}
+                  description={t('settingsTasks.editor.target.description')}
                 >
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Button
@@ -482,9 +387,9 @@ export function ScheduledTaskEditorDialog({
                       className={cn('h-auto flex-col items-start rounded-lg px-4 py-3 text-left', runMode !== 'new_session' && 'bg-background/80')}
                       onClick={() => setRunMode('new_session')}
                     >
-                      <span className="text-sm font-semibold">新建会话</span>
+                      <span className="text-sm font-semibold">{t('settingsTasks.editor.target.newSession')}</span>
                       <span className={cn('text-[11px] leading-5', runMode === 'new_session' ? 'text-[hsl(var(--brand-soft-foreground))/0.82]' : 'text-muted-foreground')}>
-                        每次执行创建一条新的 session
+                        {t('settingsTasks.editor.target.newSessionHint')}
                       </span>
                     </Button>
                     <Button
@@ -493,15 +398,18 @@ export function ScheduledTaskEditorDialog({
                       className={cn('h-auto flex-col items-start rounded-lg px-4 py-3 text-left', runMode !== 'single_session' && 'bg-background/80')}
                       onClick={() => setRunMode('single_session')}
                     >
-                      <span className="text-sm font-semibold">连续会话</span>
+                      <span className="text-sm font-semibold">{t('settingsTasks.editor.target.singleSession')}</span>
                       <span className={cn('text-[11px] leading-5', runMode === 'single_session' ? 'text-[hsl(var(--brand-soft-foreground))/0.82]' : 'text-muted-foreground')}>
-                        把消息持续追加到同一个 session
+                        {t('settingsTasks.editor.target.singleSessionHint')}
                       </span>
                     </Button>
                   </div>
 
                   {runMode === 'new_session' ? (
-                    <FieldGroup label="项目目录" description="新建会话会以这个目录作为 project root。">
+                    <FieldGroup
+                      label={t('settingsTasks.editor.target.projectPathLabel')}
+                      description={t('settingsTasks.editor.target.projectPathDescription')}
+                    >
                       <div className="flex gap-2">
                         <Input value={projectPath} onChange={(event) => setProjectPath(event.target.value)} />
                         <Button
@@ -514,17 +422,17 @@ export function ScheduledTaskEditorDialog({
                             }).catch(console.error)
                           }}
                         >
-                          选择目录
+                          {t('settingsTasks.editor.target.chooseFolder')}
                         </Button>
                       </div>
                     </FieldGroup>
                   ) : (
                     <SettingsSelect
-                      label="目标会话"
-                      value={singleSessionId || '__none__'}
-                      onValueChange={(value) => setSingleSessionId(value === '__none__' ? '' : value)}
+                      label={t('settingsTasks.editor.target.sessionLabel')}
+                      value={singleSessionId || NO_SESSION_VALUE}
+                      onValueChange={(value) => setSingleSessionId(value === NO_SESSION_VALUE ? '' : value)}
                       options={[
-                        { value: '__none__', label: '请选择会话' },
+                        { value: NO_SESSION_VALUE, label: t('settingsTasks.editor.target.sessionPlaceholder') },
                         ...sessions.map((session) => ({ value: session.id, label: session.title })),
                       ]}
                     />
@@ -534,196 +442,38 @@ export function ScheduledTaskEditorDialog({
 
               <div className="space-y-5">
                 <SectionCard
-                  title="运行配置与结果"
-                  description="右侧统一配置运行时上下文、启用工具和结果处理策略。"
+                  title={t('settingsTasks.editor.runtime.title')}
+                  description={t('settingsTasks.editor.runtime.description')}
                 >
-                  <FieldGroup label="模型">
-                    <ModelSelector
-                      externalSelectedModel={modelSelection}
-                      onModelSelect={(option) => {
-                        setModelSelection({ channelId: option.channelId, modelId: option.modelId })
-                      }}
-                    />
-                  </FieldGroup>
+                  <ScheduledTaskRuntimeFields
+                    tools={tools}
+                    modelSelection={modelSelection}
+                    onModelSelectionChange={setModelSelection}
+                    thinkingLevel={thinkingLevel}
+                    onThinkingLevelChange={setThinkingLevel}
+                    historyTurns={historyTurns}
+                    onHistoryTurnsChange={setHistoryTurns}
+                    additionalDirectories={additionalDirectories}
+                    onAdditionalDirectoriesChange={setAdditionalDirectories}
+                    selectedToolIds={selectedToolIds}
+                    onSelectedToolIdsChange={setSelectedToolIds}
+                    permissionMode={permissionModeOverride}
+                    onPermissionModeChange={setPermissionModeOverride}
+                  />
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <SettingsSelect
-                      label="Thinking"
-                      value={thinkingLevel}
-                      onValueChange={(value) => setThinkingLevel(value as ThinkingLevel)}
-                      options={THINKING_OPTIONS}
-                    />
-
-                    <FieldGroup label="History Turns">
-                      <Input value={historyTurns} onChange={(event) => setHistoryTurns(event.target.value)} />
-                    </FieldGroup>
-                  </div>
-
-                  <FieldGroup label="Additional Directories" description="每行一个目录，作为本次任务的附加上下文范围。">
-                    <Textarea
-                      rows={5}
-                      value={additionalDirectories}
-                      onChange={(event) => setAdditionalDirectories(event.target.value)}
-                      placeholder="每行一个目录"
-                    />
-                  </FieldGroup>
-
-                  <FieldGroup label="Enabled Tools" description="只启用本任务真正需要的工具，能让行为更可预测。">
-                    <div className="flex flex-wrap gap-2">
-                      {tools.map((tool) => {
-                        const active = selectedToolIds.includes(tool.meta.id)
-                        return (
-                          <button
-                            key={tool.meta.id}
-                            type="button"
-                            className={cn(
-                              'rounded-md border px-2.5 py-1.5 text-xs transition-colors',
-                              active
-                                ? 'border-[hsl(var(--brand-soft-foreground)/0.18)] bg-brand-soft text-brand-soft-foreground'
-                                : 'border-border/60 bg-background/80 text-muted-foreground',
-                            )}
-                            onClick={() => {
-                              setSelectedToolIds((prev) => (
-                                prev.includes(tool.meta.id)
-                                  ? prev.filter((item) => item !== tool.meta.id)
-                                  : [...prev, tool.meta.id]
-                              ))
-                            }}
-                          >
-                            {tool.meta.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </FieldGroup>
-
-                  <FieldGroup label="权限模式" description="后台任务会严格按这里的模式运行，不依赖当前前台会话的审批状态。">
-                    <div className="border-b border-border/45 px-1 py-3 last:border-b-0">
-                      <PermissionModeSelector value={permissionModeOverride} onChange={setPermissionModeOverride} />
-                      <div className="mt-2 text-xs leading-5 text-muted-foreground">
-                        `auto` 适合完全自动化任务；`smart` 是默认交互策略，适合需要审批敏感操作的后台流程。
-                      </div>
-                    </div>
-                  </FieldGroup>
-
-                  <div className="rounded-lg bg-muted/25 px-4 py-4">
-                    <div className="text-xs font-medium text-muted-foreground">
-                      结果处理
-                    </div>
-
-                    <div className="mt-4 space-y-4">
-                      <FieldGroup label="结果投递" description="可同时投递到多个远程渠道绑定；默认要求全部投递成功才通过远程渠道送达校验。">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between border-b border-border/45 px-1 py-3 last:border-b-0">
-                            <div>
-                              <div className="text-sm font-medium text-foreground">不投递</div>
-                              <div className="mt-1 text-xs text-muted-foreground">只在本地 session 记录任务结果。</div>
-                            </div>
-                            <Switch
-                              checked={delivery.kind === 'none'}
-                              onCheckedChange={(checked) => {
-                                if (checked) setDelivery({ kind: 'none' })
-                              }}
-                            />
-                          </div>
-                          {bindings.length === 0 && (
-                            <div className="rounded-lg border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground">
-                              当前没有远程渠道绑定。先从 Telegram / Discord / 飞书 / 微信发一条消息创建绑定。
-                            </div>
-                          )}
-                          {bindings.map((binding) => (
-                            <div key={binding.endpointKey} className="flex items-center justify-between border-b border-border/45 px-1 py-3 last:border-b-0">
-                              <div>
-                                <div className="text-sm font-medium text-foreground">{binding.displayName || binding.endpointKey}</div>
-                                <div className="mt-1 text-xs text-muted-foreground">{binding.channelType} · {binding.endpointKey}</div>
-                              </div>
-                              <Switch
-                                checked={selectedDeliveryEndpointKeys.has(binding.endpointKey)}
-                                onCheckedChange={(checked) => {
-                                  setDelivery((prev) => setDeliveryTarget(prev, binding, checked))
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </FieldGroup>
-
-                      <FieldGroup label="结果校验" description="把“任务跑了”和“产出合格”分开判断，适合日报、日记和备份类任务。">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between border-b border-border/45 px-1 py-3 last:border-b-0">
-                            <div>
-                              <div className="text-sm font-medium text-foreground">Reply 非空</div>
-                              <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                                推荐给写日记、日报和总结任务，避免“执行成功但没有正文”。
-                              </div>
-                            </div>
-                            <Switch
-                              checked={hasVerifier(resultVerifiers, 'reply_non_empty')}
-                              onCheckedChange={(checked) => toggleVerifier('reply_non_empty', checked)}
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between border-b border-border/45 px-1 py-3 last:border-b-0">
-                            <div>
-                              <div className="text-sm font-medium text-foreground">远程渠道投递成功</div>
-                              <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                                如果任务依赖远程渠道送达最终结果，可以把投递也纳入成功条件。
-                              </div>
-                            </div>
-                            <Switch
-                              checked={hasVerifier(resultVerifiers, 'bridge_delivery_success')}
-                              onCheckedChange={(checked) => toggleVerifier('bridge_delivery_success', checked)}
-                            />
-                          </div>
-
-                          <div className="border-b border-border/45 px-1 py-3 last:border-b-0">
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
-                                <div className="text-sm font-medium text-foreground">文件产出存在</div>
-                                <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                                  适合备份、日志或写文件类任务。路径默认相对当前 project root 解析。
-                                </div>
-                              </div>
-                              <Switch
-                                checked={hasVerifier(resultVerifiers, 'file_exists')}
-                                onCheckedChange={(checked) => toggleVerifier('file_exists', checked)}
-                              />
-                            </div>
-
-                            {hasVerifier(resultVerifiers, 'file_exists') && (
-                              <div className="mt-3">
-                                <Input
-                                  value={verificationFilePath}
-                                  onChange={(event) => setVerificationFilePath(event.target.value)}
-                                  placeholder="例如 diary/today.md"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </FieldGroup>
-
-                      <div className="flex items-center justify-between border-b border-border/45 px-1 py-3 last:border-b-0">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">Missed run 提醒</div>
-                          <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                            当任务错过本轮 deadline 时，追加本地 system message；如果配置了远程渠道，也会发出提醒。
-                          </div>
-                        </div>
-                        <Switch checked={notifyOnMissedRun} onCheckedChange={setNotifyOnMissedRun} />
-                      </div>
-
-                      <div className="flex items-center justify-between border-b border-border/45 px-1 py-3 last:border-b-0">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">AI 可结束任务</div>
-                          <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                            仅 loop 模式下建议开启，允许模型在任务完成后主动调用退出工具。
-                          </div>
-                        </div>
-                        <Switch checked={aiCanExit} onCheckedChange={setAiCanExit} />
-                      </div>
-                    </div>
-                  </div>
+                  <ScheduledTaskResultFields
+                    bindings={bindings}
+                    delivery={delivery}
+                    onDeliveryChange={setDelivery}
+                    resultVerifiers={resultVerifiers}
+                    onToggleVerifier={toggleVerifier}
+                    verificationFilePath={verificationFilePath}
+                    onVerificationFilePathChange={setVerificationFilePath}
+                    notifyOnMissedRun={notifyOnMissedRun}
+                    onNotifyOnMissedRunChange={setNotifyOnMissedRun}
+                    aiCanExit={aiCanExit}
+                    onAiCanExitChange={setAiCanExit}
+                  />
                 </SectionCard>
               </div>
             </div>
@@ -732,14 +482,14 @@ export function ScheduledTaskEditorDialog({
           <div className="border-t border-border/60 bg-background/92 px-6 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs leading-6 text-muted-foreground">
-                定时任务会使用你为它单独配置的权限模式运行，不会继承当前前台会话的审批状态。
+                {t('settingsTasks.editor.footerNotice')}
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" className="rounded-lg" onClick={onClose} disabled={saving}>
-                  取消
+                  {t('settingsTasks.editor.cancel')}
                 </Button>
                 <Button type="button" className="rounded-lg" onClick={() => void submit()} disabled={saving}>
-                  {saving ? '保存中...' : '保存任务'}
+                  {saving ? t('settingsTasks.editor.saving') : t('settingsTasks.editor.save')}
                 </Button>
               </div>
             </div>

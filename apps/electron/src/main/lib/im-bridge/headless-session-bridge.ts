@@ -1,9 +1,11 @@
 import { SESSION_IPC_CHANNELS } from '@kila/shared'
 import type { AgentEvent, BridgeChannelType, PermissionRequest, SessionMessage, SessionMeta, SessionSendInput, SessionStreamEvent } from '@kila/shared'
 import { runHeadlessSession } from '../headless-session-runner'
+import type { HeadlessSessionSink } from '../session-service'
 
 interface HeadlessSessionServiceLike {
-  sendMessage: (input: SessionSendInput, webContents?: any) => Promise<void>
+  /** 无头链路第二参数传的是事件 sink（不是 WebContents），方法签名保持双变以兼容真实 SessionService */
+  sendMessage(input: SessionSendInput, sink?: HeadlessSessionSink): Promise<void>
 }
 
 export interface HeadlessStreamEventContext {

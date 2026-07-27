@@ -14,6 +14,7 @@
  * - baseUrl：来自 DB.api，用户可改
  */
 
+import type { TFunction } from 'i18next'
 import {
   PROVIDER_DEFAULT_URLS,
   inferApiTypeFromProvider,
@@ -34,6 +35,8 @@ export interface ChannelPreset {
   searchTerms?: string[]
   iconProvider?: ProviderType
   description?: string
+  /** 内置预设的描述走翻译 key，渲染时再解析 */
+  descriptionKey?: string
   /** 是否来自 DB（动态加载），用于 UI 分组展示 */
   source?: 'builtin' | 'db'
 }
@@ -49,7 +52,7 @@ export const QUICK_PRESETS: ChannelPreset[] = [
     baseUrl: PROVIDER_DEFAULT_URLS.anthropic ?? '',
     models: [],
     searchTerms: ['claude', 'anthropic'],
-    description: 'Claude 系列模型官方 API',
+    descriptionKey: 'settings.channel.preset.anthropic',
     source: 'builtin',
   },
   {
@@ -61,7 +64,7 @@ export const QUICK_PRESETS: ChannelPreset[] = [
     baseUrl: PROVIDER_DEFAULT_URLS.openai ?? '',
     models: [],
     searchTerms: ['gpt', 'openai'],
-    description: 'GPT 系列模型官方 API',
+    descriptionKey: 'settings.channel.preset.openai',
     source: 'builtin',
   },
   {
@@ -73,7 +76,7 @@ export const QUICK_PRESETS: ChannelPreset[] = [
     baseUrl: PROVIDER_DEFAULT_URLS.google ?? '',
     models: [],
     searchTerms: ['google', 'gemini'],
-    description: 'Gemini 系列模型官方 API',
+    descriptionKey: 'settings.channel.preset.google',
     source: 'builtin',
   },
 ]
@@ -97,7 +100,7 @@ export interface ProviderDbSummary {
  * provider 字段：DB id 命中内置白名单则用白名单值，否则 fallback 'custom'；
  * apiType 通过 inferApiTypeFromProvider 推导（DB id 通常等同于 provider 名）。
  */
-export function dbSummaryToPreset(summary: ProviderDbSummary): ChannelPreset {
+export function dbSummaryToPreset(summary: ProviderDbSummary, t: TFunction): ChannelPreset {
   const provider: ProviderType = summary.id as ProviderType
   const apiType = inferApiTypeFromProvider(summary.id)
   return {
@@ -109,7 +112,7 @@ export function dbSummaryToPreset(summary: ProviderDbSummary): ChannelPreset {
     baseUrl: summary.api ?? '',
     models: [],
     searchTerms: [summary.id, summary.name ?? '', ...(summary.tags ?? [])].filter(Boolean) as string[],
-    description: summary.description ?? `${summary.modelCount} 个可用模型`,
+    description: summary.description ?? t('settings.channel.preset.modelCount', { count: summary.modelCount }),
     source: 'db',
   }
 }

@@ -132,7 +132,17 @@ export function getAuditLogPath(): string {
   return join(getConfigDir(), 'audit.jsonl')
 }
 
-function safePathSegment(value: string): string {
+/**
+ * 将外部传入的 ID 净化为单个安全目录名
+ *
+ * 只保留 `[a-zA-Z0-9_-]`，其余字符（含 `.`、`/`、`\`、NUL）一律替换为 `_`，
+ * 从根本上消除 `../../../tmp/x` 这类目录穿越写入。
+ * Session ID 由 randomUUID() 生成，净化对合法 ID 是无操作。
+ */
+export function safePathSegment(value: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error('路径片段不能为空')
+  }
   return value.replace(/[^a-zA-Z0-9_-]/g, '_')
 }
 
@@ -164,10 +174,26 @@ export function getGlobalAgentStatePath(): string {
   return join(getGlobalAgentConfigDir(), 'config.json')
 }
 
+/**
+ * 将附件的 localPath 解析为磁盘绝对路径
+ *
+ * 默认只接受 `{conversationId}/{uuid}.ext` 形式的相对路径，并强制约束在
+ * `~/.kila/attachments/` 内；任何越界（`../`）或绝对路径都会抛错。
+ *
+ * `allowAbsolute` 仅供「已在上层完成白名单校验」的存量绝对路径附件使用
+ * （会话导入导出 / 历史消息转换），不得在 IPC 入口直接开启。
+ */
 export function resolveAttachmentPath(localPath: string, options: { allowAbsolute?: boolean } = {}): string {
+  if (typeof localPath !== 'string') {
+    throw new Error('附件路径必须是字符串')
+  }
+  if (localPath.includes('\0')) {
+    throw new Error('附件路径包含非法字符')
+  }
+
   if (isAbsolute(localPath)) {
     if (options.allowAbsolute) {
-      return localPath
+      return resolve(localPath)
     }
     throw new Error('附件路径必须是相对路径')
   }
@@ -175,7 +201,7 @@ export function resolveAttachmentPath(localPath: string, options: { allowAbsolut
   const attachmentsDir = resolve(getAttachmentsDir())
   const fullPath = resolve(attachmentsDir, localPath)
   const rel = relative(attachmentsDir, fullPath)
-  if (rel.startsWith('..') || isAbsolute(rel)) {
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
     throw new Error('附件路径越界')
   }
   return fullPath
@@ -201,8 +227,11 @@ export function getAttachmentsDir(): string {
   return dir
 }
 
+/**
+ * 获取某个会话的附件目录（会话 ID 先净化，杜绝目录穿越写入）
+ */
 export function getConversationAttachmentsDir(conversationId: string): string {
-  const dir = join(getAttachmentsDir(), conversationId)
+  const dir = join(getAttachmentsDir(), safePathSegment(conversationId))
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }

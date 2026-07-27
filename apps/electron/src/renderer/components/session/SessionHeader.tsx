@@ -1,5 +1,6 @@
-import * as React from 'react'
+import type * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { FolderOpen, Clock3 } from 'lucide-react'
 import { sessionsAtom } from '@/atoms/session-atoms'
 import { Button } from '@/components/ui/button'
@@ -10,13 +11,14 @@ interface SessionHeaderProps {
 }
 
 export function SessionHeader({ sessionId, messageCount }: SessionHeaderProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const sessions = useAtomValue(sessionsAtom)
   const session = sessions.find((item) => item.id === sessionId) ?? null
 
   if (!session) return null
 
   const projectLabel = session.project.name.trim() || session.project.path
-  const messageLabel = `${messageCount} 条消息`
+  const messageLabel = t('session.header.messages', { count: messageCount })
 
   return (
     <div className="relative z-[var(--kila-z-panel)] flex h-8 shrink-0 items-center justify-center bg-transparent px-4 titlebar-drag-region">
@@ -43,7 +45,7 @@ export function SessionHeader({ sessionId, messageCount }: SessionHeaderProps): 
           onClick={() => { void window.electronAPI.openSettingsWindow('scheduled-tasks') }}
         >
           <Clock3 className="size-3" />
-          定时任务
+          {t('session.header.scheduledTasks')}
         </Button>
       </div>
     </div>

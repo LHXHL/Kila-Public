@@ -15,7 +15,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { AgentSendInput, AgentMessage, AgentGenerateTitleInput, AgentProviderAdapter, AgentRunOutcome } from '@kila/shared'
-import { AgentEventBus } from './agent-event-bus'
+import type { AgentEventBus } from './agent-event-bus'
 import { appendAgentMessage } from './agent-message-store'
 import {
   buildAgentRunContext,

@@ -5,6 +5,8 @@
  * 从 AgentMessages.tsx 中抽取，便于跨组件复用和独立测试。
  */
 
+import type { TFunction } from 'i18next'
+import i18n from '@/lib/i18n'
 import { stripWidgetFencesToPlainText } from '@/lib/generative-ui/parse-show-widget'
 import { estimateMessageShellHeight } from '@/lib/pretext/message-height-estimator'
 import type { AgentMessage, FileAttachment } from '@kila/shared'
@@ -21,19 +23,19 @@ export function formatMessageTime(timestamp: number): string {
   })
 }
 
-export function getMessageSourceLabel(message: AgentMessage): string {
+export function getMessageSourceLabel(message: AgentMessage, t: TFunction): string {
   if (message.messageSourceLabel?.trim()) {
     return message.messageSourceLabel
   }
 
   switch (message.messageSource) {
     case 'scheduled-task':
-      return '定时任务'
+      return t('agent.message.sourceScheduledTask')
     case 'im-bridge':
       return 'IM Bridge'
     case 'manual':
     default:
-      return '手动'
+      return t('agent.message.sourceManual')
   }
 }
 
@@ -151,7 +153,8 @@ function buildPayloadPreviewValue(
   if (typeof value === 'string') {
     if (value.length <= PAYLOAD_PREVIEW_STRING_CHARS) return value
     state.truncated = true
-    return `${value.slice(0, PAYLOAD_PREVIEW_STRING_CHARS)}… [字符串已截断 ${value.length - PAYLOAD_PREVIEW_STRING_CHARS} 字符]`
+    const omitted = value.length - PAYLOAD_PREVIEW_STRING_CHARS
+    return `${value.slice(0, PAYLOAD_PREVIEW_STRING_CHARS)}… ${i18n.t('agent.payload.stringTruncated', { count: omitted })}`
   }
   if (value === null || typeof value === 'number' || typeof value === 'boolean') return value
   if (typeof value === 'bigint') return `${value.toString()}n`
@@ -166,7 +169,7 @@ function buildPayloadPreviewValue(
   }
   if (depth >= PAYLOAD_PREVIEW_MAX_DEPTH || state.nodeCount >= PAYLOAD_PREVIEW_MAX_NODES) {
     state.truncated = true
-    return '[内容过深，已省略]'
+    return i18n.t('agent.payload.tooDeep')
   }
 
   state.seen.add(value)
@@ -177,7 +180,7 @@ function buildPayloadPreviewValue(
       .map((item) => buildPayloadPreviewValue(item, state, depth + 1))
     if (value.length > visible.length) {
       state.truncated = true
-      visible.push(`… [另有 ${value.length - visible.length} 项]`)
+      visible.push(`… ${i18n.t('agent.payload.moreItems', { count: value.length - visible.length })}`)
     }
     return visible
   }
@@ -197,7 +200,7 @@ function buildPayloadPreviewValue(
   }
   if (hasMoreEntries) {
     state.truncated = true
-    preview['…'] = `[还有更多字段，预览仅显示前 ${PAYLOAD_PREVIEW_MAX_ENTRIES} 个]`
+    preview['…'] = i18n.t('agent.payload.moreFields', { count: PAYLOAD_PREVIEW_MAX_ENTRIES })
   }
   return preview
 }
@@ -224,7 +227,7 @@ export function formatPayloadPreview(value: unknown, maxChars = TOOL_PAYLOAD_MAX
     const rendered = getRenderablePayloadText(serialized, maxChars)
     if (!state.truncated) return rendered.text
     if (rendered.truncatedCharCount > 0) return rendered.text
-    return `${rendered.text}\n… [结构化预览已限制，复制可获取完整内容]`
+    return `${rendered.text}\n… ${i18n.t('agent.payload.previewLimited')}`
   } catch {
     return String(value)
   }
@@ -297,7 +300,7 @@ export function getRenderablePayloadText(
   }
 
   return {
-    text: `${normalizedText}\n… [截断 ${truncatedCharCount} 个字符]`,
+    text: `${normalizedText}\n… ${i18n.t('agent.payload.charsTruncated', { count: truncatedCharCount })}`,
     truncatedCharCount,
   }
 }
@@ -322,15 +325,15 @@ export function formatToolPayload(
   return formatPayloadPreview(filtered, maxChars)
 }
 
-export function formatThinkingDuration(durationLabel: string): string {
+export function formatThinkingDuration(durationLabel: string, t: TFunction): string {
   const minuteMatch = durationLabel.match(/^(\d+)m(\d+)s$/)
-  if (minuteMatch) return `${minuteMatch[1]} 分 ${minuteMatch[2]} 秒`
+  if (minuteMatch) return t('agent.thinking.durationMinutes', { minutes: minuteMatch[1], seconds: minuteMatch[2] })
 
   const secondMatch = durationLabel.match(/^(\d+(?:\.\d+)?)s$/)
-  if (secondMatch) return `${secondMatch[1]} 秒`
+  if (secondMatch) return t('agent.thinking.durationSeconds', { seconds: secondMatch[1] })
 
   const millisecondMatch = durationLabel.match(/^(\d+)\sms$/)
-  if (millisecondMatch) return `${millisecondMatch[1]} 毫秒`
+  if (millisecondMatch) return t('agent.thinking.durationMilliseconds', { milliseconds: millisecondMatch[1] })
 
   return durationLabel
 }
@@ -338,21 +341,22 @@ export function formatThinkingDuration(durationLabel: string): string {
 export function getThinkingTitle(
   durationLabel: string | null,
   running: boolean,
+  t: TFunction,
   summaryText?: string,
 ): string {
   if (running) {
     const preview = summaryText?.trim().replace(/\s+/g, ' ')
     if (preview) return preview.length > 40 ? `${preview.slice(0, 40)}…` : preview
     return durationLabel
-      ? `Kila 思考了 ${formatThinkingDuration(durationLabel)}`
-      : 'Kila 思考中…'
+      ? t('agent.thinking.thoughtFor', { duration: formatThinkingDuration(durationLabel, t) })
+      : t('agent.thinking.running')
   }
 
   if (durationLabel) {
-    return `Kila 思考了 ${formatThinkingDuration(durationLabel)}`
+    return t('agent.thinking.thoughtFor', { duration: formatThinkingDuration(durationLabel, t) })
   }
 
-  return 'Kila 完成了思考'
+  return t('agent.thinking.done')
 }
 
 // ===== 高度预测 =====

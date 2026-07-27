@@ -18,6 +18,10 @@ export interface CompactionRecord {
   summaryText?: string
   firstKeptEntryId?: string
   tokensBefore?: number
+  /** 压缩后的估算上下文 token，用于展示"省了多少"。 */
+  estimatedTokensAfter?: number
+  /** 生成摘要那次 LLM 调用消耗的 token 合计。 */
+  summaryTokens?: number
   willRetry?: boolean
 }
 
@@ -39,6 +43,8 @@ export interface CompactionSummary {
   retryCount: number
   tokensBefore: number
   summaryChars: number
+  /** 压缩自身消耗的 token 合计（生成摘要的 LLM 调用）。 */
+  summaryTokens: number
   lastCompactedAt?: number
 }
 
@@ -81,11 +87,24 @@ export function collectCompactionRecords(
         summaryText: event.summaryText,
         firstKeptEntryId: event.firstKeptEntryId,
         tokensBefore: event.tokensBefore,
+        estimatedTokensAfter: event.estimatedTokensAfter,
+        summaryTokens: sumEventUsageTokens(event),
         willRetry: event.willRetry,
       })
     }
   }
   return records
+}
+
+/** 压缩摘要那次模型调用的 token 合计，与主进程状态卡的口径一致。 */
+function sumEventUsageTokens(event: CompactCompleteEvent): number | undefined {
+  const usage = event.usage
+  if (!usage) return undefined
+  const total = (usage.inputTokens || 0)
+    + (usage.outputTokens || 0)
+    + (usage.cacheReadTokens || 0)
+    + (usage.cacheCreationTokens || 0)
+  return total > 0 ? total : undefined
 }
 
 async function loadSessionCompactionRecords(
@@ -170,6 +189,7 @@ export function summarizeCompactionRecords(records: CompactionRecord[]): Compact
     if (record.willRetry) acc.retryCount += 1
     acc.tokensBefore += record.tokensBefore ?? 0
     acc.summaryChars += record.summaryText?.length ?? 0
+    acc.summaryTokens += record.summaryTokens ?? 0
     acc.lastCompactedAt = Math.max(acc.lastCompactedAt ?? 0, record.createdAt)
     return acc
   }, {
@@ -178,5 +198,6 @@ export function summarizeCompactionRecords(records: CompactionRecord[]): Compact
     retryCount: 0,
     tokensBefore: 0,
     summaryChars: 0,
+    summaryTokens: 0,
   })
 }

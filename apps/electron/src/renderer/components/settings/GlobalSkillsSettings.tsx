@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { Blocks, Download, FolderOpen, Search, Wand2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -93,6 +94,7 @@ function LibraryListItem({ entry, selected, onSelect }: LibraryListItemProps): R
 }
 
 export function GlobalSkillsSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const bumpCapabilitiesVersion = useSetAtom(workspaceCapabilitiesVersionAtom)
   const [entries, setEntries] = React.useState<GlobalSkillEntry[]>([])
   const [skillsDir, setSkillsDir] = React.useState('')
@@ -182,7 +184,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
 
   const handleDeleteSkill = React.useCallback(async (detail: GlobalSkillDetail): Promise<void> => {
     if (detail.managementMode !== 'managed' || detail.kind !== 'skill') return
-    if (!confirm(`确定删除 Skill「${detail.name}」？此操作不可恢复。`)) return
+    if (!confirm(t('settings.skills.deleteConfirm', { name: detail.name }))) return
 
     try {
       await window.electronAPI.deleteGlobalAgentSkill(detail.slug)
@@ -195,7 +197,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
     } catch (error) {
       console.error('[全局 Skills 设置] 删除失败:', error)
     }
-  }, [bumpCapabilitiesVersion, loadList, selectedId])
+  }, [bumpCapabilitiesVersion, loadList, selectedId, t])
 
   const handleToggleSkill = React.useCallback(async (detail: GlobalSkillDetail, enabled: boolean): Promise<void> => {
     if (detail.managementMode !== 'managed' || detail.kind !== 'skill') return
@@ -265,8 +267,8 @@ export function GlobalSkillsSettings(): React.ReactElement {
   return (
     <div className="space-y-8">
       <SettingsSection
-        title="技能库"
-        description="统一浏览 Kila、Codex、Claude 三套能力来源。点击 Skill 或 Plugin 后在弹窗中查看完整详情；只有 Kila 管理的 Skill 支持启停和删除。"
+        title={t('settings.skills.title')}
+        description={t('settings.skills.description')}
         action={skillsDir ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -278,7 +280,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
                 <FolderOpen className="size-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>打开 Kila Skills 目录</TooltipContent>
+            <TooltipContent>{t('settings.skills.openDirectory')}</TooltipContent>
           </Tooltip>
         ) : undefined}
       >
@@ -287,19 +289,19 @@ export function GlobalSkillsSettings(): React.ReactElement {
             <Input
               value={installRepoUrl}
               onChange={(event) => setInstallRepoUrl(event.target.value)}
-              placeholder="GitHub Skill 仓库 URL"
+              placeholder={t('settings.skills.repoUrlPlaceholder')}
               className="h-11 rounded-xl border-border/50 bg-background text-sm shadow-none"
             />
             <Input
               value={installSubdir}
               onChange={(event) => setInstallSubdir(event.target.value)}
-              placeholder="子目录（可选）"
+              placeholder={t('settings.skills.subdirPlaceholder')}
               className="h-11 rounded-xl border-border/50 bg-background text-sm shadow-none"
             />
             <Input
               value={installSlug}
               onChange={(event) => setInstallSlug(event.target.value)}
-              placeholder="Slug（可选）"
+              placeholder={t('settings.skills.slugPlaceholder')}
               className="h-11 rounded-xl border-border/50 bg-background text-sm shadow-none"
             />
             <button
@@ -309,7 +311,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border/60 bg-background px-4 text-sm font-medium text-foreground/78 transition-colors hover:border-primary/25 hover:bg-kila-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download className="size-4" />
-              {installing ? '处理中' : '安装'}
+              {installing ? t('settings.skills.installing') : t('settings.skills.install')}
             </button>
           </div>
 
@@ -319,7 +321,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="搜索 Skill 或 Plugin..."
+                placeholder={t('settings.skills.searchPlaceholder')}
                 className="h-12 rounded-xl border-border/50 bg-background pl-12 text-sm shadow-none"
               />
             </div>
@@ -327,18 +329,18 @@ export function GlobalSkillsSettings(): React.ReactElement {
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <EntityMetadataChip tone="accent">{totalSkills} Skills</EntityMetadataChip>
               <EntityMetadataChip>{totalPlugins} Plugins</EntityMetadataChip>
-              <EntityMetadataChip>{sourceCount} 来源</EntityMetadataChip>
+              <EntityMetadataChip>{t('settings.skills.sourceCount', { count: sourceCount })}</EntityMetadataChip>
             </div>
           </div>
 
           <div className="rounded-[var(--kila-panel-radius)] border border-border/45 bg-card/70 p-3 sm:p-4">
             {loadingList ? (
               <div className="flex min-h-[280px] items-center justify-center text-sm text-muted-foreground">
-                加载中...
+                {t('common.loading')}
               </div>
             ) : groupedEntries.length === 0 ? (
               <div className="flex min-h-[280px] items-center justify-center rounded-[20px] border border-dashed border-border/60 px-4 text-center text-sm text-muted-foreground">
-                没有匹配的条目。
+                {t('settings.skills.noMatches')}
               </div>
             ) : (
               <div className="space-y-6">
@@ -350,7 +352,7 @@ export function GlobalSkillsSettings(): React.ReactElement {
                           {group.label}
                         </div>
                         <div className="mt-0.5 text-[12px] text-muted-foreground/70">
-                          点击卡片查看完整详情
+                          {t('settings.skills.cardHint')}
                         </div>
                       </div>
                       <EntityMetadataChip>{group.entries.length}</EntityMetadataChip>

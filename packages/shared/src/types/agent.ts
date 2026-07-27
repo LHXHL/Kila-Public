@@ -26,12 +26,8 @@ export interface AgentWorkspace {
 // ===== SDK 新增类型声明（0.2.52 ~ 0.2.63） =====
 
 /**
- * 思考模式配置
- *
- * 控制 Claude 的推理/思考行为：
- * - adaptive: Claude 自行决定何时以及思考多少（Opus 4.6+ 默认）
- * - enabled: 固定思考 Token 预算（旧模型）
- * - disabled: 不使用扩展思考
+ * 思考模式配置。控制 Claude 的推理/思考行为：
+ * adaptive=Claude 自行决定何时及思考多少（Opus 4.6+ 默认）；enabled=固定思考 Token 预算（旧模型）；disabled=不使用扩展思考。
  */
 export type ThinkingConfig =
   | { type: 'adaptive' }
@@ -48,12 +44,7 @@ export type ThinkingConfig =
 export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh'
 
 /**
- * 推理深度等级
- *
- * 兼容旧 Agent 设置存储：
- * - xhigh 在旧字段中对应 max
- *
- * 与 adaptive thinking 配合使用，引导思考深度：
+ * 推理深度等级，与 adaptive thinking 配合使用；兼容旧 Agent 设置存储（xhigh 在旧字段中对应 max）。
  * - low: 最少思考，最快响应
  * - medium: 适度思考
  * - high: 深度推理（默认）
@@ -358,9 +349,15 @@ export type AgentEvent =
       tokensBefore?: number
       details?: unknown
       willRetry?: boolean
+      /** 生成摘要那次 LLM 调用的真实用量；压缩也要跑模型调用，不计会漏掉这部分计费。 */
+      usage?: AgentEventUsage
+      /** 压缩后的估算上下文 token，用于向用户展示"省了多少"。 */
+      estimatedTokensAfter?: number
     }
   // Pi 手动压缩的良性空操作（会话过小或已经压缩），不能伪装成真正的压缩边界。
   | { type: 'compact_noop'; message: string }
+  // 摘要生成的重试进度（Pi 0.82 起）；压缩期间不给反馈，用户会面对十几秒的静默。
+  | { type: 'summarization_retry'; attempt: number; delaySeconds?: number; phase: 'scheduled' | 'start' | 'finished' }
   // 权限请求
   | { type: 'permission_request'; request: PermissionRequest }
   | { type: 'permission_resolved'; requestId: string; behavior: 'allow' | 'deny'; resolution: 'user' | 'timeout' | 'session_end' }

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { ModelSelector } from '@/components/composer/ModelSelector'
 import type { ModelOption } from '@kila/shared'
@@ -17,12 +18,13 @@ interface BridgeDefaultModelFieldProps {
 }
 
 export function BridgeDefaultModelField({
-  label = '默认模型',
+  label,
   description,
   value,
   onChange,
-  clearLabel = '清除覆盖',
+  clearLabel,
 }: BridgeDefaultModelFieldProps): React.ReactElement {
+  const { t } = useTranslation()
   const selectedModel = value?.channelId && value?.modelId
     ? { channelId: value.channelId, modelId: value.modelId }
     : null
@@ -39,7 +41,7 @@ export function BridgeDefaultModelField({
   return (
     <div className="px-4 py-3 space-y-2">
       <div>
-        <div className={LABEL_CLASS}>{label}</div>
+        <div className={LABEL_CLASS}>{label ?? t('settingsBridge.common.defaultModel')}</div>
         <div className={cn(DESCRIPTION_CLASS, 'mt-0.5')}>{description}</div>
       </div>
 
@@ -57,7 +59,7 @@ export function BridgeDefaultModelField({
           onClick={() => onChange({ channelId: undefined, modelId: undefined })}
           disabled={!hasSelection}
         >
-          {clearLabel}
+          {clearLabel ?? t('settingsBridge.common.clearOverride')}
         </Button>
       </div>
     </div>

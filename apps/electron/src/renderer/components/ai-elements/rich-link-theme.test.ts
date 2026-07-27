@@ -15,9 +15,10 @@ describe('富链接主题颜色', () => {
     expect(globalStyles).toContain('--kila-link-chip-foreground: var(--brand-soft-foreground);')
     expect(globalStyles).toContain('--kila-link-chip-hover: var(--brand-soft-hover);')
 
-    expect(chipSource).toContain('var(--kila-link-chip-background)')
-    expect(chipSource).toContain('var(--kila-link-chip-foreground)')
-    expect(chipSource).toContain('var(--kila-link-chip-hover)')
+    // 消息侧 chip 走 tailwind 语义工具类（语义 token 注册进 tailwind.config.js 后不再内联 var()）
+    expect(chipSource).toContain('bg-kila-link-chip-background')
+    expect(chipSource).toContain('text-kila-link-chip-foreground')
+    expect(chipSource).toContain('hover:bg-kila-link-chip-hover')
     expect(chipSource).not.toContain('var(--status-')
 
     const composerStyles = inputSource.slice(

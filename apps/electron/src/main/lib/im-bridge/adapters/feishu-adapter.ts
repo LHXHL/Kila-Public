@@ -1,18 +1,13 @@
-import type { FeishuBridgeConfig, FileAttachment } from '@kila/shared'
+import type { BridgeAdapterCapabilities, FeishuBridgeConfig, FileAttachment } from '@kila/shared'
 import type { BridgeTestResult } from '@kila/shared'
 import { BaseImAdapter } from './base-adapter'
 import type { BridgeAttachmentReference, BridgeOutboundMessage, BridgePermissionPromptMessage } from './base-adapter'
 import { buildAgentReplyCard, buildErrorCard, splitLongContent } from './feishu-renderer'
+import { FEISHU_CAPABILITIES, FEISHU_PERMISSION_DENIED_HINT } from './adapter-capabilities'
 import { downloadFeishuAttachments } from './feishu-files'
 import { ScopedQueue } from '../feishu/scoped-queue'
 import { RunCoordinator } from '../feishu/run-coordinator'
-import {
-  createInitialState,
-  reduce as reduceRunState,
-  markInterrupted,
-  markError,
-  finalizeIfRunning,
-} from '../feishu/card-run-state'
+import { createInitialState } from '../feishu/card-run-state'
 import type { RunState } from '../feishu/card-run-state'
 import { CardStream } from '../feishu/card-stream'
 import { renderCard } from '../feishu/card-renderer'
@@ -22,44 +17,21 @@ import {
   buildGroupExtraBlock,
 } from '../feishu/prompt-builder'
 import type { BridgeContext, QuotedMessage } from '../feishu/prompt-builder'
+import { wrapLarkWsClient } from './lark-ws-client'
+import type {
+  FeishuApiError,
+  FeishuAttachmentClientLike,
+  FeishuChannelLike,
+  FeishuClientLike,
+  FeishuEventMessage,
+  FeishuEventSender,
+  FeishuMention,
+  FeishuWsClientLike,
+  LarkClientInstance,
+} from './lark-sdk-types'
 
 import { createLogger } from '../../logger'
 const log = createLogger('IM Bridge')
-
-interface FeishuMessageApi {
-  create: (input: { params?: Record<string, unknown>; data: Record<string, unknown> }) => Promise<any>
-  reply: (input: { path: Record<string, unknown>; data: Record<string, unknown> }) => Promise<any>
-  get: (input: { path: Record<string, unknown> }) => Promise<any>
-}
-
-interface FeishuClientLike {
-  request: (input: { method: string; url: string }) => Promise<any>
-  im: {
-    message: FeishuMessageApi
-    chat: {
-      create: (input: { data: Record<string, unknown>; params?: Record<string, unknown> }) => Promise<any>
-      update: (input: { path: Record<string, unknown>; data: Record<string, unknown> }) => Promise<any>
-    }
-  }
-}
-
-interface FeishuWsClientLike {
-  start: (input?: Record<string, unknown>) => Promise<void>
-  stop?: () => void
-}
-
-interface FeishuChannelLike {
-  rawClient: FeishuClientLike
-  connect: () => Promise<void>
-  disconnect?: () => Promise<void>
-  on: (handlers: {
-    message?: (message: Record<string, unknown>) => void | Promise<void>
-    reject?: (event: Record<string, unknown>) => void
-    error?: (error: unknown) => void
-    reconnecting?: () => void
-    reconnected?: () => void
-  }) => () => void
-}
 
 interface FeishuAdapterDeps {
   getConfig: () => FeishuBridgeConfig
@@ -77,31 +49,6 @@ interface FeishuAdapterDeps {
 interface AgentStreamEvent {
   type: 'text' | 'tool_start' | 'tool_result' | 'done' | 'error'
   [key: string]: unknown
-}
-
-interface FeishuMention {
-  key?: string
-  id?: string | { open_id?: string; union_id?: string; user_id?: string }
-  openId?: string
-  userId?: string
-  name?: string
-}
-
-interface FeishuEventMessage {
-  message_id: string
-  chat_id: string
-  chat_type?: string
-  message_type?: string
-  content?: unknown
-  mentions?: FeishuMention[]
-  parent_id?: string
-  root_id?: string
-}
-
-interface FeishuEventSender {
-  sender_id?: { open_id?: string; user_id?: string; union_id?: string }
-  type?: string
-  sender_type?: string
 }
 
 function parseMentionedOpenId(mention: FeishuMention): string | undefined {
@@ -142,12 +89,12 @@ function parseMessageText(messageType: string, rawContent: unknown): string {
   return ''
 }
 
-function getRecord(value: unknown): Record<string, any> | undefined {
-  return value && typeof value === 'object' ? value as Record<string, any> : undefined
+function getRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : undefined
 }
 
-function resolveEventEnvelope(payload: Record<string, any>): {
-  event: Record<string, any>
+function resolveEventEnvelope(payload: Record<string, unknown>): {
+  event: Record<string, unknown>
   message?: FeishuEventMessage
   sender?: FeishuEventSender
   eventId?: string
@@ -162,7 +109,7 @@ function resolveEventEnvelope(payload: Record<string, any>): {
   }
 }
 
-function normalizeChannelRawMessage(message: Record<string, unknown>): Record<string, any> {
+function normalizeChannelRawMessage(message: Record<string, unknown>): Record<string, unknown> {
   const raw = getRecord(message.raw)
   if (raw) return raw
 
@@ -265,11 +212,12 @@ class TripleDedup {
 
 export class FeishuAdapter extends BaseImAdapter {
   readonly channelType = 'feishu' as const
+  readonly capabilities: BridgeAdapterCapabilities = FEISHU_CAPABILITIES
   private client: FeishuClientLike | null = null
   private wsClient: FeishuWsClientLike | null = null
   private channel: FeishuChannelLike | null = null
   private channelUnsubscribe: (() => void) | null = null
-  private larkClient: InstanceType<typeof import('@larksuiteoapi/node-sdk').Client> | null = null
+  private larkClient: LarkClientInstance | null = null
   private botOpenId: string | null = null
   private readonly lastInboundMessageIdByChatId = new Map<string, string>()
   private readonly chatTypeByChatId = new Map<string, 'p2p' | 'group'>()
@@ -332,12 +280,12 @@ export class FeishuAdapter extends BaseImAdapter {
   }
 
   /** 获取原生 lark.Client 实例（用于 CardKit 2.0 API） */
-  private getLarkClient(): InstanceType<typeof import('@larksuiteoapi/node-sdk').Client> | null {
+  private getLarkClient(): LarkClientInstance | null {
     if (this.larkClient) return this.larkClient
     try {
-      const client = this.getOrCreateClient() as any
+      const client = this.getOrCreateClient()
       if (client?.cardkit) {
-        this.larkClient = client as InstanceType<typeof import('@larksuiteoapi/node-sdk').Client>
+        this.larkClient = client as unknown as LarkClientInstance
         return this.larkClient
       }
     } catch {
@@ -369,10 +317,7 @@ export class FeishuAdapter extends BaseImAdapter {
       appSecret: this.config.appSecret,
       loggerLevel: lark.LoggerLevel.warn,
     })
-    this.wsClient = {
-      start: async () => ws.start({ eventDispatcher }),
-      stop: () => (ws as any).stop?.(),
-    }
+    this.wsClient = wrapLarkWsClient(ws, eventDispatcher)
     return this.wsClient
   }
 
@@ -380,7 +325,7 @@ export class FeishuAdapter extends BaseImAdapter {
     if (this.channel) return this.channel
 
     const lark = require('@larksuiteoapi/node-sdk') as typeof import('@larksuiteoapi/node-sdk')
-    if (typeof (lark as any).createLarkChannel !== 'function') {
+    if (typeof lark.createLarkChannel !== 'function') {
       return {
         rawClient: this.getOrCreateClient(),
         connect: async () => this.getOrCreateWsClient().start(),
@@ -389,10 +334,10 @@ export class FeishuAdapter extends BaseImAdapter {
       }
     }
 
-    this.channel = (lark as any).createLarkChannel({
+    this.channel = lark.createLarkChannel({
       appId: this.config.appId,
       appSecret: this.config.appSecret,
-      domain: (lark as any).Domain?.Feishu,
+      domain: lark.Domain?.Feishu,
       loggerLevel: lark.LoggerLevel.warn,
       policy: {
         dmMode: 'open',
@@ -401,7 +346,7 @@ export class FeishuAdapter extends BaseImAdapter {
       },
       safety: { chatQueue: { enabled: false } },
       includeRawEvent: true,
-    }) as FeishuChannelLike
+    }) as unknown as FeishuChannelLike
     this.client = this.channel.rawClient
     return this.channel
   }
@@ -434,10 +379,9 @@ export class FeishuAdapter extends BaseImAdapter {
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
-      const status = (error as any)?.response?.status
-      const code = (error as any)?.response?.data?.code
-      const msg = (error as any)?.response?.data?.msg
-      log.error(`[IM Bridge][Feishu] 连接测试失败: status=${status}, code=${code}, msg=${msg}, appId=${this.config.appId.substring(0, 4)}***`)
+      const detail = (error as FeishuApiError)?.response
+      const { code, msg } = detail?.data ?? {}
+      log.error(`[IM Bridge][Feishu] 连接测试失败: status=${detail?.status}, code=${code}, msg=${msg}, appId=${this.config.appId.substring(0, 4)}***`)
       return {
         channel: 'feishu',
         success: false,
@@ -533,7 +477,7 @@ export class FeishuAdapter extends BaseImAdapter {
     return mentions.some((mention) => parseMentionedOpenId(mention) === this.botOpenId)
   }
 
-  async handleEventPayload(payload: Record<string, any>): Promise<void> {
+  async handleEventPayload(payload: Record<string, unknown>): Promise<void> {
     const { event, message, sender, eventId } = resolveEventEnvelope(payload)
     if (!message) return
 
@@ -543,7 +487,7 @@ export class FeishuAdapter extends BaseImAdapter {
     const chatId = String(message.chat_id ?? '')
     const chatType = message.chat_type === 'group' ? 'group' : 'p2p'
     const messageType = String(message.message_type ?? '')
-    const mentions = message.mentions as FeishuMention[] | undefined
+    const mentions = message.mentions
     const userId = String(sender?.sender_id?.open_id ?? 'unknown')
     const messageId = String(message.message_id ?? '')
 
@@ -568,8 +512,9 @@ export class FeishuAdapter extends BaseImAdapter {
       return
     }
 
-    const groupName = typeof (event as any)?.chat?.name === 'string'
-      ? (event as any).chat.name
+    const chatName = getRecord(event.chat)?.name
+    const groupName = typeof chatName === 'string'
+      ? chatName
       : (chatType === 'group' ? '飞书群聊' : '飞书私聊')
     this.displayNameByChatId.set(chatId, groupName)
 
@@ -668,7 +613,7 @@ export class FeishuAdapter extends BaseImAdapter {
       const client = this.getOrCreateClient()
       const response = await client.im.message.get({
         path: { message_id: messageId },
-      }) as { data?: { items?: Array<Record<string, any>> } }
+      })
 
       const msg = response?.data?.items?.[0]
       if (!msg) return undefined
@@ -855,7 +800,7 @@ export class FeishuAdapter extends BaseImAdapter {
   }
 
   async sendPermissionPrompt(input: BridgePermissionPromptMessage): Promise<void> {
-    await this.sendCard(input.chatId, buildErrorCard(`${input.promptText}\n\n当前飞书桥接暂不支持远程审批，请在桌面端继续处理。`))
+    await this.sendCard(input.chatId, buildErrorCard(`${input.promptText}\n\n${FEISHU_PERMISSION_DENIED_HINT}`))
   }
 
   async createChatWithUser(input: { userOpenId: string; name: string }): Promise<string> {
@@ -899,7 +844,7 @@ export class FeishuAdapter extends BaseImAdapter {
 
     const client = this.getOrCreateClient()
     return downloadFeishuAttachments({
-      client: client as any,
+      client: client as unknown as FeishuAttachmentClientLike,
       attachments,
       sessionId,
     })

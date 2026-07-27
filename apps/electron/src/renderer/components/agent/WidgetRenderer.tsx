@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   SessionPinnedWidget,
   WidgetDraftIntent,
@@ -87,6 +88,7 @@ function WidgetRendererInner({
   onDraftIntent,
   draftSource,
 }: WidgetRendererProps): React.ReactElement {
+  const { t } = useTranslation()
   const { openExternal, openUrlInSessionBrowser } = useSessionWebPreview(sessionId)
   const resolvedCacheKey = React.useMemo(
     () => cacheKey || getWidgetCacheKey(widgetCode),
@@ -142,7 +144,7 @@ function WidgetRendererInner({
       if (event.data.type === 'widget:error') {
         const message = typeof event.data.message === 'string' && event.data.message.trim()
           ? event.data.message.trim()
-          : 'Widget 渲染失败'
+          : t('agent.widget.renderFailed')
         heightLockedRef.current = false
         setFinalized(true)
         setWidgetError(message)
@@ -166,7 +168,7 @@ function WidgetRendererInner({
           void openUrlInSessionBrowser(href).catch(() => {
             void openExternal(href).catch((error) => {
               console.error('[WidgetRenderer] 打开 Widget 链接失败:', error)
-              toast.error('无法打开 Widget 链接')
+              toast.error(t('agent.widget.openLinkFailed'))
             })
           })
         }
@@ -183,7 +185,7 @@ function WidgetRendererInner({
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [draftSource, onDraftIntent, openExternal, openUrlInSessionBrowser, updateIframeHeight])
+  }, [draftSource, onDraftIntent, openExternal, openUrlInSessionBrowser, t, updateIframeHeight])
 
   const postWidgetMessage = React.useCallback((type: 'widget:update' | 'widget:finalize', html: string): void => {
     const contentWindow = iframeRef.current?.contentWindow
@@ -258,11 +260,11 @@ function WidgetRendererInner({
     if (iframeReady || widgetError) return
 
     const timer = window.setTimeout(() => {
-      setWidgetError('Widget 运行环境加载超时，请检查应用资源或重试')
+      setWidgetError(t('agent.widget.loadTimeout'))
     }, 10_000)
 
     return () => window.clearTimeout(timer)
-  }, [frameRevision, iframeReady, widgetError])
+  }, [frameRevision, iframeReady, t, widgetError])
 
   React.useEffect(() => {
     setIframeHeight(
@@ -302,14 +304,14 @@ function WidgetRendererInner({
         },
       })
       onPinned?.(pinnedWidget)
-      toast.success('已固定到右侧 Board')
+      toast.success(t('agent.widget.pinned'))
     } catch (error) {
       console.error('[WidgetRenderer] 固定 widget 失败:', error)
-      toast.error('固定 widget 失败')
+      toast.error(t('agent.widget.pinFailed'))
     } finally {
       setIsPinning(false)
     }
-  }, [canPin, onPinned, sessionId, sourceBlockKey, sourceMessageId, title, widgetCode])
+  }, [canPin, onPinned, sessionId, sourceBlockKey, sourceMessageId, t, title, widgetCode])
 
   const overlayVisible = !widgetError && (showOverlay || (hasCdnScript && !isStreaming && iframeReady && !finalized))
 
@@ -338,7 +340,7 @@ function WidgetRendererInner({
             <AlertTriangle className="size-5" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Widget 无法渲染</p>
+            <p className="text-sm font-medium text-foreground">{t('agent.widget.cannotRender')}</p>
             <p className="max-w-xl text-xs leading-5 text-muted-foreground">{widgetError}</p>
           </div>
           <button
@@ -347,7 +349,7 @@ function WidgetRendererInner({
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RotateCcw className="size-3.5" />
-            重试渲染
+            {t('agent.widget.retryRender')}
           </button>
         </div>
       )}
@@ -378,7 +380,7 @@ function WidgetRendererInner({
             className="inline-flex items-center gap-1 rounded-md border border-border/25 bg-background/80 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:cursor-wait disabled:opacity-60"
           >
             <Pin className="size-3.5" />
-            {isPinning ? '固定中…' : '固定'}
+            {isPinning ? t('agent.widget.pinning') : t('agent.widget.pin')}
           </button>
         )}
         <button
@@ -387,7 +389,7 @@ function WidgetRendererInner({
           className="inline-flex items-center gap-1 rounded-md border border-border/25 bg-background/80 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
         >
           <Code className="size-3.5" />
-          {showCode ? '隐藏代码' : '查看代码'}
+          {showCode ? t('agent.widget.hideCode') : t('agent.widget.showCode')}
         </button>
       </div>
     </div>

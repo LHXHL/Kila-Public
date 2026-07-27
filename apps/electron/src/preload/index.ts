@@ -7,6 +7,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS, CHANNEL_IPC_CHANNELS, AGENT_IPC_CHANNELS, SESSION_IPC_CHANNELS, SESSION_BOARD_IPC_CHANNELS, ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS, GITHUB_RELEASE_IPC_CHANNELS, PERSONALITY_IPC_CHANNELS, AGENT_TOOL_IPC_CHANNELS, FEISHU_BRIDGE_IPC_CHANNELS, IM_BRIDGE_IPC_CHANNELS, WECHAT_BRIDGE_IPC_CHANNELS, TOKEN_USAGE_IPC_CHANNELS, SCHEDULED_TASK_IPC_CHANNELS, SYSTEM_PROMPT_IPC_CHANNELS, CUA_DRIVER_IPC_CHANNELS, THEME_IPC_CHANNELS } from '@kila/shared/ipc'
+import type { IpcResult } from '@kila/shared/ipc'
 import { USER_PROFILE_IPC_CHANNELS, SETTINGS_IPC_CHANNELS, SETTINGS_TABS } from '../types'
 import type {
   RuntimeStatus,
@@ -470,19 +471,8 @@ export interface ElectronAPI extends RuntimePreloadApi, GitPreloadApi, Scheduled
   /** 删除长期记忆 */
   forgetMemory: (uri: string) => Promise<boolean>
 
-  /** 获取记忆调试状态 */
-  getMemoryDebug: (input?: { sessionId?: string; projectPath?: string }) => Promise<{
-    sessionId?: string
-    projectPath?: string
-    threadState: any
-    snapshot: any
-    runtimeEvents: any[]
-    lastWorkingMemoryFetchAt?: number
-    config: {
-      nowledgeEnabled: boolean
-      sessionContextEnabled: boolean
-    }
-  }>
+  /** 获取记忆调试状态（结构直接复用 IPC 契约，避免 Preload 与主进程各写一份） */
+  getMemoryDebug: (input?: { sessionId?: string; projectPath?: string }) => Promise<IpcResult<'memory:get-debug'>>
 
   /** 检测本地 Nowledge */
   detectLocalNowledge: () => Promise<{

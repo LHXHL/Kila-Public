@@ -11,6 +11,7 @@
 
 import * as React from 'react'
 import { useAtom, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { Activity, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -84,6 +85,7 @@ function buildPresetSearchText(preset: ChannelPreset): string {
 }
 
 export function ChannelSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const [channels, setChannels] = React.useState<Channel[]>([])
   const [dbPresets, setDbPresets] = React.useState<ChannelPreset[]>([])
   const [dbLoading, setDbLoading] = React.useState(true)
@@ -106,8 +108,8 @@ export function ChannelSettings(): React.ReactElement {
   const draftOriginChannelIdRef = React.useRef<string | null>(null)
 
   const confirmDiscardDraft = React.useCallback((): boolean => (
-    !formDirty || window.confirm('当前供应商配置尚未保存。放弃这些更改并继续？')
-  ), [formDirty])
+    !formDirty || window.confirm(t('settings.channel.discardConfirm'))
+  ), [formDirty, t])
 
   const handleFormDirtyChange = React.useCallback((dirty: boolean): void => {
     setFormDirty(dirty)
@@ -126,7 +128,7 @@ export function ChannelSettings(): React.ReactElement {
         const builtinIds = new Set(CHANNEL_PRESETS.map((p) => p.capabilityProviderId))
         const filtered = summaries
           .filter((s) => !builtinIds.has(s.id))
-          .map(dbSummaryToPreset)
+          .map((summary) => dbSummaryToPreset(summary, t))
         // 按字母排序
         filtered.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
         setDbPresets(filtered)
@@ -181,7 +183,7 @@ export function ChannelSettings(): React.ReactElement {
       return list
     } catch (error) {
       console.error('[供应商设置] 加载供应商列表失败:', error)
-      setLoadError(error instanceof Error ? error.message : '供应商列表加载失败')
+      setLoadError(error instanceof Error ? error.message : t('settings.channel.loadFailed'))
       return null
     } finally {
       setLoading(false)
@@ -243,7 +245,7 @@ export function ChannelSettings(): React.ReactElement {
 
   const handleDelete = async (channel: Channel): Promise<void> => {
     if (!confirmDiscardDraft()) return
-    if (!confirm(`确定删除供应商「${channel.name}」？此操作不可恢复。`)) return
+    if (!confirm(t('settings.channel.deleteConfirm', { name: channel.name }))) return
 
     try {
       await window.electronAPI.deleteChannel(channel.id)
@@ -256,7 +258,7 @@ export function ChannelSettings(): React.ReactElement {
       await syncDefaultSelection(updatedChannels)
     } catch (error) {
       console.error('[供应商设置] 删除供应商失败:', error)
-      toast.error('删除供应商失败')
+      toast.error(t('settings.channel.deleteFailed'))
     }
   }
 
@@ -271,7 +273,7 @@ export function ChannelSettings(): React.ReactElement {
       await syncDefaultSelection(updatedChannels)
     } catch (error) {
       console.error('[供应商设置] 切换供应商状态失败:', error)
-      toast.error('切换供应商状态失败')
+      toast.error(t('settings.channel.toggleFailed'))
     }
   }
 
@@ -290,7 +292,7 @@ export function ChannelSettings(): React.ReactElement {
         setDoctorResult({
           channelId: channel.id,
           ok: false,
-          lines: ['真实推理：失败 - 当前渠道没有启用模型，请先启用至少一个模型'],
+          lines: [t('settings.channel.doctorNoModel')],
         })
         return
       }
@@ -308,13 +310,13 @@ export function ChannelSettings(): React.ReactElement {
         apiKey,
       })
       const lines = [
-        `真实推理：${connection.success ? '通过' : '失败'} - ${connection.message}`,
-        `协议：${connection.resolvedApi ?? channel.apiType ?? '自动推断'}`,
-        `测试模型：${connection.modelId ?? testedModel.id}`,
-        `模型列表：${modelFetch.success ? '可达' : '失败'} - ${modelFetch.message}`,
-        `远端模型数：${modelFetch.models.length}`,
-        `本地启用模型：${enabledModels.length}/${channel.models.length}`,
-        `默认选择：${agentChannelId === channel.id ? (agentModelId || '未指定模型') : '不是当前默认渠道'}`,
+        t('settings.channel.doctorInference', { result: connection.success ? t('settings.channel.doctorPass') : t('settings.channel.doctorFail'), message: connection.message }),
+        t('settings.channel.doctorProtocol', { protocol: connection.resolvedApi ?? channel.apiType ?? t('settings.channel.doctorAutoInfer') }),
+        t('settings.channel.doctorTestModel', { model: connection.modelId ?? testedModel.id }),
+        t('settings.channel.doctorModelList', { result: modelFetch.success ? t('settings.channel.doctorReachable') : t('settings.channel.doctorFail'), message: modelFetch.message }),
+        t('settings.channel.doctorRemoteModels', { count: modelFetch.models.length }),
+        t('settings.channel.doctorLocalModels', { enabled: enabledModels.length, total: channel.models.length }),
+        t('settings.channel.doctorDefault', { value: agentChannelId === channel.id ? (agentModelId || t('settings.channel.doctorNoModelId')) : t('settings.channel.doctorNotDefault') }),
       ]
       setDoctorResult({
         channelId: channel.id,
@@ -412,8 +414,8 @@ export function ChannelSettings(): React.ReactElement {
   return (
     <div className="space-y-8">
       <SettingsSection
-        title="供应商管理"
-        description="管理 AI 供应商连接，配置 API Key 和可用模型。启用后的渠道会直接出现在会话输入框的模型选择器中。"
+        title={t('settings.channel.title')}
+        description={t('settings.channel.description')}
       >
         <div className="space-y-4">
           <div
@@ -425,8 +427,8 @@ export function ChannelSettings(): React.ReactElement {
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                aria-label="搜索供应商"
-                placeholder="搜索供应商..."
+                aria-label={t('settings.channel.searchPlaceholder')}
+                placeholder={t('settings.channel.searchPlaceholder')}
                 className="h-12 rounded-xl border-border/50 bg-background pl-12 text-sm shadow-none"
               />
             </div>
@@ -438,7 +440,7 @@ export function ChannelSettings(): React.ReactElement {
                 onClick={openBlankDraft}
               >
                 <Plus size={16} />
-                <span>添加供应商</span>
+                <span>{t('settings.channel.addProvider')}</span>
               </Button>
             </div>
           </div>
@@ -454,18 +456,18 @@ export function ChannelSettings(): React.ReactElement {
               <div data-slot="channel-list-scroll" className="flex-1 min-h-0">
                 {loading ? (
                   <div className="flex h-full items-center justify-center py-12 text-center text-sm text-muted-foreground">
-                    加载中...
+                    {t('common.loading')}
                   </div>
                 ) : loadError ? (
                   <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 px-4 py-12 text-center text-sm text-destructive">
                     <span>{loadError}</span>
                     <Button type="button" variant="outline" size="sm" onClick={() => { void loadChannels() }}>
-                      重试
+                      {t('settings.memory.retry')}
                     </Button>
                   </div>
                 ) : filteredEntries.length === 0 ? (
                   <div className="flex h-full items-center justify-center rounded-[20px] border border-dashed border-border/60 px-4 py-14 text-center text-sm text-muted-foreground">
-                    没有匹配的供应商。
+                    {t('settings.channel.noMatches')}
                   </div>
                 ) : (
                   <ScrollArea className="h-full pr-1">
@@ -544,17 +546,17 @@ export function ChannelSettings(): React.ReactElement {
                           </span>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {selectedPreset.description ?? (
-                            '已按预设填入推荐的供应商类型和 Base URL。补全 API Key 后保存，才会真正创建到你的供应商列表里。'
-                          )}
+                          {selectedPreset.descriptionKey
+                            ? t(selectedPreset.descriptionKey)
+                            : selectedPreset.description ?? t('settings.channel.presetHint')}
                         </div>
                       </div>
                     </div>
                   ) : isCreating ? (
                     <div className="flex items-start justify-between gap-4 pb-1">
                       <div className="space-y-2">
-                        <div className="text-[28px] font-semibold tracking-tight text-foreground">新建供应商</div>
-                        <div className="text-sm text-muted-foreground">按照参考布局在右侧直接完成连接、模型和启用状态配置。</div>
+                        <div className="text-[28px] font-semibold tracking-tight text-foreground">{t('settings.channel.newProvider')}</div>
+                        <div className="text-sm text-muted-foreground">{t('settings.channel.newProviderHint')}</div>
                       </div>
                     </div>
                   ) : selectedChannel ? (
@@ -585,7 +587,7 @@ export function ChannelSettings(): React.ReactElement {
                                     : 'bg-muted text-muted-foreground',
                                 )}
                               >
-                                {selectedChannel.enabled ? 'Active' : 'Inactive'}
+                                {selectedChannel.enabled ? t('settings.channel.statusActive') : t('settings.channel.statusInactive')}
                               </span>
                             </div>
                             <div className="truncate text-sm text-muted-foreground">
@@ -602,8 +604,8 @@ export function ChannelSettings(): React.ReactElement {
                           size="icon"
                           onClick={() => { void runProviderDoctor(selectedChannel) }}
                           className="h-11 w-11 rounded-xl border-border/50"
-                          title="诊断"
-                          aria-label={`诊断供应商 ${selectedChannel.name}`}
+                          title={t('settings.channel.doctor')}
+                          aria-label={t('settings.channel.doctorAria', { name: selectedChannel.name })}
                           disabled={doctorRunningId === selectedChannel.id}
                         >
                           {doctorRunningId === selectedChannel.id
@@ -616,8 +618,8 @@ export function ChannelSettings(): React.ReactElement {
                           size="icon"
                           onClick={() => { void handleDelete(selectedChannel) }}
                           className="h-11 w-11 rounded-xl border-border/50 text-destructive hover:text-destructive"
-                          title="删除"
-                          aria-label={`删除供应商 ${selectedChannel.name}`}
+                          title={t('common.delete')}
+                          aria-label={t('settings.channel.deleteAria', { name: selectedChannel.name })}
                         >
                           <Trash2 size={16} />
                         </Button>
@@ -625,16 +627,16 @@ export function ChannelSettings(): React.ReactElement {
                           <Switch
                             checked={selectedChannel.enabled}
                             onCheckedChange={() => { void handleToggle(selectedChannel) }}
-                            aria-label={`${selectedChannel.enabled ? '停用' : '启用'}供应商 ${selectedChannel.name}`}
+                            aria-label={selectedChannel.enabled ? t('settings.channel.disableAria', { name: selectedChannel.name }) : t('settings.channel.enableAria', { name: selectedChannel.name })}
                           />
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-[20px] border border-dashed border-border/60 px-6 text-center">
-                      <div className="text-sm font-medium text-foreground">选择一个供应商开始编辑</div>
+                      <div className="text-sm font-medium text-foreground">{t('settings.channel.emptySelection')}</div>
                       <div className="max-w-md text-sm text-muted-foreground">
-                        左侧列表负责切换，右侧详情区负责编辑；预设模板与已保存渠道共用同一层列表。
+                        {t('settings.channel.emptySelectionHint')}
                       </div>
                     </div>
                   )}
@@ -650,7 +652,7 @@ export function ChannelSettings(): React.ReactElement {
                         <Activity className="size-4" />
                         <span>Provider Doctor</span>
                         <EntityMetadataChip tone={doctorResult.ok ? 'success' : 'danger'}>
-                          {doctorResult.ok ? 'Healthy' : 'Issue'}
+                          {doctorResult.ok ? t('settings.channel.doctorHealthy') : t('settings.channel.doctorIssue')}
                         </EntityMetadataChip>
                       </div>
                       <div className="space-y-1 text-muted-foreground">
@@ -665,7 +667,7 @@ export function ChannelSettings(): React.ReactElement {
                     <>
                       {formDirty && (
                         <div role="status" className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                          有未保存的更改
+                          {t('settings.channel.unsavedChanges')}
                         </div>
                       )}
                       <ChannelForm
@@ -708,6 +710,7 @@ function ChannelListItem({
   statusTone,
   onSelect,
 }: ChannelListItemProps): React.ReactElement {
+  const { t } = useTranslation()
   return (
     <WorkspaceEntityRow
       selected={selected}
@@ -720,7 +723,7 @@ function ChannelListItem({
         />
       )}
       title={title}
-      description={statusTone === 'preset' ? '预设模板' : '已保存供应商'}
+      description={statusTone === 'preset' ? t('settings.channel.presetTemplate') : t('settings.channel.savedProvider')}
       metadata={badgeLabel ? (
         <EntityMetadataChip>
             {badgeLabel}
@@ -728,7 +731,7 @@ function ChannelListItem({
       ) : undefined}
       trailing={(
         <EntityMetadataChip tone={statusTone === 'active' ? 'accent' : 'neutral'}>
-          {statusTone === 'active' ? 'Active' : statusTone === 'preset' ? 'Preset' : 'Inactive'}
+          {statusTone === 'active' ? t('settings.channel.statusActive') : statusTone === 'preset' ? t('settings.channel.statusPreset') : t('settings.channel.statusInactive')}
         </EntityMetadataChip>
       )}
     />

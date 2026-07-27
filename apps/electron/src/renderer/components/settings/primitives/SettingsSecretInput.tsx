@@ -5,6 +5,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { LABEL_CLASS, DESCRIPTION_CLASS } from './SettingsUIConstants'
@@ -47,6 +48,7 @@ export function SettingsSecretInput({
   hasSavedValue,
   onReveal,
 }: SettingsSecretInputProps): React.ReactElement {
+  const { t } = useTranslation()
   const inputId = React.useId()
   const descriptionId = `${inputId}-description`
   const [visible, setVisible] = React.useState(false)
@@ -79,7 +81,7 @@ export function SettingsSecretInput({
         setRevealedValue(nextValue)
       } catch (error) {
         console.error('[SettingsSecretInput] 查看明文失败:', error)
-        setRevealError(error instanceof Error ? error.message : '查看明文失败，请重试')
+        setRevealError(error instanceof Error ? error.message : t('settings.secretInput.revealFailed'))
         return
       } finally {
         setRevealing(false)
@@ -87,7 +89,9 @@ export function SettingsSecretInput({
     }
 
     setVisible(true)
-  }, [disabled, onReveal, revealedValue, revealing, showsSavedSecret, visible])
+  }, [disabled, onReveal, revealedValue, revealing, showsSavedSecret, t, visible])
+
+  const toggleLabel = visible ? t('settings.secretInput.hide') : t('settings.secretInput.reveal')
 
   return (
     <div className="px-4 py-3 space-y-2">
@@ -115,18 +119,18 @@ export function SettingsSecretInput({
           disabled={disabled || revealing}
           onClick={() => void handleToggleVisibility()}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={visible ? '隐藏明文' : '查看明文'}
-          title={visible ? '隐藏明文' : '查看明文'}
+          aria-label={toggleLabel}
+          title={toggleLabel}
         >
           {revealing ? <Loader2 size={16} className="animate-spin" /> : visible ? <EyeOff size={16} /> : <Eye size={16} />}
-          <span className="sr-only">{visible ? '隐藏明文' : '查看明文'}</span>
+          <span className="sr-only">{toggleLabel}</span>
         </button>
       </div>
       {revealError && (
         <p id={`${inputId}-error`} role="alert" className="text-xs text-destructive">{revealError}</p>
       )}
       {hasSavedValue && (
-        <div className="text-xs text-muted-foreground">已保存</div>
+        <div className="text-xs text-muted-foreground">{t('settings.secretInput.saved')}</div>
       )}
     </div>
   )

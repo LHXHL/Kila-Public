@@ -1,0 +1,96 @@
+# CI — push / PR 触发，跑类型检查、测试、构建与规范闸门
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================
+  # 静态检查：类型 + Lint + 文件体积闸门
+  # ============================================
+  check:
+    name: 类型检查与规范闸门
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: 类型检查（全部 workspace）
+        run: bun run typecheck
+
+      - name: Lint（Biome）
+        run: bun run lint
+
+      - name: 文件体积闸门（800 行硬上限）
+        run: bun run check:file-size
+
+      - name: i18n 一致性闸门（中英 key 必须对齐）
+        run: bun run check:i18n
+
+  # ============================================
+  # 单元测试
+  # ============================================
+  test:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: 运行测试
+        run: bun test
+
+  # ============================================
+  # 构建冒烟：确认打包链路没断
+  # ============================================
+  build:
+    name: 构建冒烟
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build CLI resource
+        run: bun run --cwd apps/cli build
+
+      - name: Build（main + preload + renderer + external deps）
+        working-directory: apps/electron
+        run: |
+          bun run build:provider-db
+          bun run build:main
+          bun run build:preload
+          bun run build:renderer
+          bun run build:resources
+          bun run scripts/copy-external-deps.ts

@@ -15,6 +15,8 @@ export interface RichLinkPresentation {
   kind: RichLinkKind
   label: string
   meta: string | null
+  /** 需要本地化的 meta 文案 key；有值时由渲染层用 t() 解析，优先于 meta */
+  metaKey?: string
   isExternal: boolean
   isLocalFile: boolean
   filePath: string | null
@@ -199,7 +201,8 @@ export function createRichLinkPresentation(
     return {
       kind: getKindFromExtension(extension, 'local-file'),
       label: isMeaningfulLabel(text, href) ? text.trim() : getFileName(filePath),
-      meta: extension ? extension.toUpperCase() : '本地文件',
+      meta: extension ? extension.toUpperCase() : null,
+      metaKey: extension ? undefined : 'shell.richLink.localFile',
       isExternal: false,
       isLocalFile: true,
       filePath,
@@ -211,7 +214,8 @@ export function createRichLinkPresentation(
     return {
       kind: getKindFromExtension(extension, 'local-file'),
       label: isMeaningfulLabel(text, href) ? text.trim() : getFileName(href),
-      meta: extension ? extension.toUpperCase() : '本地文件',
+      meta: extension ? extension.toUpperCase() : null,
+      metaKey: extension ? undefined : 'shell.richLink.localFile',
       isExternal: false,
       isLocalFile: false,
       filePath: null,

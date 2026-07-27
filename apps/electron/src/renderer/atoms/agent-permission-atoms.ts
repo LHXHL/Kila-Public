@@ -1,14 +1,5 @@
 import { atom } from 'jotai'
 import type { AskUserRequest, PermissionRequest } from '@kila/shared'
-import { currentSessionIdAtom } from './session-atoms'
-
-type PermissionRequestsUpdate =
-  | readonly PermissionRequest[]
-  | ((prev: readonly PermissionRequest[]) => readonly PermissionRequest[])
-
-type AskUserRequestsUpdate =
-  | readonly AskUserRequest[]
-  | ((prev: readonly AskUserRequest[]) => readonly AskUserRequest[])
 
 function upsertSessionQueue<T extends { requestId: string }>(
   prev: Map<string, readonly T[]>,
@@ -86,50 +77,8 @@ export function countPendingRequests(
 /** 待处理的权限请求 Map — 以 sessionId 为 key，切换会话时保留状态 */
 export const allPendingPermissionRequestsAtom = atom<Map<string, readonly PermissionRequest[]>>(new Map())
 
-/** 当前会话的权限请求队列（派生读写原子） */
-export const pendingPermissionRequestsAtom = atom(
-  (get): readonly PermissionRequest[] => {
-    const currentId = get(currentSessionIdAtom)
-    if (!currentId) return []
-    return get(allPendingPermissionRequestsAtom).get(currentId) ?? []
-  },
-  (get, set, update: PermissionRequestsUpdate) => {
-    const currentId = get(currentSessionIdAtom)
-    if (!currentId) return
-    set(allPendingPermissionRequestsAtom, (prev) => {
-      const map = new Map(prev)
-      const current = map.get(currentId) ?? []
-      const nextValue = typeof update === 'function' ? update(current) : update
-      if (nextValue.length === 0) map.delete(currentId)
-      else map.set(currentId, nextValue)
-      return map
-    })
-  },
-)
-
 /** 待处理的 AskUser 请求 Map — 以 sessionId 为 key，切换会话时保留状态 */
 export const allPendingAskUserRequestsAtom = atom<Map<string, readonly AskUserRequest[]>>(new Map())
-
-/** 当前会话的 AskUser 请求队列（派生读写原子） */
-export const pendingAskUserRequestsAtom = atom(
-  (get): readonly AskUserRequest[] => {
-    const currentId = get(currentSessionIdAtom)
-    if (!currentId) return []
-    return get(allPendingAskUserRequestsAtom).get(currentId) ?? []
-  },
-  (get, set, update: AskUserRequestsUpdate) => {
-    const currentId = get(currentSessionIdAtom)
-    if (!currentId) return
-    set(allPendingAskUserRequestsAtom, (prev) => {
-      const map = new Map(prev)
-      const current = map.get(currentId) ?? []
-      const nextValue = typeof update === 'function' ? update(current) : update
-      if (nextValue.length === 0) map.delete(currentId)
-      else map.set(currentId, nextValue)
-      return map
-    })
-  },
-)
 
 export const totalPendingRequestsAtom = atom<number>((get) => {
   return countPendingRequests(

@@ -9,6 +9,7 @@
 
 import * as React from 'react'
 import { useAtom, useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { FolderOpen, GitBranch, Globe, Wrench } from 'lucide-react'
 import {
   tabsAtom,
@@ -24,20 +25,22 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { SplitModeToggle } from './SplitModeToggle'
 
+/** 与 SessionSidePanel 共用同一批文案 key，避免两处各写一份 */
 const TOOLBAR_SESSION_TOOLS: Array<{
   id: AgentSidePanelToolId
-  label: string
+  labelKey: string
   icon: React.ComponentType<{ className?: string }>
 }> = [
-  { id: 'files', label: '文件工作台', icon: FolderOpen },
-  { id: 'web', label: '网页预览', icon: Globe },
-  { id: 'tools', label: '工具调用', icon: Wrench },
-  { id: 'git', label: 'Git 状态', icon: GitBranch },
+  { id: 'files', labelKey: 'session.sidePanel.files', icon: FolderOpen },
+  { id: 'web', labelKey: 'session.sidePanel.web', icon: Globe },
+  { id: 'tools', labelKey: 'session.sidePanel.tools', icon: Wrench },
+  { id: 'git', labelKey: 'session.sidePanel.git', icon: GitBranch },
 ]
 
 const SIDEPANEL_CLOSE_ANIMATION_MS = 180
 
 export function WorkspaceToolbar(): React.ReactElement {
+  const { t } = useTranslation()
   const tabs = useAtomValue(tabsAtom)
   const activeTabId = useAtomValue(activeTabIdAtom)
   const [sidePanelActiveToolMap, setSidePanelActiveToolMap] = useAtom(agentSidePanelActiveToolMapAtom)
@@ -102,6 +105,7 @@ export function WorkspaceToolbar(): React.ReactElement {
         {TOOLBAR_SESSION_TOOLS.map((tool) => {
           const Icon = tool.icon
           const active = activeSidePanelToolId === tool.id
+          const label = t(tool.labelKey)
 
           return (
             <Tooltip key={tool.id}>
@@ -110,7 +114,7 @@ export function WorkspaceToolbar(): React.ReactElement {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label={tool.label}
+                  aria-label={label}
                   aria-pressed={active}
                   disabled={!activeSessionId}
                   className={cn(
@@ -125,7 +129,7 @@ export function WorkspaceToolbar(): React.ReactElement {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>{tool.label}</p>
+                <p>{label}</p>
               </TooltipContent>
             </Tooltip>
           )

@@ -10,6 +10,8 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 interface WeChatMediaServiceDeps {
   fetchImpl?: FetchLike
   maxBytes?: number
+  /** 动态上限：跟随 `wechat.maxInboundFileBytes` 配置变化，优先于静态 maxBytes */
+  getMaxBytes?: () => number
   allowedHosts?: string[]
 }
 
@@ -92,6 +94,11 @@ export class WeChatMediaService {
     this.allowedHosts = deps.allowedHosts ?? DEFAULT_ALLOWED_HOST_SUFFIXES
   }
 
+  private get effectiveMaxBytes(): number {
+    const configured = this.deps.getMaxBytes?.()
+    return typeof configured === 'number' && configured > 0 ? configured : this.maxBytes
+  }
+
   async downloadAttachments(attachments: BridgeAttachmentReference[], sessionId: string): Promise<FileAttachment[]> {
     const results: FileAttachment[] = []
     for (const attachment of attachments) {
@@ -113,13 +120,20 @@ export class WeChatMediaService {
 
     const url = new URL(urlValue)
     ensureAllowedHost(url, this.allowedHosts)
+    const maxBytes = this.effectiveMaxBytes
     const response = await this.fetchImpl(url)
     if (!response.ok) {
       throw new Error(`WeChat attachment download failed (${response.status})`)
     }
 
+    // 先看声明长度，避免超大文件整份进内存
+    const declared = Number(response.headers?.get?.('content-length') ?? '')
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      throw new Error(`WeChat attachment too large: ${attachment.filename}`)
+    }
+
     const raw = Buffer.from(await response.arrayBuffer())
-    if (raw.byteLength > this.maxBytes) {
+    if (raw.byteLength > maxBytes) {
       throw new Error(`WeChat attachment too large: ${attachment.filename}`)
     }
 

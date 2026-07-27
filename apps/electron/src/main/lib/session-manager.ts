@@ -11,6 +11,7 @@ import {
   openSync,
   readFileSync,
   readSync,
+  readdirSync,
   rmSync,
   statSync,
   unlinkSync,
@@ -35,12 +36,21 @@ import {
 import { cleanupSessionProject, createSessionProjectFromPath, createTempSessionProject } from './session-project-manager'
 import { cleanupSessionBoard } from './session-board-manager'
 import { markSessionSearchIndexDirty } from './session-search-dirty'
-import { getSettings, updateSettings } from './settings-service'
+import { getSettings, isSettingsDegraded, updateSettings } from './settings-service'
 import { appendTextDurably, readJsonWithBackup, writeTextAtomic, writeTextAtomicWithBackup } from './safe-json-file'
+import { createDegradedConfigRegistry, degradeCorruptConfig } from './config-file-guard'
 
 
 import { createLogger } from './logger'
 const log = createLogger('Session 管理')
+
+/**
+ * 索引降级只读登记表。
+ *
+ * sessions.json 主备双双解析失败时，内存里只有一个空列表；此时任何 writeIndex
+ * 都会把空列表连同 .bak 一起写死，销毁唯一恢复源。登记后本进程拒绝所有覆盖写。
+ */
+const degradedIndexes = createDegradedConfigRegistry()
 
 interface SessionsIndex {
   version: number
@@ -124,6 +134,7 @@ function ensureSessionsDir(dir: string): void {
 
 function readIndex(deps?: SessionManagerDeps): SessionsIndex {
   const { indexPath } = resolvePaths(deps?.paths)
+  // 文件不存在是可信的首次运行，允许后续写入；「存在但读不出来」才是不可信状态。
   if (!existsSync(indexPath)) {
     return { version: INDEX_VERSION, sessions: [] }
   }
@@ -131,21 +142,29 @@ function readIndex(deps?: SessionManagerDeps): SessionsIndex {
   try {
     return readJsonWithBackup(indexPath, (raw) => {
       const parsed = JSON.parse(raw) as SessionsIndex
+      if (!Array.isArray(parsed.sessions)) {
+        throw new Error('sessions 字段缺失或不是数组')
+      }
       return {
         version: parsed.version ?? INDEX_VERSION,
-        sessions: Array.isArray(parsed.sessions)
-          ? parsed.sessions.map((session) => normalizeSessionMeta(session))
-          : [],
+        sessions: parsed.sessions.map((session) => normalizeSessionMeta(session)),
       }
     })
   } catch (error) {
-    log.error('[Session 管理] 读取索引失败:', error)
+    degradeCorruptConfig(degradedIndexes, { filePath: indexPath, label: '会话索引', error })
     return { version: INDEX_VERSION, sessions: [] }
   }
 }
 
 function writeIndex(index: SessionsIndex, deps?: SessionManagerDeps): void {
   const { indexPath } = resolvePaths(deps?.paths)
+  const degradedReason = degradedIndexes.getDegradedReason(indexPath)
+  if (degradedReason) {
+    // 内存里的索引是兜底空值，写回等于永久删除全部会话元数据，必须显式失败。
+    log.error(`[Session 管理] 索引处于降级只读模式，已拒绝写入: ${degradedReason}`)
+    throw new Error(`会话索引处于降级只读模式，已拒绝写入以避免会话丢失（${degradedReason}）`)
+  }
+
   writeTextAtomicWithBackup(indexPath, JSON.stringify(index, null, 2))
   invalidateCache()
 }
@@ -561,13 +580,51 @@ export function saveSessionMessages(id: string, messages: SessionMessage[], deps
   if (!deps?.paths) markSessionSearchIndexDirty(id)
 }
 
+/**
+ * 判断磁盘上是否已经存在统一 Session 数据。
+ *
+ * 只要索引文件存在，或 sessions/ 目录里还有任何文件，就说明这是老用户而非首装。
+ * 注意 getSessionsDir() 会自动创建空目录，所以目录存在本身不能作为判据。
+ */
+function hasExistingUnifiedSessionData(): boolean {
+  const { indexPath, sessionsDir } = resolvePaths()
+
+  if (existsSync(indexPath)) return true
+  if (!existsSync(sessionsDir)) return false
+
+  try {
+    return readdirSync(sessionsDir).length > 0
+  } catch (error) {
+    // 目录存在却读不出来时按「有数据」处理：宁可不清理，也不能误删。
+    log.error('[Session 管理] 扫描 Session 目录失败，按已有数据处理:', error)
+    return true
+  }
+}
+
 export function bootstrapUnifiedSessions(): void {
   const settings = getSettings()
   if (settings.unifiedSessionsBootstrapped && settings.sessionProjectModelBootstrapped) {
     return
   }
 
-  // 清理旧数据（仅首次运行时执行）
+  // 护栏一：设置文件不可信时，bootstrapped 标志同样不可信，绝不执行破坏性清理。
+  if (isSettingsDegraded()) {
+    log.error('[Session 管理] 应用设置处于降级状态，已跳过首次引导的数据清理')
+    return
+  }
+
+  // 护栏二：磁盘上已有 Session 数据说明是老用户，只补标志，不清理任何目录。
+  if (hasExistingUnifiedSessionData()) {
+    log.warn('[Session 管理] 检测到已有 Session 数据，跳过首次引导清理并直接标记为已引导')
+    updateSettings({
+      unifiedSessionsBootstrapped: true,
+      sessionProjectModelBootstrapped: true,
+    })
+    markSessionSearchIndexDirty()
+    return
+  }
+
+  // 清理旧数据（仅确认首次运行时执行）
   const projectModelTargets = [
     resolvePaths().indexPath,
     resolvePaths().sessionsDir,
@@ -577,6 +634,7 @@ export function bootstrapUnifiedSessions(): void {
 
   for (const target of projectModelTargets) {
     if (!existsSync(target)) continue
+    log.warn(`[Session 管理] 首次引导清理旧数据: ${target}`)
     rmSync(target, { recursive: true, force: true })
   }
 

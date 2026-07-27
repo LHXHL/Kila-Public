@@ -79,6 +79,9 @@ import {
   validateSessionSearchInput,
 } from './validation'
 
+import { createLogger } from '../lib/logger'
+
+const log = createLogger('Session IPC')
 export function registerSessionHandlers(): void {
   handle(
     SESSION_IPC_CHANNELS.LIST_SESSIONS,
@@ -152,7 +155,7 @@ export function registerSessionHandlers(): void {
           ensureSessionProjectReady(session.project)
           watchableSessions.push(session)
         } catch (error) {
-          console.warn(
+          log.warn(
             `[Session 项目监听] Session ${sessionId} 的项目不可用:`,
             error
           )
@@ -294,7 +297,7 @@ export function registerSessionHandlers(): void {
 
       // 桌面 IPC 只确认请求已通过预检并启动；完整运行结果继续由流事件交付。
       void sendSessionMessage(validatedInput, event.sender).catch((error) => {
-        console.error('[Session IPC] Agent 运行失败:', error)
+        log.error('[Session IPC] Agent 运行失败:', error)
         if (!event.sender.isDestroyed()) {
           event.sender.send(SESSION_IPC_CHANNELS.STREAM_ERROR, {
             sessionId,

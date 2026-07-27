@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { HighlightToken } from '@kila/core'
 import { cn } from '@/lib/utils'
 import { useCodeTokens } from './use-code-tokens'
@@ -39,8 +40,9 @@ export const CodeViewer = React.memo(function CodeViewer({
   code,
   language,
   className,
-  ariaLabel = '代码内容',
+  ariaLabel,
 }: CodeViewerProps): React.ReactElement {
+  const { t } = useTranslation()
   const normalizedCode = code.replace(/\n$/, '')
   const lines = React.useMemo(() => normalizedCode.split('\n'), [normalizedCode])
   const [lineWindow, setLineWindow] = React.useState(() => ({
@@ -85,7 +87,7 @@ export const CodeViewer = React.memo(function CodeViewer({
         'h-full min-h-0 overflow-auto bg-code-surface shadow-[inset_0_1px_0_hsl(var(--foreground)/0.035)]',
         className,
       )}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t('fileBrowser.codeViewer.label')}
     >
       <pre className="m-0 min-w-max py-3 font-mono text-[12px] leading-[1.7] text-foreground/90">
         <code className="block">

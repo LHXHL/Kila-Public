@@ -1,0 +1,82 @@
+{
+  "fileBrowser": {
+    "tree": {
+      "label": "项目文件",
+      "loading": "正在加载目录...",
+      "refreshing": "正在刷新目录...",
+      "empty": "目录为空",
+      "emptyFolder": "空文件夹",
+      "loadFailed": "加载失败",
+      "childLoadFailed": "子目录加载失败",
+      "retry": "重试"
+    },
+    "toolbar": {
+      "openInFileManager": "在文件管理器中打开",
+      "openProjectInFileManager": "在文件管理器中打开项目目录",
+      "refresh": "刷新文件树"
+    },
+    "contextMenu": {
+      "moreActions": "更多操作：{{name}}",
+      "showInFolder": "在文件夹中显示",
+      "move": "移动到...",
+      "moveSelected_one": "移动选中 ({{count}})",
+      "moveSelected_other": "移动选中 ({{count}})",
+      "rename": "重命名",
+      "delete": "删除",
+      "deleteSelected_one": "删除选中 ({{count}})",
+      "deleteSelected_other": "删除选中 ({{count}})"
+    },
+    "rename": {
+      "duplicate": "同名文件已存在",
+      "failed": "重命名失败"
+    },
+    "delete": {
+      "title": "确认删除",
+      "confirmMany_one": "确定要删除选中的 <b>{{count}}</b> 个项目吗？",
+      "confirmMany_other": "确定要删除选中的 <b>{{count}}</b> 个项目吗？",
+      "confirmOne": "确定要删除 <b>{{name}}</b> 吗？",
+      "includesChildren": "（包含所有子文件）",
+      "irreversible": "此操作不可撤销。"
+    },
+    "dropZone": {
+      "hint": "拖拽文件到此处",
+      "description": "当前会话项目文件夹内可访问",
+      "selectTooltip": "添加文件到当前会话项目文件夹",
+      "attachTooltip": "切换当前会话的项目文件夹",
+      "selectFiles": "选择文件",
+      "attachFolder": "附加文件夹",
+      "reading": "正在读取 {{completed}}/{{total}}",
+      "saving_one": "正在保存 {{count}} 个文件…",
+      "saving_other": "正在保存 {{count}} 个文件…",
+      "uploaded_one": "已添加 {{count}} 个文件",
+      "uploaded_other": "已添加 {{count}} 个文件",
+      "uploadFailed": "文件上传失败",
+      "folderUnsupported": "不支持拖拽文件夹",
+      "folderUnsupportedHint": "请使用「附加文件夹」按钮"
+    },
+    "mention": {
+      "noMatch": "无匹配文件"
+    },
+    "preview": {
+      "selectTitle": "选择一个文件",
+      "selectDescription": "在文件标签中点击任意文件，这里会显示内联预览。",
+      "loading": "正在加载预览...",
+      "unavailableTitle": "预览不可用",
+      "unavailableDescription": "当前文件尚未加载到预览面板。",
+      "failedTitle": "预览失败",
+      "failedDescription": "读取文件预览时发生错误。",
+      "loadFailed": "预览加载失败",
+      "retry": "重试",
+      "openInWindow": "在独立窗口打开",
+      "openFileInWindow": "在独立窗口打开 {{name}}",
+      "tooLargeTitle": "文件过大",
+      "tooLargeDescription": "当前文件超过了内联预览大小限制。",
+      "unsupportedTitle": "暂不支持内联预览",
+      "unsupportedDescription": "可以点击右上角按钮，在独立窗口中继续查看。",
+      "codeContent": "{{path}} 代码内容"
+    },
+    "codeViewer": {
+      "label": "代码内容"
+    }
+  }
+}

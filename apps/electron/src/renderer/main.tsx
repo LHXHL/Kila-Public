@@ -6,6 +6,7 @@
 
 import React, { useEffect, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
+import { useTranslation } from 'react-i18next'
 import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import App from './App'
 import {
@@ -339,6 +340,7 @@ function MainWindowBridgeInitializer(): null {
  * 订阅 agent-tools.json 文件变更通知，自动刷新工具列表。
  */
 function AgentToolInitializer(): null {
+  const { t } = useTranslation()
   const setAgentTools = useSetAtom(agentToolsAtom)
 
   useEffect(() => {
@@ -353,12 +355,12 @@ function AgentToolInitializer(): null {
       window.electronAPI.getAgentTools()
         .then((tools) => {
           setAgentTools(tools)
-          toast.success('Agent 工具已更新')
+          toast.success(t('shell.agentToolsUpdated'))
         })
         .catch((err: unknown) => console.error('[AgentToolInitializer] 刷新工具列表失败:', err))
     })
     return cleanup
-  }, [setAgentTools])
+  }, [setAgentTools, t])
 
   return null
 }

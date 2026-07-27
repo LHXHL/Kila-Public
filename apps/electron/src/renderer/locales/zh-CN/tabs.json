@@ -1,0 +1,34 @@
+{
+  "tabs": {
+    "home": {
+      "greeting": "{{greeting}}，{{name}}",
+      "defaultName": "你",
+      "openSessionHint": "打开一个会话开始工作。",
+      "lunarDate": "农历 {{date}}",
+      "locationUnset": "位置待补充",
+      "localTimeZone": "本地时区"
+    },
+    "greeting": {
+      "lateNight": "夜深了",
+      "morning": "早上好",
+      "midday": "中午好",
+      "afternoon": "下午好",
+      "evening": "晚上好"
+    },
+    "splitMode": {
+      "label": "分屏模式",
+      "single": "单面板",
+      "horizontal2": "左右分屏",
+      "vertical2": "上下分屏",
+      "grid4": "四格分屏"
+    },
+    "panel": {
+      "label": "工作区 {{index}}",
+      "labelFocused": "工作区 {{index}}，当前焦点",
+      "empty": "从侧边栏选择一个会话"
+    },
+    "content": {
+      "missingTab": "标签页不存在"
+    }
+  }
+}

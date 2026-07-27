@@ -1,10 +1,30 @@
 import { randomUUID } from 'node:crypto'
+import {
+  asRecord,
+  CATEGORY_TO_UNIT_TYPE,
+  categoryFromUnitType,
+  createNowledgeRequestError,
+  normalizeCategory,
+  normalizeText,
+  NowledgeRequestError,
+  parseConnectionItems,
+  parseHealthVersion,
+  parseThreadFetchResult,
+  parseThreadSearchResults,
+  parseTimelineEvents,
+  parseWorkingMemoryPayload,
+  pickListPayload,
+  toFiniteNumber,
+  toOptionalTimestamp,
+  toStringArray,
+  toTimestamp,
+} from './nowledge-payload'
 import type { MemoryProvider } from './provider'
 import { memoryStateStore, type MemoryStateStore } from './state-store'
+import { patchMarkdownSection } from './working-memory-patch'
 import type {
   MemoryConnectionsInput,
   MemoryConnectionsResult,
-  MemoryCategory,
   MemoryEditInput,
   MemoryEntry,
   MemoryListInput,
@@ -38,6 +58,21 @@ interface NowledgeMemoryProviderDeps {
 
 const MIN_THREAD_SYNC_TIMEOUT_MS = 30_000
 
+/**
+ * 幂等读请求的重试次数。
+ *
+ * Kila 是本地优先应用但记忆依赖 Nowledge 本地服务：读路径偶发超时（服务刚启动、
+ * 正在重建索引）时重试一次能显著降低「记忆突然为空」的体感。
+ * 写入侧保持快速失败，避免重复落库。
+ */
+const READ_RETRIES = 1
+
+/** 读请求重试的退避基数，按尝试次数线性放大 */
+const RETRY_BACKOFF_MS = 300
+
+/** 记忆列表响应的包装字段（不同 Nowledge 版本命名不一致） */
+const MEMORY_LIST_KEYS = ['memories', 'items', 'results'] as const
+
 interface NormalizedMemoryRecord {
   id: string
   title: string
@@ -46,141 +81,8 @@ interface NormalizedMemoryRecord {
   sourceThreadId?: string
 }
 
-type NowledgeUnitType = 'fact' | 'preference' | 'decision' | 'plan' | 'procedure' | 'learning' | 'context' | 'event'
-
-const CATEGORY_TO_UNIT_TYPE: Record<MemoryCategory, NowledgeUnitType> = {
-  general: 'context',
-  decision: 'decision',
-  preference: 'preference',
-  fact: 'fact',
-  task: 'plan',
-  insight: 'learning',
-}
-
-const UNIT_TYPE_TO_CATEGORY: Record<NowledgeUnitType, MemoryCategory> = {
-  fact: 'fact',
-  preference: 'preference',
-  decision: 'decision',
-  plan: 'task',
-  procedure: 'task',
-  learning: 'insight',
-  context: 'general',
-  event: 'general',
-}
-
-function normalizeText(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  return trimmed ? trimmed : undefined
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value
-    .map((item) => normalizeText(item))
-    .filter((item): item is string => Boolean(item))
-}
-
-function toFiniteNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function toOptionalTimestamp(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value)
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return undefined
-}
-
-function normalizeCategory(value: unknown): MemoryCategory | undefined {
-  return value === 'general'
-    || value === 'decision'
-    || value === 'preference'
-    || value === 'fact'
-    || value === 'task'
-    || value === 'insight'
-    ? value
-    : undefined
-}
-
-function categoryFromUnitType(value: unknown): MemoryCategory {
-  const unitType = normalizeText(value) as NowledgeUnitType | undefined
-  return unitType && UNIT_TYPE_TO_CATEGORY[unitType]
-    ? UNIT_TYPE_TO_CATEGORY[unitType]
-    : 'general'
-}
-
-interface NowledgeErrorPayload {
-  detail: string
-  requestId?: string
-}
-
-type NowledgeRequestErrorCode = 'remote_embedding_auth_failed' | 'local_auth_failed' | 'request_failed'
-
-class NowledgeRequestError extends Error {
-  constructor(
-    readonly code: NowledgeRequestErrorCode,
-    readonly status: number,
-    message: string,
-    readonly requestId?: string,
-  ) {
-    super(message)
-    this.name = 'NowledgeRequestError'
-  }
-}
-
-function parseNowledgeErrorPayload(responseText: string): NowledgeErrorPayload {
-  let detail = responseText.trim()
-
-  try {
-    const payload = asRecord(JSON.parse(detail))
-    detail = normalizeText(payload?.detail)
-      ?? normalizeText(payload?.message)
-      ?? detail
-  } catch {
-    // 非 JSON 响应保留原始文本，避免掩盖 Nowledge 返回的诊断信息。
-  }
-
-  const requestId = detail.match(/["']request_id["']\s*:\s*["']([^"']+)["']/i)?.[1]
-  return { detail, requestId }
-}
-
-function createNowledgeRequestError(status: number, responseText: string): Error {
-  const { detail, requestId } = parseNowledgeErrorPayload(responseText)
-  const normalizedDetail = detail.toLowerCase()
-  const requestSuffix = requestId ? `（request_id: ${requestId}）` : ''
-  const embeddingAuthFailed = normalizedDetail.includes('remote embedding failed')
-    && (normalizedDetail.includes('401 unauthorized') || normalizedDetail.includes('authentication failed'))
-
-  if (embeddingAuthFailed) {
-    const providerName = normalizedDetail.includes('modelscope') ? 'ModelScope' : '远程 Embedding 服务'
-    const credentialName = providerName === 'ModelScope' ? 'ModelScope Token' : 'Embedding 凭证'
-    return new NowledgeRequestError(
-      'remote_embedding_auth_failed',
-      status,
-      `Nowledge 本地服务连接正常，但 ${providerName} 认证失败。请在 Nowledge Mem 中更新有效的 ${credentialName}，重启 Nowledge Mem 后重试。${requestSuffix}`,
-      requestId,
-    )
-  }
-
-  if (status === 401 || status === 403) {
-    return new NowledgeRequestError(
-      'local_auth_failed',
-      status,
-      `Kila 无法通过 Nowledge 本地 API 认证。请重新执行“自动检测并启用”，同步最新的本地 API Key。${requestSuffix}`,
-      requestId,
-    )
-  }
-
-  return new NowledgeRequestError('request_failed', status, `Nowledge request failed: ${status} ${detail}`, requestId)
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export class NowledgeMemoryProvider implements MemoryProvider {
@@ -200,12 +102,8 @@ export class NowledgeMemoryProvider implements MemoryProvider {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.request('/health', { method: 'GET', timeoutMs: 5_000 })
-      this.backendVersion = typeof response?.version === 'string'
-        ? response.version
-        : typeof response?.server_version === 'string'
-          ? response.server_version
-          : this.backendVersion
+      const response = await this.requestRead('/health', { timeoutMs: 5_000 })
+      this.backendVersion = parseHealthVersion(response) ?? this.backendVersion
       return true
     } catch {
       return false
@@ -217,7 +115,8 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     return {
       mode: 'nowledge',
       activeProvider: 'nowledge',
-      localReady: true,
+      // 本地 Markdown 存储已移除：这两个字段只为兼容既有状态类型保留，恒为不可用。
+      localReady: false,
       memoryDirectory: '',
       nowledgeEnabled: true,
       nowledgeConfigured: true,
@@ -229,22 +128,16 @@ export class NowledgeMemoryProvider implements MemoryProvider {
   }
 
   async search(input: MemorySearchInput): Promise<MemorySearchResult[]> {
+    // 语义上是读操作，只是 Nowledge 用 POST 传查询体，因此同样允许一次重试。
     const response = await this.request('/memories/search', {
       method: 'POST',
+      retries: READ_RETRIES,
       body: {
         query: input.query,
         limit: input.limit,
       },
     })
-    const responseRecord = asRecord(response)
-    const items = Array.isArray(response)
-      ? response
-      : Array.isArray(responseRecord?.memories)
-        ? responseRecord.memories
-        : Array.isArray(responseRecord?.results)
-          ? responseRecord.results
-          : []
-    return items
+    return pickListPayload(response, MEMORY_LIST_KEYS)
       .map((item): MemorySearchResult | null => {
         const result = asRecord(item)
         if (!result) return null
@@ -264,13 +157,13 @@ export class NowledgeMemoryProvider implements MemoryProvider {
           matchedSnippet: normalizeText(result.snippet),
         }
       })
-      .filter((item: MemorySearchResult | null): item is MemorySearchResult => Boolean(item))
+      .filter((item): item is MemorySearchResult => item !== null)
   }
 
   async read(uri: string): Promise<MemoryEntry | null> {
     const id = this.idFromUri(uri)
     if (!id) return null
-    const response = await this.request(`/memories/${encodeURIComponent(id)}`, { method: 'GET' })
+    const response = await this.requestRead(`/memories/${encodeURIComponent(id)}`)
     return this.toMemoryEntryFromResponse(response)
   }
 
@@ -340,18 +233,10 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     const params = new URLSearchParams()
     if (typeof input.limit === 'number') params.set('limit', String(input.limit))
     if (typeof input.offset === 'number') params.set('offset', String(input.offset))
-    const response = await this.request(`/memories${params.size ? `?${params.toString()}` : ''}`, { method: 'GET' })
-    const responseRecord = asRecord(response)
-    const items = Array.isArray(response)
-      ? response
-      : Array.isArray(responseRecord?.memories)
-        ? responseRecord.memories
-        : Array.isArray(responseRecord?.items)
-          ? responseRecord.items
-          : []
-    return items
+    const response = await this.requestRead(`/memories${params.size ? `?${params.toString()}` : ''}`)
+    return pickListPayload(response, MEMORY_LIST_KEYS)
       .map((item) => this.toMemoryEntry(item))
-      .filter((item: MemoryEntry | null): item is MemoryEntry => Boolean(item))
+      .filter((item): item is MemoryEntry => item !== null)
   }
 
   async captureThread(input: MemoryThreadCaptureInput): Promise<void> {
@@ -362,13 +247,13 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     if (input.scope === 'project') return null
     const params = new URLSearchParams()
     params.set('date', new Date().toISOString().slice(0, 10))
-    const response = await this.request(`/agent/working-memory?${params.toString()}`, { method: 'GET' })
-    const payload = response.working_memory ?? response.workingMemory ?? response
-    if (!payload || typeof payload.content !== 'string') return null
+    const response = await this.requestRead(`/agent/working-memory?${params.toString()}`)
+    const payload = parseWorkingMemoryPayload(response)
+    if (payload.content === undefined) return null
     return {
       scope: 'global',
       content: payload.content,
-      updatedAt: this.toTimestamp(payload.updated_at ?? payload.updatedAt),
+      updatedAt: payload.updatedAt,
     }
   }
 
@@ -387,21 +272,20 @@ export class NowledgeMemoryProvider implements MemoryProvider {
         content: input.content,
       },
     })
-    const payload = response.working_memory ?? response.workingMemory ?? response
+    const payload = parseWorkingMemoryPayload(response)
     return {
       scope: 'global',
-      content: typeof payload.content === 'string' ? payload.content : input.content,
-      updatedAt: this.toTimestamp(payload.updated_at ?? payload.updatedAt),
+      content: payload.content ?? input.content,
+      updatedAt: payload.updatedAt,
     }
   }
 
   async patchWorkingMemory(input: WorkingMemoryPatchInput): Promise<WorkingMemory> {
     const current = await this.getWorkingMemory(input)
-    const nextContent = this.patchWorkingMemorySection(current?.content ?? '', input.heading, input)
     return this.setWorkingMemory({
       scope: input.scope,
       projectPath: input.projectPath,
-      content: nextContent,
+      content: patchMarkdownSection(current?.content ?? '', input.heading, input),
     })
   }
 
@@ -413,22 +297,8 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     })
     if (input.source) params.set('source', input.source)
 
-    const response = await this.request(`/threads/search?${params.toString()}`, { method: 'GET' })
-    const items = Array.isArray(response.threads) ? response.threads : []
-    return items.map((item: any) => ({
-      threadId: String(item.thread_id ?? item.id ?? ''),
-      title: String(item.title ?? '(untitled thread)'),
-      source: normalizeText(item.source),
-      messageCount: Number(item.message_count ?? 0),
-      lastActivity: typeof item.last_activity === 'string' ? item.last_activity : undefined,
-      relevanceScore: Number(item.relevance_score ?? 0),
-      matchedMessages: Array.isArray(item.matched_messages)
-        ? item.matched_messages.slice(0, 3).map((message: any) => ({
-          role: String(message.role ?? 'unknown'),
-          snippet: String(message.snippet ?? '').trim(),
-        }))
-        : [],
-    })).filter((item: MemoryThreadSearchResult) => Boolean(item.threadId))
+    const response = await this.requestRead(`/threads/search?${params.toString()}`)
+    return parseThreadSearchResults(response)
   }
 
   async fetchThread(input: MemoryThreadFetchInput): Promise<MemoryThreadFetchResult | null> {
@@ -436,20 +306,8 @@ export class NowledgeMemoryProvider implements MemoryProvider {
       limit: String(Math.min(Math.max(input.limit ?? 50, 1), 200)),
     })
     if ((input.offset ?? 0) > 0) params.set('offset', String(input.offset))
-    const response = await this.request(`/threads/${encodeURIComponent(input.threadId)}?${params.toString()}`, { method: 'GET' })
-    return {
-      threadId: String(response.thread_id ?? response.id ?? input.threadId),
-      title: String(response.title ?? '(untitled)'),
-      source: normalizeText(response.source),
-      messageCount: Number(response.message_count ?? response.total_messages ?? 0),
-      messages: Array.isArray(response.messages)
-        ? response.messages.map((message: any) => ({
-          role: String(message.role ?? 'unknown'),
-          content: String(message.content ?? ''),
-          timestamp: message.timestamp ?? message.created_at ?? null,
-        }))
-        : [],
-    }
+    const response = await this.requestRead(`/threads/${encodeURIComponent(input.threadId)}?${params.toString()}`)
+    return parseThreadFetchResult(response, input.threadId)
   }
 
   async deleteThread(threadId: string, options?: { cascadeDeleteMemories?: boolean }): Promise<boolean> {
@@ -476,19 +334,8 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     if (input.dateTo) params.set('date_to', input.dateTo)
     if (input.tier1Only === false) params.set('tier1_only', 'false')
 
-    const response = await this.request(`/agent/feed/events?${params.toString()}`, { method: 'GET' })
-    const items = Array.isArray(response) ? response : Array.isArray(response.events) ? response.events : []
-    return items.map((item: any) => ({
-      id: normalizeText(item.id),
-      eventType: String(item.event_type ?? item.type ?? 'unknown'),
-      createdAt: String(item.created_at ?? item.timestamp ?? new Date().toISOString()),
-      title: normalizeText(item.title),
-      description: normalizeText(item.description ?? item.summary ?? item.detail),
-      memoryId: normalizeText(item.memory_id),
-      relatedMemoryIds: Array.isArray(item.related_memory_ids)
-        ? item.related_memory_ids.map((value: unknown) => String(value ?? '')).filter(Boolean)
-        : [],
-    }))
+    const response = await this.requestRead(`/agent/feed/events?${params.toString()}`)
+    return parseTimelineEvents(response)
   }
 
   async getConnections(input: MemoryConnectionsInput): Promise<MemoryConnectionsResult | null> {
@@ -499,35 +346,10 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     }
     if (!memoryId) return null
 
-    const response = await this.request(`/graph/expand/${encodeURIComponent(memoryId)}?depth=1&limit=20`, { method: 'GET' })
-    const neighbors = Array.isArray(response.neighbors) ? response.neighbors : []
-    const edges = Array.isArray(response.edges) ? response.edges : []
-    const nodeMap = new Map<string, any>()
-    for (const node of neighbors) {
-      const id = String(node.id ?? '')
-      if (id) nodeMap.set(id, node)
-    }
-
-    const items = edges.flatMap((edge: any) => {
-      const source = String(edge.source ?? '')
-      const target = String(edge.target ?? '')
-      const neighborId = source === memoryId ? target : source
-      const node = nodeMap.get(neighborId)
-      if (!node) return []
-      return [{
-        nodeId: neighborId,
-        nodeType: String(node.node_type ?? node.type ?? 'unknown'),
-        title: String(node.title ?? node.name ?? node.label ?? neighborId),
-        snippet: normalizeText(node.content ?? node.snippet),
-        edgeType: String(edge.edge_type ?? edge.type ?? 'RELATED'),
-        relation: normalizeText(edge.metadata?.relation_type ?? edge.content_relation),
-        weight: typeof edge.weight === 'number' ? edge.weight : typeof edge.relevance_score === 'number' ? edge.relevance_score : undefined,
-      }]
-    })
-
+    const response = await this.requestRead(`/graph/expand/${encodeURIComponent(memoryId)}?depth=1&limit=20`)
     return {
       targetMemoryId: memoryId,
-      items,
+      items: parseConnectionItems(response, memoryId),
     }
   }
 
@@ -641,17 +463,9 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     writeId: string,
     startedAt: number,
   ): Promise<MemoryEntry | null> {
-    const response = await this.request('/memories?limit=100&offset=0', { method: 'GET' })
-    const responseRecord = asRecord(response)
-    const items = Array.isArray(response)
-      ? response
-      : Array.isArray(responseRecord?.memories)
-        ? responseRecord.memories
-        : Array.isArray(responseRecord?.items)
-          ? responseRecord.items
-          : []
+    const response = await this.requestRead('/memories?limit=100&offset=0')
 
-    for (const item of items) {
+    for (const item of pickListPayload(response, MEMORY_LIST_KEYS)) {
       const record = asRecord(item)
       const rawMemory = asRecord(record?.memory) ?? record
       const metadata = asRecord(rawMemory?.metadata)
@@ -715,8 +529,8 @@ export class NowledgeMemoryProvider implements MemoryProvider {
         ?? record.source_thread_id,
       ),
       projectPath: normalizeText(metadata?.kila_project_path ?? record.projectPath),
-      createdAt: this.toTimestamp(record.createdAt ?? record.created_at ?? record.time),
-      updatedAt: this.toTimestamp(record.updatedAt ?? record.updated_at ?? record.time),
+      createdAt: toTimestamp(record.createdAt ?? record.created_at ?? record.time),
+      updatedAt: toTimestamp(record.updatedAt ?? record.updated_at ?? record.time),
     }
   }
 
@@ -742,49 +556,9 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     }
   }
 
-  private patchWorkingMemorySection(currentContent: string, heading: string, input: Pick<WorkingMemoryPatchInput, 'content' | 'append'>): string {
-    const trimmedHeading = heading.trim()
-    if (!currentContent.trim()) {
-      return `${trimmedHeading}\n${(input.append ?? input.content ?? '').trim()}`.trim()
-    }
-
-    const lines = currentContent.split('\n')
-    const headingLc = trimmedHeading.toLowerCase()
-    let startIndex = -1
-    for (let index = 0; index < lines.length; index += 1) {
-      if (lines[index]!.trim().toLowerCase() === headingLc) {
-        startIndex = index
-        break
-      }
-    }
-
-    if (startIndex < 0) {
-      return `${currentContent.trimEnd()}\n\n${trimmedHeading}\n${(input.append ?? input.content ?? '').trim()}`.trim()
-    }
-
-    let endIndex = lines.length
-    for (let index = startIndex + 1; index < lines.length; index += 1) {
-      if (/^#{1,6}\s/.test(lines[index]!)) {
-        endIndex = index
-        break
-      }
-    }
-
-    const existingBody = lines.slice(startIndex + 1, endIndex).join('\n').trimEnd()
-    const nextBody = typeof input.append === 'string'
-      ? [existingBody, input.append.trim()].filter(Boolean).join('\n')
-      : (input.content ?? '').trim()
-
-    return [
-      ...lines.slice(0, startIndex),
-      lines[startIndex]!,
-      nextBody,
-      ...lines.slice(endIndex),
-    ].join('\n').trim()
-  }
-
-  private toTimestamp(value: unknown): number {
-    return toOptionalTimestamp(value) ?? Date.now()
+  /** 幂等读请求：超时时允许一次带退避的重试 */
+  private requestRead(pathname: string, options: { timeoutMs?: number } = {}): Promise<unknown> {
+    return this.request(pathname, { method: 'GET', timeoutMs: options.timeoutMs, retries: READ_RETRIES })
   }
 
   private async request(pathname: string, options: {
@@ -792,7 +566,7 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     body?: Record<string, unknown>
     timeoutMs?: number
     retries?: number
-  }): Promise<any> {
+  }): Promise<unknown> {
     const timeoutMs = options.timeoutMs ?? this.options.timeoutMs
     const retries = options.retries ?? 0
 
@@ -824,13 +598,12 @@ export class NowledgeMemoryProvider implements MemoryProvider {
         if (response.status === 204) return {}
         return await response.json()
       } catch (error) {
-        if (this.isAbortError(error)) {
-          if (attempt < retries) {
-            continue
-          }
+        if (!this.isAbortError(error)) throw error
+        if (attempt >= retries) {
           throw new Error(`Nowledge request timed out after ${timeoutMs}ms: ${pathname}`)
         }
-        throw error
+        // 只对幂等读路径重试；线性退避避免刚启动的 Nowledge 被连续打爆。
+        await delay(RETRY_BACKOFF_MS * (attempt + 1))
       } finally {
         clearTimeout(timeout)
       }

@@ -7,6 +7,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -44,6 +45,7 @@ export function ToolSelectorPopover({
   disabled = false,
   readOnlyBuiltinTools = false,
 }: ToolSelectorPopoverProps = {}): React.ReactElement {
+  const { t } = useTranslation()
   const tools = useAtomValue(agentToolsAtom)
   const setAgentTools = useSetAtom(agentToolsAtom)
   const hasActiveTools = useAtomValue(hasActiveToolsAtom)
@@ -56,8 +58,8 @@ export function ToolSelectorPopover({
       setAgentTools(updated)
     } catch (err) {
       console.error('[ToolSelectorPopover] 切换工具失败:', err)
-      toast.error('工具状态更新失败', {
-        description: err instanceof Error ? err.message : '请重试',
+      toast.error(t('tools.toggleFailed'), {
+        description: err instanceof Error ? err.message : t('common.pleaseRetry'),
       })
     }
   }
@@ -77,7 +79,7 @@ export function ToolSelectorPopover({
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="工具"
+          aria-label={t('tools.tools')}
           disabled={disabled}
           className={cn(
             buttonClassName ?? 'size-[30px] rounded-lg',
@@ -120,6 +122,7 @@ function ToolSelectorContent({
   toggleTool,
   goToToolSettings,
 }: ToolSelectorContentProps): React.ReactElement {
+  const { t } = useTranslation()
   const [capabilities, setCapabilities] = React.useState<WorkspaceCapabilities | null>(null)
   const [capabilitiesLoading, setCapabilitiesLoading] = React.useState(true)
   const [capabilitiesError, setCapabilitiesError] = React.useState<string | null>(null)
@@ -139,13 +142,13 @@ function ToolSelectorContent({
       .catch((error) => {
         if (cancelled) return
         console.error('[ToolSelectorPopover] 加载会话能力失败:', error)
-        setCapabilitiesError(error instanceof Error ? error.message : '能力列表加载失败')
+        setCapabilitiesError(error instanceof Error ? error.message : t('tools.capabilitiesLoadFailed'))
         setCapabilitiesLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [retryVersion])
+  }, [retryVersion, t])
 
   const enabledMcp = React.useMemo(
     () => capabilities?.mcpServers.filter((server) => server.enabled) ?? [],
@@ -156,10 +159,10 @@ function ToolSelectorContent({
     <div className="space-y-3 p-4">
       <section className="space-y-1">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Built-in Tools
+          {t('tools.builtinTools')}
         </div>
         {tools.length === 0 ? (
-          <p className="py-2 text-xs text-muted-foreground">加载中...</p>
+          <p className="py-2 text-xs text-muted-foreground">{t('common.loading')}</p>
         ) : (
           <div className="space-y-1">
             {tools.map((tool) => {
@@ -180,7 +183,7 @@ function ToolSelectorContent({
                     </span>
                     {!tool.available && (
                       <span className="shrink-0 text-[10px] text-muted-foreground">
-                        需配置
+                        {t('tools.needsConfig')}
                       </span>
                     )}
                   </div>
@@ -199,19 +202,19 @@ function ToolSelectorContent({
 
       <section className="space-y-2 border-t border-border/50 pt-3">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Enabled MCP
+          {t('tools.enabledMcp')}
         </div>
         {capabilitiesLoading ? (
-          <p role="status" className="text-xs text-muted-foreground">正在加载 MCP…</p>
+          <p role="status" className="text-xs text-muted-foreground">{t('tools.loadingMcp')}</p>
         ) : capabilitiesError ? (
           <div role="alert" className="space-y-1 text-xs text-destructive">
             <p>{capabilitiesError}</p>
-            <button type="button" className="text-primary hover:underline" onClick={() => setRetryVersion((value) => value + 1)}>重试</button>
+            <button type="button" className="text-primary hover:underline" onClick={() => setRetryVersion((value) => value + 1)}>{t('common.retry')}</button>
           </div>
         ) : (
           <CapabilityBadgeList
             items={enabledMcp.map((server) => server.name)}
-            emptyText="当前没有启用的 MCP"
+            emptyText={t('tools.noMcp')}
           />
         )}
       </section>
@@ -225,7 +228,7 @@ function ToolSelectorContent({
         className="flex w-full items-center gap-1.5 border-t border-border/50 pt-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <Settings className="size-3" />
-        <span>管理工具</span>
+        <span>{t('tools.manageTools')}</span>
       </button>
     </div>
   )

@@ -6,7 +6,6 @@
  */
 
 export * from './agent-stream-atoms'
-export * from './agent-team-atoms'
 export * from './agent-permission-atoms'
 export * from './agent-context-atoms'
 export * from './agent-ui-atoms'

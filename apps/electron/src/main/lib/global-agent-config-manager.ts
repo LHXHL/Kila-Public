@@ -5,7 +5,7 @@
  * ~/.kila/global-agent/
  */
 
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -19,7 +19,6 @@ import type {
   GlobalSkillEntrySource,
   SkillMeta,
   WorkspaceCapabilities,
-  WorkspaceMcpConfig,
 } from '@kila/shared'
 import { parseGlobalSkillMentionId } from '@kila/shared'
 import {
@@ -30,19 +29,27 @@ import {
   getCodexPluginsDir,
   getCodexSkillsDir,
   getGlobalAgentInactiveSkillsDir,
-  getGlobalAgentMcpPath,
   getGlobalAgentSkillsDir,
-  getGlobalAgentStatePath,
 } from './config-paths'
 import { syncMissingSkillDirectories } from './skill-sync'
+import { writeTextAtomic } from './safe-json-file'
+import {
+  getGlobalAgentMcpConfig,
+  mutateGlobalAgentMcpConfig,
+  readGlobalAgentState,
+  writeGlobalAgentState,
+} from './global-agent-config-store'
 
 
 import { createLogger } from './logger'
 const log = createLogger('全局 Agent 配置')
 
-interface GlobalAgentState {
-  deletedSkillSlugs?: string[]
-}
+// MCP 配置与全局状态的持久化统一由 global-agent-config-store 承担（原子写 + 降级只读 + 写入互斥）
+export {
+  getGlobalAgentMcpConfig,
+  mutateGlobalAgentMcpConfig,
+  saveGlobalAgentMcpConfig,
+} from './global-agent-config-store'
 
 interface GlobalSkillSourceLock {
   version: 1
@@ -416,25 +423,6 @@ export function syncBuiltinSkillsToGlobalAgent(): void {
   }
 }
 
-function readGlobalAgentState(): GlobalAgentState {
-  const configPath = getGlobalAgentStatePath()
-
-  if (!existsSync(configPath)) {
-    return {}
-  }
-
-  try {
-    const raw = readFileSync(configPath, 'utf-8')
-    return JSON.parse(raw) as GlobalAgentState
-  } catch {
-    return {}
-  }
-}
-
-function writeGlobalAgentState(state: GlobalAgentState): void {
-  writeFileSync(getGlobalAgentStatePath(), JSON.stringify(state, null, 2), 'utf-8')
-}
-
 function getDeletedSkillSlugs(): Set<string> {
   return new Set(readGlobalAgentState().deletedSkillSlugs ?? [])
 }
@@ -453,27 +441,6 @@ function setDeletedSkillSlug(skillSlug: string, deleted: boolean): void {
     ...current,
     deletedSkillSlugs: Array.from(deletedSkillSlugs).sort(),
   })
-}
-
-export function getGlobalAgentMcpConfig(): WorkspaceMcpConfig {
-  const mcpPath = getGlobalAgentMcpPath()
-
-  if (!existsSync(mcpPath)) {
-    return { servers: {} }
-  }
-
-  try {
-    const raw = readFileSync(mcpPath, 'utf-8')
-    const parsed = JSON.parse(raw) as Partial<WorkspaceMcpConfig>
-    return { servers: parsed.servers ?? {} }
-  } catch (error) {
-    log.error('[全局 Agent 配置] 读取 MCP 配置失败:', error)
-    return { servers: {} }
-  }
-}
-
-export function saveGlobalAgentMcpConfig(config: WorkspaceMcpConfig): void {
-  writeFileSync(getGlobalAgentMcpPath(), JSON.stringify(config, null, 2), 'utf-8')
 }
 
 export function getGlobalAgentSkills(): SkillMeta[] {
@@ -573,10 +540,7 @@ function installSkillDirectory(input: GlobalSkillInstallInput, existingInstalled
   const slug = deriveSkillSlug(safeInput.repoUrl, safeInput.subdir, safeInput.slug)
   const targetPath = join(getGlobalAgentSkillsDir(), slug)
   const inactivePath = join(getGlobalAgentInactiveSkillsDir(), slug)
-  rmSync(targetPath, { recursive: true, force: true })
-  rmSync(inactivePath, { recursive: true, force: true })
-  cpSync(sourceDir, targetPath, { recursive: true, force: false })
-  rmSync(join(targetPath, '.git'), { recursive: true, force: true })
+  const stagingPath = `${targetPath}.new`
 
   const now = Date.now()
   const lock: GlobalSkillSourceLock = {
@@ -587,7 +551,24 @@ function installSkillDirectory(input: GlobalSkillInstallInput, existingInstalled
     installedAt: existingInstalledAt ?? now,
     updatedAt: now,
   }
-  writeFileSync(join(targetPath, SKILL_SOURCE_LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`, 'utf-8')
+
+  // 先把完整内容准备到同分区的暂存目录，复制中途失败时旧版本仍然完好可用。
+  rmSync(stagingPath, { recursive: true, force: true })
+  try {
+    cpSync(sourceDir, stagingPath, { recursive: true, force: false })
+    rmSync(join(stagingPath, '.git'), { recursive: true, force: true })
+    writeTextAtomic(join(stagingPath, SKILL_SOURCE_LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`)
+  } catch (error) {
+    rmSync(stagingPath, { recursive: true, force: true })
+    rmSync(tempDir, { recursive: true, force: true })
+    log.error(`[全局 Agent 配置] 安装 Skill 失败，已保留原有版本: ${slug}`, error)
+    throw error
+  }
+
+  // 暂存目录就绪后才替换旧版本，尽量缩短「旧版已删、新版未就位」的窗口。
+  rmSync(targetPath, { recursive: true, force: true })
+  rmSync(inactivePath, { recursive: true, force: true })
+  renameSync(stagingPath, targetPath)
   rmSync(tempDir, { recursive: true, force: true })
   setDeletedSkillSlug(slug, false)
 
@@ -684,24 +665,24 @@ export function toggleGlobalAgentMcpServer(
   serverName: string,
   enabled: boolean,
 ): { name: string; enabled: boolean; type: WorkspaceCapabilities['mcpServers'][number]['type'] } {
-  const config = getGlobalAgentMcpConfig()
-  const current = config.servers?.[serverName]
+  const current = getGlobalAgentMcpConfig().servers?.[serverName]
 
   if (!current) {
     throw new Error(`MCP server 不存在: ${serverName}`)
   }
 
   if (current.enabled !== enabled) {
-    saveGlobalAgentMcpConfig({
+    // 读-改-写必须在同一临界区内完成，否则会整段覆盖并发写入的其他服务器改动。
+    mutateGlobalAgentMcpConfig((config) => ({
       ...config,
       servers: {
         ...config.servers,
         [serverName]: {
-          ...current,
+          ...(config.servers?.[serverName] ?? current),
           enabled,
         },
       },
-    })
+    }))
   }
 
   return {

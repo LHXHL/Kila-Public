@@ -6,7 +6,6 @@
  */
 
 import { normalizeAgentToolName, type AgentEvent, type AgentEventUsage, type RetryAttempt } from '@kila/shared'
-import { currentSessionIdAtom } from './session-atoms'
 
 /** processEvents 最大保留条数（超出时裁剪旧事件） */
 const MAX_PROCESS_EVENTS = 500
@@ -115,6 +114,8 @@ export interface AgentStreamState {
   contextWindow?: number
   /** 是否正在压缩上下文 */
   isCompacting?: boolean
+  /** 摘要生成的重试进度；压缩期间没有它，界面会静默十几秒 */
+  summarizationRetry?: { attempt: number; delaySeconds?: number }
   /** 流式开始时间戳（用于思考计时持久化） */
   startedAt?: number
   /** 重试状态（扩展版） */
@@ -895,22 +896,17 @@ export function applyAgentEvent(prev: AgentStreamState, event: AgentEvent): Agen
       }
     }
 
-    case 'shell_killed':
-    case 'tool_use_summary':
-      return prev
-
     case 'complete': {
       const prevUsage = prev.cumulativeUsage
-      const eventUsage = event.usage
-      const nextCumulativeUsage = eventUsage
+      const nextCumulativeUsage = event.usage
         ? {
-            inputTokens: (prevUsage?.inputTokens ?? 0) + (eventUsage.inputTokens ?? 0),
-            outputTokens: (prevUsage?.outputTokens ?? 0) + (eventUsage.outputTokens ?? 0),
-            cacheReadTokens: (prevUsage?.cacheReadTokens ?? 0) + (eventUsage.cacheReadTokens ?? 0),
-            cacheCreationTokens: (prevUsage?.cacheCreationTokens ?? 0) + (eventUsage.cacheCreationTokens ?? 0),
-            costUsd: (prevUsage?.costUsd ?? 0) + (eventUsage.costUsd ?? 0),
-            contextInputTokens: eventUsage.contextInputTokens ?? prevUsage?.contextInputTokens,
-            contextWindow: eventUsage.contextWindow ?? prevUsage?.contextWindow,
+            inputTokens: (prevUsage?.inputTokens ?? 0) + (event.usage.inputTokens ?? 0),
+            outputTokens: (prevUsage?.outputTokens ?? 0) + (event.usage.outputTokens ?? 0),
+            cacheReadTokens: (prevUsage?.cacheReadTokens ?? 0) + (event.usage.cacheReadTokens ?? 0),
+            cacheCreationTokens: (prevUsage?.cacheCreationTokens ?? 0) + (event.usage.cacheCreationTokens ?? 0),
+            costUsd: (prevUsage?.costUsd ?? 0) + (event.usage.costUsd ?? 0),
+            contextInputTokens: event.usage.contextInputTokens ?? prevUsage?.contextInputTokens,
+            contextWindow: event.usage.contextWindow ?? prevUsage?.contextWindow,
           }
         : prevUsage
 
@@ -918,39 +914,39 @@ export function applyAgentEvent(prev: AgentStreamState, event: AgentEvent): Agen
         ...prev,
         retrying: undefined,
         isCompacting: false,
+        summarizationRetry: undefined,
         cumulativeUsage: nextCumulativeUsage,
       }
     }
 
+    // 终态收敛：typed_error / error 语义一致，压缩与摘要重试提示都必须清干净
     case 'typed_error':
-      return {
-        ...prev,
-        running: false,
-        isCompacting: false,
-        retrying: prev.retrying?.failed ? prev.retrying : undefined,
-      }
-
     case 'error':
       return {
         ...prev,
         running: false,
         isCompacting: false,
+        summarizationRetry: undefined,
         retrying: prev.retrying?.failed ? prev.retrying : undefined,
       }
 
     case 'usage_update':
-      return {
-        ...prev,
-        inputTokens: event.usage.inputTokens,
-        ...(event.usage.contextWindow && { contextWindow: event.usage.contextWindow }),
-      }
+      return { ...prev, inputTokens: event.usage.inputTokens, ...(event.usage.contextWindow && { contextWindow: event.usage.contextWindow }) }
 
     case 'compacting':
       return { ...prev, isCompacting: true }
 
     case 'compact_complete':
     case 'compact_noop':
-      return { ...prev, isCompacting: false }
+      return { ...prev, isCompacting: false, summarizationRetry: undefined }
+
+    // Pi 摘要重试：scheduled/start 保持压缩态并给出可见进度，finished 只收掉进度条
+    case 'summarization_retry':
+      return {
+        ...prev,
+        isCompacting: event.phase !== 'finished' || Boolean(prev.isCompacting),
+        summarizationRetry: event.phase === 'finished' ? undefined : { attempt: event.attempt, delaySeconds: event.delaySeconds },
+      }
 
     case 'model_resolved':
       return { ...prev, model: event.model }
@@ -1006,6 +1002,8 @@ export function applyAgentEvent(prev: AgentStreamState, event: AgentEvent): Agen
       }
     }
 
+    case 'shell_killed':
+    case 'tool_use_summary':
     case 'permission_request':
     case 'permission_resolved':
     case 'ask_user_request':
@@ -1017,6 +1015,3 @@ export function applyAgentEvent(prev: AgentStreamState, event: AgentEvent): Agen
       return prev
   }
 }
-
-// 重新导出 currentSessionIdAtom 供本模块使用（atom 文件需要）
-export { currentSessionIdAtom }

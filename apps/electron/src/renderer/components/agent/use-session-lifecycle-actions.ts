@@ -8,6 +8,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { sessionMessageToLegacyAgentMessage, type AgentMessage, type ThinkingLevel } from '@kila/shared'
 import { tabsAtom, splitLayoutAtom, openTab } from '@/atoms/tab-atoms'
@@ -33,6 +34,7 @@ interface SessionLifecycleActions {
 }
 
 export function useSessionLifecycleActions(deps: UseSessionLifecycleActionsDeps): SessionLifecycleActions {
+  const { t } = useTranslation()
   const {
     sessionId,
     currentSelection,
@@ -63,16 +65,16 @@ export function useSessionLifecycleActions(deps: UseSessionLifecycleActionsDeps)
       setMessages(retained
         .map(sessionMessageToLegacyAgentMessage)
         .filter((message): message is AgentMessage => message !== null))
-      toast.success('会话已回退', {
-        description: '后续消息已移除；如需保留另一条路线，请先使用“分叉会话”',
+      toast.success(t('agent.session.rewound'), {
+        description: t('agent.session.rewoundDescription'),
       })
     } catch (error) {
       console.error('[AgentView] 回退会话失败:', error)
-      toast.error(error instanceof Error ? error.message : '回退会话失败')
+      toast.error(error instanceof Error ? error.message : t('agent.session.rewindFailed'))
     } finally {
       setRewindTargetMessageId(null)
     }
-  }, [rewindTargetMessageId, sessionId, setMessages, setRewindTargetMessageId])
+  }, [rewindTargetMessageId, sessionId, setMessages, setRewindTargetMessageId, t])
 
   const handleBranchFromMessage = React.useCallback((messageId: string): void => {
     window.electronAPI.branchSessionFromMessage({
@@ -85,14 +87,14 @@ export function useSessionLifecycleActions(deps: UseSessionLifecycleActionsDeps)
       setTabs(result.tabs)
       setLayout(result.layout)
       setCurrentSessionId(meta.id)
-      toast.success('已创建分叉会话', {
-        description: `${meta.title} 已打开；项目、模型和能力配置已继承`,
+      toast.success(t('agent.session.branched'), {
+        description: t('agent.session.branchedDescription', { title: meta.title }),
       })
     }).catch((error) => {
       console.error('[AgentView] 创建分叉会话失败:', error)
-      toast.error(error instanceof Error ? error.message : '创建分叉会话失败')
+      toast.error(error instanceof Error ? error.message : t('agent.session.branchFailed'))
     })
-  }, [layout, sessionId, setCurrentSessionId, setLayout, setSessions, setTabs, tabs])
+  }, [layout, sessionId, setCurrentSessionId, setLayout, setSessions, setTabs, t, tabs])
 
   const handleRetryInNewSession = React.useCallback(async (): Promise<void> => {
     if (!currentSelection.channelId) return
@@ -115,7 +117,7 @@ export function useSessionLifecycleActions(deps: UseSessionLifecycleActionsDeps)
       setCurrentSessionId(meta.id)
 
       // 发送引用旧会话的默认提示词
-      const prompt = `上个会话的 id 是 ${sessionId}，可以参考同项目目录下的会话继续完成工作`
+      const prompt = t('agent.session.retryNewSessionPrompt', { sessionId })
 
       // 初始化新会话流式状态
       setStreamingStates((prev) => {
@@ -144,7 +146,7 @@ export function useSessionLifecycleActions(deps: UseSessionLifecycleActionsDeps)
     } catch (error) {
       console.error('[AgentView] 在新会话中重试失败:', error)
     }
-  }, [sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, historyTurns, thinkingLevel, projectPath, tabs, layout, setCurrentSessionId, setSessions, setTabs, setLayout, setStreamingStates])
+  }, [sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, historyTurns, thinkingLevel, projectPath, tabs, layout, setCurrentSessionId, setSessions, setTabs, setLayout, setStreamingStates, t])
 
   return { handleConfirmRewind, handleBranchFromMessage, handleRetryInNewSession }
 }

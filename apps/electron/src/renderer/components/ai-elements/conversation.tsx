@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { ArrowDownIcon } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { StickToBottom, useStickToBottomContext } from 'use-stick-to-bottom'
 
 // ===== Conversation 根容器 =====
@@ -57,12 +58,16 @@ export interface ConversationEmptyStateProps extends ComponentProps<'div'> {
 
 export function ConversationEmptyState({
   className,
-  title = '暂无消息',
-  description = '在下方输入框开始session',
+  title,
+  description,
   icon,
   children,
   ...props
 }: ConversationEmptyStateProps): React.ReactElement {
+  const { t } = useTranslation()
+  const resolvedTitle = title ?? t('shell.conversation.emptyTitle')
+  const resolvedDescription = description ?? t('shell.conversation.emptyDescription')
+
   return (
     <div
       className={cn(
@@ -75,9 +80,9 @@ export function ConversationEmptyState({
         <>
           {icon && <div className="text-muted-foreground">{icon}</div>}
           <div className="space-y-1">
-            <h3 className="font-medium text-sm">{title}</h3>
-            {description && (
-              <p className="text-muted-foreground text-sm">{description}</p>
+            <h3 className="font-medium text-sm">{resolvedTitle}</h3>
+            {resolvedDescription && (
+              <p className="text-muted-foreground text-sm">{resolvedDescription}</p>
             )}
           </div>
         </>

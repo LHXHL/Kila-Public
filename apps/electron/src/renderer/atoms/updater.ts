@@ -25,11 +25,6 @@ export const hasUpdateAtom = atom((get) => {
   return status === 'available'
 })
 
-/** updater 是否可用 */
-export const updaterAvailableAtom = atom<boolean>(() => {
-  return !!window.electronAPI?.updater
-})
-
 /**
  * 初始化更新状态订阅
  *
@@ -53,9 +48,4 @@ export function initializeUpdater(
   // 订阅状态变化
   const cleanup = updater.onStatusChanged(setStatus)
   return cleanup
-}
-
-/** 手动检查更新 */
-export async function checkForUpdates(): Promise<void> {
-  await window.electronAPI?.updater?.checkForUpdates()
 }

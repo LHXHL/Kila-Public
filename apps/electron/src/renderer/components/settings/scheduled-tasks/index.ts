@@ -1,5 +1,7 @@
 export * from './ScheduledTaskEditorDialog'
 export * from './ScheduledTaskList'
+export * from './ScheduledTaskResultFields'
 export * from './ScheduledTaskRunsPanel'
+export * from './ScheduledTaskRuntimeFields'
 export * from './ScheduledTaskScheduleEditor'
 export * from './ScheduledTasksSettings'

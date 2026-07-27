@@ -20,6 +20,7 @@ for (const key of Object.keys(process.env)) {
   }
 }
 
+import { createLogger } from './lib/logger'
 import { createApplicationMenu } from './menu'
 import { registerIpcHandlers } from './ipc/index'
 import { createTray, destroyTray } from './tray'
@@ -56,6 +57,8 @@ import {
   isAllowedWebPreviewUrl,
   WEB_PREVIEW_PARTITION,
 } from './lib/web-preview-security'
+
+const log = createLogger('主进程')
 
 let mainWindow: BrowserWindow | null = null
 const pendingDeepLinks: string[] = []
@@ -142,7 +145,7 @@ async function handleProviderInstallDeepLink(inputLink: ProviderInstallDeepLink)
     openSettingsWindow('channels')
   } catch (error) {
     // 不记录原始 deep link，避免 API Key 泄露到日志。
-    console.error('[DeepLink] provider/install 创建失败:', error)
+    log.error('[DeepLink] provider/install 创建失败:', error)
     dialog.showErrorBox('导入失败', error instanceof Error ? error.message : String(error))
   }
 }
@@ -195,7 +198,7 @@ function ensureWindowOnScreen(win: BrowserWindow): void {
       width: bounds.width,
       height: bounds.height,
     })
-    console.log('[窗口] 窗口已重新定位到主显示器')
+    log.info('[窗口] 窗口已重新定位到主显示器')
   }
 }
 
@@ -261,7 +264,7 @@ function createWindow(): void {
   const iconExists = existsSync(iconPath)
 
   if (!iconExists) {
-    console.warn('App icon not found at:', iconPath)
+    log.warn('[窗口] 未找到应用图标:', iconPath)
   }
 
   mainWindow = new BrowserWindow({
@@ -355,7 +358,7 @@ function createWindow(): void {
         }
       }
     } catch (error) {
-      console.warn('[Native-feel] 获取系统强调色失败:', error)
+      log.warn('[Native-feel] 获取系统强调色失败:', error)
     }
   })
 
@@ -379,7 +382,7 @@ function createWindow(): void {
 
   // Native-feel: 渲染进程崩溃时记录日志并自动恢复
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    console.error('[Kila] 渲染进程异常退出:', details.reason, details.exitCode)
+    log.error('[Kila] 渲染进程异常退出:', details.reason, details.exitCode)
     // 如果窗口还在，尝试重新加载
     if (mainWindow && !mainWindow.isDestroyed()) {
       setTimeout(() => {
@@ -430,7 +433,7 @@ app.whenReady().then(async () => {
   await initializeRuntime()
 
   ensureBundledCliInstalled().catch((error) => {
-    console.error('[CLI Installer] 安装 kila wrapper 失败:', error)
+    log.error('[CLI Installer] 安装 kila wrapper 失败:', error)
   })
 
   // 同步内置 / Alma Skills 到全局 Agent Skills 真相源
@@ -440,23 +443,25 @@ app.whenReady().then(async () => {
   bootstrapUnifiedSessions()
   // 初始化全局 MCP 服务器长连接
   mcpServerManager.initialize().catch((error) => {
-    console.error('[MCP] 初始化失败，将在首次使用时重试:', error)
+    log.error('[MCP] 初始化失败，将在首次使用时重试:', error)
   })
   try {
     await memoryProviderManager.initialize()
   } catch (error) {
-    console.error('[Memory] 初始化失败，将在首次使用时重试:', error)
+    log.error('[Memory] 初始化失败，将在首次使用时重试:', error)
   }
 
   if (process.env.KILA_RUN_ACCEPTANCE === 'session-project') {
     try {
       const report = await runSessionProjectAcceptance()
+      // biome-ignore lint/suspicious/noConsole: 验收模式的结构化结果需直接写 stdout 供外部 CLI 消费，不能经 logger 脱敏改写
       console.log(JSON.stringify({ ok: true, report }, null, 2))
       app.exit(0)
       return
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const stack = error instanceof Error ? error.stack : undefined
+      // biome-ignore lint/suspicious/noConsole: 验收模式的结构化结果需直接写 stdout 供外部 CLI 消费，不能经 logger 脱敏改写
       console.error(JSON.stringify({ ok: false, error: message, stack }, null, 2))
       app.exit(1)
       return
@@ -477,7 +482,7 @@ app.whenReady().then(async () => {
   }
 
   startCliBridgeServer().catch((error) => {
-    console.error('[CLI Bridge] 启动失败:', error)
+    log.error('[CLI Bridge] 启动失败:', error)
   })
 
   // Set dock icon on macOS (required for dev mode, bundled apps use Info.plist)
@@ -521,12 +526,12 @@ app.whenReady().then(async () => {
   syncFeishuMirrorSleepBlocker()
   if (bridgeConfig.enabled && bridgeConfig.autoStart) {
     bridgeManager.start().catch((err) => {
-      console.error('[IM Bridge] 自动启动失败:', err)
+      log.error('[IM Bridge] 自动启动失败:', err)
     })
   }
 
   scheduledTaskManager.start().catch((error) => {
-    console.error('[ScheduledTask] 启动失败:', error)
+    log.error('[ScheduledTask] 启动失败:', error)
   })
 
   app.on('activate', () => {

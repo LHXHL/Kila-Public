@@ -108,7 +108,9 @@ export class WeChatAdapterGroup extends BaseImAdapter {
     this.credentialStore = deps.credentialStore ?? new WeChatCredentialStore()
     this.contextStore = deps.contextStore ?? new WeChatContextStore()
     this.deferredStore = deps.deferredStore ?? new WeChatDeferredOutboundStore()
-    this.mediaService = deps.mediaService ?? new WeChatMediaService()
+    this.mediaService = deps.mediaService ?? new WeChatMediaService({
+      getMaxBytes: () => this.deps.getConfig().maxInboundFileBytes,
+    })
     this.loginManager = new WeChatLoginManager({
       credentialStore: this.credentialStore,
       getBaseUrl: () => this.deps.getConfig().baseUrl,

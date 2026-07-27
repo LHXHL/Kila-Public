@@ -9,6 +9,9 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { app } from 'electron'
 
+import { createLogger } from './logger'
+
+const log = createLogger('窗口状态')
 interface WindowState {
   x: number
   y: number
@@ -58,6 +61,6 @@ export function saveWindowState(state: WindowState): void {
     }
     writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf-8')
   } catch (error) {
-    console.error('[窗口状态] 保存失败:', error)
+    log.error('[窗口状态] 保存失败:', error)
   }
 }

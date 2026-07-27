@@ -6,6 +6,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { activeTabAtom, splitLayoutAtom, tabsAtom } from '@/atoms/tab-atoms'
 import { currentSessionIdAtom } from '@/atoms/session-atoms'
 import { userProfileAtom } from '@/atoms/user-profile'
@@ -14,13 +15,14 @@ import { WorkspaceToolbar } from './WorkspaceToolbar'
 import { SplitContainer } from './SplitContainer'
 import { CalendarDays, MapPin, Moon } from 'lucide-react'
 
-function getGreeting(date: Date): string {
+/** 按当前小时挑选问候语文案 key */
+function getGreetingKey(date: Date): string {
   const hour = date.getHours()
-  if (hour < 6) return '夜深了'
-  if (hour < 11) return '早上好'
-  if (hour < 14) return '中午好'
-  if (hour < 18) return '下午好'
-  return '晚上好'
+  if (hour < 6) return 'tabs.greeting.lateNight'
+  if (hour < 11) return 'tabs.greeting.morning'
+  if (hour < 14) return 'tabs.greeting.midday'
+  if (hour < 18) return 'tabs.greeting.afternoon'
+  return 'tabs.greeting.evening'
 }
 
 const GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸']
@@ -53,27 +55,31 @@ function getLunarDateLabel(date: Date): string {
 
 
 export function MainArea(): React.ReactElement {
+  const { t, i18n } = useTranslation()
   const tabs = useAtomValue(tabsAtom)
   const activeTab = useAtomValue(activeTabAtom)
   const splitLayout = useAtomValue(splitLayoutAtom)
   const setCurrentSessionId = useSetAtom(currentSessionIdAtom)
   const userProfile = useAtomValue(userProfileAtom)
-  const displayName = userProfile.userName.trim() || '你'
+  const displayName = userProfile.userName.trim() || t('tabs.home.defaultName')
   const [now, setNow] = React.useState(() => new Date())
   React.useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000)
     return () => clearInterval(timer)
   }, [])
-  const greeting = getGreeting(now)
-  const dateLabel = React.useMemo(() => now.toLocaleDateString('zh-CN', {
+  const greeting = t(getGreetingKey(now))
+  // 日期格式跟随当前界面语言，避免英文界面里出现中式日期
+  const dateLabel = React.useMemo(() => now.toLocaleDateString(i18n.language, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     weekday: 'long',
-  }), [now])
+  }), [i18n.language, now])
   const lunarDateLabel = React.useMemo(() => getLunarDateLabel(now), [now])
-  const profileLocation = [userProfile.city, userProfile.country].filter(Boolean).join(' · ') || '位置待补充'
-  const profileTimeZone = userProfile.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || '本地时区'
+  // 农历只在中文环境展示：其内容是干支与月日的中文字符，英文界面无法阅读
+  const showLunarDate = i18n.language.startsWith('zh')
+  const profileLocation = [userProfile.city, userProfile.country].filter(Boolean).join(' · ') || t('tabs.home.locationUnset')
+  const profileTimeZone = userProfile.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || t('tabs.home.localTimeZone')
 
   // focused Pane 是当前会话的唯一真相源，确保侧栏、权限队列和后台桥接始终指向可见焦点。
   React.useEffect(() => {
@@ -104,14 +110,17 @@ export function MainArea(): React.ReactElement {
         <div className="titlebar-no-drag flex flex-1 items-center justify-center px-6 py-10 text-muted-foreground">
           <div className="w-full max-w-[680px] text-center">
             <h2 className="text-balance text-[34px] font-semibold leading-tight tracking-tight text-foreground md:text-[40px]">
-              {greeting}，{displayName}
+              {t('tabs.home.greeting', { greeting, name: displayName })}
             </h2>
             <p className="mx-auto mt-3 max-w-[560px] text-sm leading-6 text-muted-foreground">
-              打开一个会话开始工作。
+              {t('tabs.home.openSessionHint')}
             </p>
             <div className="mx-auto mt-6 flex max-w-[620px] flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5" />{dateLabel}</span>
-              <span className="inline-flex items-center gap-1.5"><Moon className="size-3.5" />农历 {lunarDateLabel}</span>
+              {/* 农历标签本身是中文字符（甲辰年正月初一），英文界面下显示无意义，故仅中文环境展示 */}
+              {showLunarDate && (
+                <span className="inline-flex items-center gap-1.5"><Moon className="size-3.5" />{t('tabs.home.lunarDate', { date: lunarDateLabel })}</span>
+              )}
               <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />{profileLocation} · {profileTimeZone}</span>
             </div>
           </div>

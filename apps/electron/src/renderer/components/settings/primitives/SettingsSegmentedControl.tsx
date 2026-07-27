@@ -5,7 +5,7 @@
  * 水平排列的按钮组，高亮当前选中项。
  */
 
-import * as React from 'react'
+import type * as React from 'react'
 import { cn } from '@/lib/utils'
 import { LABEL_CLASS, DESCRIPTION_CLASS } from './SettingsUIConstants'
 

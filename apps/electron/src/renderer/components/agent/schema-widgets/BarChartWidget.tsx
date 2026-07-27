@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { BarChartSpec } from '@kila/shared'
 import { getBarChartExtent, limitChartRows, toFiniteChartNumber } from './chart-data'
 
@@ -25,6 +26,7 @@ interface BarChartWidgetProps {
 }
 
 export function BarChartWidget({ spec, onBarClick }: BarChartWidgetProps): JSX.Element {
+  const { t } = useTranslation()
   const { rows: chartData, truncatedCount } = limitChartRows(spec.data)
   const chartWidth = SVG_WIDTH - PADDING_LEFT - PADDING_RIGHT
   const chartHeight = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM
@@ -52,8 +54,8 @@ export function BarChartWidget({ spec, onBarClick }: BarChartWidgetProps): JSX.E
           ))}
         </div>
       )}
-      <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} className="w-full overflow-visible" role="img" aria-label={`柱状图，共显示 ${chartData.length} 组、${spec.series.length} 个系列`}>
-        <title>{`柱状图：${spec.series.map((series) => series.label).join('、')}`}</title>
+      <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} className="w-full overflow-visible" role="img" aria-label={t('agent.chart.barAria', { groups: chartData.length, series: spec.series.length })}>
+        <title>{t('agent.chart.barTitle', { series: spec.series.map((series) => series.label).join('、') })}</title>
         {[0, 1, 2, 3].map((index) => {
           const y = PADDING_TOP + (chartHeight * index) / 3
           const labelValue = Number((maxValue - (valueRange * index) / 3).toFixed(2))
@@ -134,7 +136,7 @@ export function BarChartWidget({ spec, onBarClick }: BarChartWidgetProps): JSX.E
         })}
       </svg>
       {truncatedCount > 0 && (
-        <p className="text-[11px] text-muted-foreground">数据量较大，仅显示前 {chartData.length} 组，另有 {truncatedCount} 组未绘制。</p>
+        <p className="text-[11px] text-muted-foreground">{t('agent.chart.truncatedBars', { shown: chartData.length, hidden: truncatedCount })}</p>
       )}
       {spec.yAxisLabel && (
         <div className="text-[11px] text-muted-foreground">{spec.yAxisLabel}</div>

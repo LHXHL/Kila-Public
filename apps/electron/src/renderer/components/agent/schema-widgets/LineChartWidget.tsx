@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { LineChartSpec } from '@kila/shared'
 import { getFiniteChartExtent, limitChartRows, toFiniteChartNumber } from './chart-data'
 
@@ -83,6 +84,7 @@ function LineChartWidgetBody({
   maxValue: number
   truncatedRowCount: number
 }): JSX.Element {
+  const { t } = useTranslation()
   const range = Math.max(1, maxValue - minValue)
 
   return (
@@ -100,8 +102,8 @@ function LineChartWidgetBody({
           ))}
         </div>
       )}
-      <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} className="w-full overflow-visible" role="img" aria-label={`折线图，共 ${spec.data.length} 个数据点、${spec.series.length} 个系列`}>
-        <title>{`折线图：${spec.series.map((series) => series.label).join('、')}`}</title>
+      <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} className="w-full overflow-visible" role="img" aria-label={t('agent.chart.lineAria', { points: spec.data.length, series: spec.series.length })}>
+        <title>{t('agent.chart.lineTitle', { series: spec.series.map((series) => series.label).join('、') })}</title>
         {[0, 1, 2, 3].map((index) => {
           const y = PADDING_TOP + (chartHeight * index) / 3
           const labelValue = (maxValue - ((maxValue - minValue) * index) / 3).toFixed(0)
@@ -177,7 +179,7 @@ function LineChartWidgetBody({
         })}
       </svg>
       {truncatedRowCount > 0 && (
-        <p className="text-[11px] text-muted-foreground">数据量较大，仅显示前 {spec.data.length} 个点，另有 {truncatedRowCount} 个点未绘制。</p>
+        <p className="text-[11px] text-muted-foreground">{t('agent.chart.truncatedPoints', { shown: spec.data.length, hidden: truncatedRowCount })}</p>
       )}
       {spec.yAxisLabel && (
         <div className="text-[11px] text-muted-foreground">{spec.yAxisLabel}</div>

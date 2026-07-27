@@ -8,6 +8,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Brain, ChevronDown, Loader2 } from 'lucide-react'
 import { MessageResponse, StreamingMessageResponse } from '@/components/ai-elements/message'
 import { useSmoothStreamContent } from '@kila/ui'
@@ -59,6 +60,7 @@ function ThinkingBody({
   running: boolean
   sessionPath?: string | null
 }): React.ReactElement {
+  const { t, i18n } = useTranslation()
   const renderedThinking = React.useMemo(
     () => getRenderablePayloadText(text, TOOL_PAYLOAD_EXPANDED_MAX_CHARS),
     [text],
@@ -90,7 +92,10 @@ function ThinkingBody({
         )}
         {renderedThinking.truncatedCharCount > 0 && (
           <div className="mt-2 text-[10px] text-muted-foreground/70">
-            思考详情过长，界面省略 {renderedThinking.truncatedCharCount.toLocaleString('zh-CN')} 字符
+            {t('agent.thinking.truncated', {
+              count: renderedThinking.truncatedCharCount,
+              chars: renderedThinking.truncatedCharCount.toLocaleString(i18n.language),
+            })}
           </div>
         )}
       </div>
@@ -113,6 +118,7 @@ export function ThinkingProcessCard({
   sessionPath?: string | null
   fallback?: boolean
 }): React.ReactElement {
+  const { t } = useTranslation()
   const running = fallback ? Boolean(streaming) : Boolean(streaming && entry && !entry.done)
   const fullText = entry?.fullText ?? entry?.text
   const hasBody = !fallback && Boolean(fullText)
@@ -122,7 +128,7 @@ export function ThinkingProcessCard({
     startedAt: entry?.startedAt ?? (running ? startedAt : undefined),
     elapsedSeconds: entry?.elapsedSeconds,
   })
-  const title = getThinkingTitle(durationLabel, running, entry?.summaryText ?? fullText)
+  const title = getThinkingTitle(durationLabel, running, t, entry?.summaryText ?? fullText)
   const fullTextValue = fullText ?? ''
 
   return (

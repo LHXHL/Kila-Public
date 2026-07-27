@@ -9,6 +9,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSetAtom } from 'jotai'
 import { ChevronDown, CircleDollarSign, Cpu, Eye, FileText, Search, Wrench, Zap } from 'lucide-react'
 import {
@@ -170,6 +171,7 @@ export function ModelSelector({
   externalSelectedModel,
   onModelSelect,
 }: ModelSelectorProps = {}): React.ReactElement {
+  const { t } = useTranslation()
   const [sessionModel, setSessionModel] = useSessionModelPreferenceOptional()
   const sessionId = useSessionIdOptional()
   const setSessions = useSetAtom(sessionsAtom)
@@ -302,7 +304,7 @@ export function ModelSelector({
     return (
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-2 py-1">
         <Cpu className="size-3.5" />
-        <span>暂无可用模型</span>
+        <span>{t('composer.noModels')}</span>
       </div>
     )
   }
@@ -326,7 +328,7 @@ export function ModelSelector({
         <Cpu className="size-3.5" />
       )}
       <span className="max-w-[200px] truncate">
-        {currentModelInfo ? currentModelInfo.modelName : '选择模型'}
+        {currentModelInfo ? currentModelInfo.modelName : t('composer.selectModel')}
       </span>
       <ChevronDown className="size-3" />
     </button>
@@ -347,7 +349,7 @@ export function ModelSelector({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={handleSearchKeyDown}
-          placeholder="搜索模型..."
+          placeholder={t('composer.searchModels')}
           className={cn(
             'flex-1 bg-transparent outline-none placeholder:text-muted-foreground/50',
             compact ? 'text-sm' : 'text-base',
@@ -359,7 +361,7 @@ export function ModelSelector({
       <div className={cn(listMaxHeightClassName, 'overflow-y-auto', compact ? 'py-0.5' : 'py-1')}>
         {filteredGrouped.size === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
-            未找到模型
+            {t('composer.noModelsFound')}
           </div>
         ) : (
           (() => {
@@ -507,7 +509,7 @@ export function ModelSelector({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg gap-0 p-0">
           <DialogHeader className="sr-only">
-            <DialogTitle>选择模型</DialogTitle>
+            <DialogTitle>{t('composer.selectModel')}</DialogTitle>
           </DialogHeader>
           {panelContent()}
         </DialogContent>

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import cronstrue from 'cronstrue'
 import type { ScheduledTaskSchedule } from '@kila/shared'
 import { Input } from '@/components/ui/input'
@@ -11,11 +12,12 @@ interface ScheduledTaskScheduleEditorProps {
   onChange: (value: ScheduledTaskSchedule) => void
 }
 
+/** 调度方式选项：label 是产品固定术语，hint 走本地化 */
 const SCHEDULE_OPTIONS = [
-  { value: 'every', label: 'Every', hint: '按固定分钟数重复执行' },
-  { value: 'cron', label: 'Cron', hint: '用 cron 表达式精确定时' },
-  { value: 'at', label: 'At', hint: '只在指定时间执行一次' },
-  { value: 'loop', label: 'Loop', hint: '完成后自动继续，适合自治流程' },
+  { value: 'every', label: 'Every', hintKey: 'settingsTasks.scheduleEditor.everyHint' },
+  { value: 'cron', label: 'Cron', hintKey: 'settingsTasks.scheduleEditor.cronHint' },
+  { value: 'at', label: 'At', hintKey: 'settingsTasks.scheduleEditor.atHint' },
+  { value: 'loop', label: 'Loop', hintKey: 'settingsTasks.scheduleEditor.loopHint' },
 ] as const
 
 function toDateTimeLocal(value: string | undefined): string {
@@ -34,32 +36,35 @@ function fromDateTimeLocal(value: string): string {
   return new Date(value).toISOString()
 }
 
-function getScheduleHint(kind: ScheduledTaskSchedule['kind']): string {
+function getScheduleHintKey(kind: ScheduledTaskSchedule['kind']): string {
   const option = SCHEDULE_OPTIONS.find((item) => item.value === kind)
-  return option?.hint ?? ''
+  return option?.hintKey ?? ''
 }
 
 export function ScheduledTaskScheduleEditor({
   value,
   onChange,
 }: ScheduledTaskScheduleEditorProps): React.ReactElement {
+  const { t } = useTranslation()
+
   const cronPreview = React.useMemo(() => {
     if (value.kind !== 'cron') return null
     try {
       return cronstrue.toString(value.expr)
     } catch {
-      return 'Cron 表达式无效'
+      return t('settingsTasks.scheduleEditor.cronInvalid')
     }
-  }, [value])
+  }, [t, value])
 
   const scheduleKind = value.kind
+  const hintKey = getScheduleHintKey(scheduleKind)
 
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-sm font-semibold text-foreground">调度方式</h4>
+        <h4 className="text-sm font-semibold text-foreground">{t('settingsTasks.scheduleEditor.title')}</h4>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          {getScheduleHint(scheduleKind)}
+          {hintKey ? t(hintKey) : ''}
         </p>
       </div>
 
@@ -93,7 +98,7 @@ export function ScheduledTaskScheduleEditor({
             >
               <span className="text-sm font-semibold">{option.label}</span>
               <span className={cn('text-[11px] leading-5', active ? 'text-[hsl(var(--brand-soft-foreground))/0.82]' : 'text-muted-foreground')}>
-                {option.hint}
+                {t(option.hintKey)}
               </span>
             </Button>
           )
@@ -104,7 +109,7 @@ export function ScheduledTaskScheduleEditor({
         {value.kind === 'every' && (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>间隔分钟</Label>
+              <Label>{t('settingsTasks.scheduleEditor.intervalMinutesLabel')}</Label>
               <Input
                 type="number"
                 min={5}
@@ -119,7 +124,7 @@ export function ScheduledTaskScheduleEditor({
               />
             </div>
             <div className="space-y-2">
-              <Label>起始时间（可选）</Label>
+              <Label>{t('settingsTasks.scheduleEditor.startAtLabel')}</Label>
               <Input
                 type="datetime-local"
                 value={toDateTimeLocal(value.startAt)}
@@ -139,7 +144,7 @@ export function ScheduledTaskScheduleEditor({
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
               <div className="space-y-2">
-                <Label>Cron 表达式</Label>
+                <Label>{t('settingsTasks.scheduleEditor.cronExprLabel')}</Label>
                 <Input
                   value={value.expr}
                   onChange={(event) => {
@@ -152,7 +157,7 @@ export function ScheduledTaskScheduleEditor({
                 />
               </div>
               <div className="space-y-2">
-                <Label>时区（可选）</Label>
+                <Label>{t('settingsTasks.scheduleEditor.timezoneLabel')}</Label>
                 <Input
                   value={value.tz ?? ''}
                   onChange={(event) => {
@@ -175,7 +180,7 @@ export function ScheduledTaskScheduleEditor({
 
         {value.kind === 'at' && (
           <div className="space-y-2">
-            <Label>执行时间</Label>
+            <Label>{t('settingsTasks.scheduleEditor.runAtLabel')}</Label>
             <Input
               type="datetime-local"
               value={toDateTimeLocal(value.at)}
@@ -191,7 +196,7 @@ export function ScheduledTaskScheduleEditor({
 
         {value.kind === 'loop' && (
           <div className="rounded-lg bg-muted/35 px-4 py-3 text-sm leading-6 text-foreground/80">
-            loop 模式会在每次完成后继续运行：成功 3 秒后重跑，失败按退避策略延迟，更适合自治型长期任务。
+            {t('settingsTasks.scheduleEditor.loopNotice')}
           </div>
         )}
       </div>

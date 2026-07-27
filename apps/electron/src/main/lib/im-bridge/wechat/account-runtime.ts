@@ -11,12 +11,16 @@ import type {
 } from '../adapters/base-adapter'
 import { chunkOutboundMessage } from '../delivery-layer'
 import { WeChatIlinkClient } from './client'
-import { WeChatContextStore } from './context-store'
-import { WeChatDeferredOutboundStore } from './deferred-outbound-store'
-import { WeChatMediaService } from './media-service'
+import type { WeChatContextStore } from './context-store'
+import type { WeChatDeferredOutboundStore } from './deferred-outbound-store'
+import type { WeChatMediaService } from './media-service'
 import { WeChatMessageAggregator } from './message-aggregator'
 import { parseWeChatInbound } from './parser'
 import type { WeChatCredential, WeChatIlinkRawMessage } from './types'
+import { classifyPollFailure, computePollBackoffDelayMs, sleepWithSignal } from '../poll-backoff'
+import { createLogger } from '../../logger'
+
+const log = createLogger('IM Bridge')
 
 const WECHAT_SESSION_EXPIRED_CODE = -14
 
@@ -151,7 +155,15 @@ export class WeChatAccountRuntime {
     return this.deps.mediaService.downloadAttachments(attachments, sessionId)
   }
 
+  /**
+   * 长轮询主循环
+   *
+   * 与 Telegram 同一套约束：只有请求成功才把状态改回 connected（禁止谎报），
+   * 失败走指数退避，401/403 这类不可重试错误直接停止轮询。
+   */
   private async pollLoop(signal: AbortSignal): Promise<void> {
+    let failureAttempt = 0
+
     while (!signal.aborted) {
       try {
         const runtime = this.deps.getRuntimeState()
@@ -176,9 +188,16 @@ export class WeChatAccountRuntime {
           throw new Error(batch.errmsg || `WeChat getupdates failed: ret=${batch.ret} errcode=${batch.errcode}`)
         }
 
+        failureAttempt = 0
+        this.markPollSucceeded()
+
         const messages = this.getBatchMessages(batch)
         for (const raw of messages) {
-          await this.handleRawMessage(raw)
+          try {
+            await this.handleRawMessage(raw)
+          } catch (error) {
+            log.error('[IM Bridge][WeChat] 处理单条入站消息失败，已跳过', error)
+          }
         }
 
         const nextBuf = batch.get_updates_buf || batch.getUpdatesBuf
@@ -190,12 +209,23 @@ export class WeChatAccountRuntime {
         const message = error instanceof Error ? error.message : String(error)
         this.patchRuntimeState({ lastError: message })
         this.updateStatus('error', { errorMessage: message })
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-        if (!signal.aborted) {
-          this.updateStatus('connected', { errorMessage: undefined, lastConnectedAt: Date.now() })
+
+        const classification = classifyPollFailure(error)
+        if (!classification.retryable) {
+          log.error(`[IM Bridge][WeChat] 轮询遇到不可重试错误，已停止：${message}`)
+          return
         }
+
+        failureAttempt += 1
+        await sleepWithSignal(computePollBackoffDelayMs(failureAttempt), signal)
       }
     }
+  }
+
+  /** 只在请求成功后回到 connected；失败期间保持 error，让外层退避真正生效 */
+  private markPollSucceeded(): void {
+    if (this.lastStatus.status === 'connected' && !this.lastStatus.errorMessage) return
+    this.updateStatus('connected', { errorMessage: undefined, lastConnectedAt: Date.now() })
   }
 
   private getBatchMessages(batch: { msgs?: WeChatIlinkRawMessage[]; update_list?: WeChatIlinkRawMessage[]; updates?: WeChatIlinkRawMessage[]; messages?: WeChatIlinkRawMessage[] }): WeChatIlinkRawMessage[] {

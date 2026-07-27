@@ -38,17 +38,14 @@ import type { AppLocale, UserProfile } from '../../../types'
 const UNSET_SELECT_VALUE = '__unset__'
 const PROFILE_INPUT_CLASS = 'h-12 rounded-xl border-border/60 bg-background/85 px-4 text-[15px] shadow-none'
 
-const NOTIFICATION_CATEGORY_OPTIONS: Array<{
-  category: KilaNotificationCategory
-  label: string
-  description: string
-}> = [
-  { category: 'agent', label: 'Agent 任务', description: '任务完成、失败等状态' },
-  { category: 'permission', label: '权限请求', description: 'Agent 请求操作权限或用户输入' },
-  { category: 'usage', label: '用量告警', description: 'Token 预算超限提醒' },
-  { category: 'update', label: '版本更新', description: '发现新版本可用' },
-  { category: 'bridge', label: 'IM 桥接', description: '飞书/Telegram 等渠道连接状态' },
-  { category: 'system', label: '系统通知', description: '其他系统级别通知' },
+/** 通知分类展示顺序；label / description 在渲染时经 `settings.general.notificationCategory.*` 翻译 */
+const NOTIFICATION_CATEGORIES: KilaNotificationCategory[] = [
+  'agent',
+  'permission',
+  'usage',
+  'update',
+  'bridge',
+  'system',
 ]
 
 type EditableProfileFields = Pick<UserProfile, 'userName' | 'timeZone' | 'city' | 'country'>
@@ -549,16 +546,16 @@ export function GeneralSettings(): React.ReactElement {
                 {t('settings.general.notificationCategories')}
               </div>
               <div className="space-y-2.5">
-                {NOTIFICATION_CATEGORY_OPTIONS.map((option) => (
-                  <div key={option.category} className="flex items-center justify-between">
+                {NOTIFICATION_CATEGORIES.map((category) => (
+                  <div key={category} className="flex items-center justify-between">
                     <div className="min-w-0">
-                      <div className="text-sm text-foreground">{option.label}</div>
-                      <div className="text-xs text-muted-foreground">{option.description}</div>
+                      <div className="text-sm text-foreground">{t(`settings.general.notificationCategory.${category}.label`)}</div>
+                      <div className="text-xs text-muted-foreground">{t(`settings.general.notificationCategory.${category}.description`)}</div>
                     </div>
                     <Switch
-                      checked={notificationPrefs[option.category]?.enabled ?? true}
+                      checked={notificationPrefs[category]?.enabled ?? true}
                       onCheckedChange={(checked) => {
-                        const next = { ...notificationPrefs, [option.category]: { enabled: checked } }
+                        const next = { ...notificationPrefs, [category]: { enabled: checked } }
                         setNotificationPrefs(next)
                         void updateNotificationPreferences(next)
                       }}

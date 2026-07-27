@@ -1,0 +1,133 @@
+{
+  "session": {
+    "header": {
+      "messages_one": "{{count}} 条消息",
+      "messages_other": "{{count}} 条消息",
+      "scheduledTasks": "定时任务"
+    },
+    "sidePanel": {
+      "files": "文件工作台",
+      "web": "网页预览",
+      "tools": "工具调用",
+      "git": "Git 状态",
+      "fallbackTitle": "工具",
+      "resize": "调整右侧栏宽度",
+      "close": "关闭右侧栏"
+    },
+    "workbench": {
+      "noProjectPath": "还没有可浏览的项目目录",
+      "selectFolder": "选择目录",
+      "selectFolderHint": "选择当前会话的项目文件夹",
+      "projectLocked": "首条消息发送后项目文件夹已锁定",
+      "switchingFolder": "正在切换项目目录",
+      "recentFiles": "最近打开",
+      "emptyProject": "请选择一个项目目录。",
+      "resizeExplorer": "调整 Explorer 宽度",
+      "resizeExplorerHint": "拖动调整 Explorer 宽度，双击恢复默认",
+      "folderSwitched": "工作台目录已切换：{{name}}",
+      "folderSwitchFailed": "工作台目录切换失败"
+    },
+    "pinnedWidget": {
+      "emptyTitle": "选择一个已固定 widget",
+      "emptyDescription": "在 transcript 中 pin 的 widget 会出现在这里，方便持续查看。"
+    },
+    "toolCalls": {
+      "loading": "正在加载工具调用…",
+      "loadFailed": "工具调用加载失败",
+      "retry": "重试",
+      "emptyTitle": "还没有工具调用",
+      "emptyDescription": "当 Agent 运行搜索、读写文件、执行命令或调用 MCP 时，这里会显示详细记录。",
+      "noTextResult": "无文本结果",
+      "running": "运行中...",
+      "status": {
+        "running": "运行中",
+        "error": "失败",
+        "backgrounded": "后台中",
+        "pending": "等待中"
+      }
+    },
+    "webPreview": {
+      "title": "网页预览",
+      "subtitle": "点击 Start 启动本地预览服务，或直接输入 http / https 地址。",
+      "navigation": "网页预览导航",
+      "start": "启动本地预览服务",
+      "stop": "停止本地预览服务",
+      "back": "后退",
+      "forward": "前进",
+      "reload": "刷新网页",
+      "urlLabel": "预览地址",
+      "urlPlaceholder": "输入网址，或启动本地预览服务…",
+      "openExternal": "在外部浏览器打开",
+      "invalidUrl": "只支持 http / https 地址",
+      "loadFailed": "网页加载失败",
+      "serverRunning": "本地预览服务运行中：{{url}}",
+      "emptyTitle": "输入 URL 或点击 Start 启动本地预览服务",
+      "emptyWithProject": "打开 HTML 文件时会自动预览，Start 也可以手动打开当前会话项目目录的本地预览服务。",
+      "emptyWithoutProject": "当前会话还没有可用的项目目录。"
+    },
+    "git": {
+      "noProject": "当前会话没有项目目录。",
+      "loading": "正在读取 Git 状态…",
+      "loadFailedTitle": "无法读取 Git 状态",
+      "retry": "重试",
+      "refresh": "刷新",
+      "notRepoTitle": "此目录尚未启用 Git",
+      "notRepoDescription": "你仍可正常对话和编辑文件。初始化 Git 仓库后，这里将展示 Diff、暂存区、提交和 Worktree。",
+      "init": "初始化 Git 仓库",
+      "recheck": "重新检测",
+      "clean": "工作区干净",
+      "status": {
+        "conflicted": "冲突",
+        "untracked": "新增",
+        "deleted": "删除",
+        "renamed": "重命名",
+        "modified": "修改"
+      },
+      "file": {
+        "stage": "暂存",
+        "unstage": "取消暂存",
+        "discard": "丢弃工作区变更"
+      },
+      "staged": "已暂存 · {{count}}",
+      "unstageAll": "全部取消",
+      "changes": "更改 · {{count}}",
+      "stageAll": "全部暂存",
+      "runChangesTitle": "本次 Agent 修改",
+      "runChangesChip": "文件快照 · {{count}}",
+      "runChangesEmpty": "本次运行未检测到文件变化。",
+      "runChangesFilter": "本次修改 {{count}}",
+      "generateReview": "生成审查任务",
+      "insertIntoComposer": "插入到输入框",
+      "insertPathIntoComposer": "插入 {{path}} 到输入框",
+      "reviewPromptHeader": "请审查本次 Agent 运行产生的修改，重点检查正确性、回归风险和缺失测试：",
+      "reviewPromptFooter": "审查后给出可执行的修复项，并说明验证结果。",
+      "worktreeCreate": "创建 Worktree",
+      "worktreeRemove": "移除 Worktree",
+      "worktreePathPlaceholder": "绝对目录路径",
+      "worktreeBranchPlaceholder": "新分支名称",
+      "worktreeConfirmRemove": "确认移除 Worktree？\n{{path}}",
+      "create": "创建",
+      "diffSourceWorktree": "工作区",
+      "diffSourceStaged": "暂存区",
+      "diffLoading": "正在加载 Diff…",
+      "diffEmpty": "此文件没有可显示的文本 Diff。",
+      "diffTruncated": "Diff 内容过大，当前仅展示前一部分。",
+      "diffSelectFile": "选择文件查看 Diff",
+      "hunkStage": "暂存",
+      "hunkUnstage": "取消暂存",
+      "hunkDiscard": "丢弃",
+      "confirmDiscardFiles_one": "确认丢弃 {{count}} 个文件的工作区变更？此操作不可撤销。",
+      "confirmDiscardFiles_other": "确认丢弃 {{count}} 个文件的工作区变更？此操作不可撤销。",
+      "confirmDiscardHunk": "确认丢弃这个 Hunk？此操作不可撤销。",
+      "commitPlaceholder": "提交信息",
+      "commit": "提交",
+      "commitFiles_one": "提交 {{count}} 个文件",
+      "commitFiles_other": "提交 {{count}} 个文件",
+      "error": {
+        "readFailed": "读取 Git 状态失败，请稍后重试。",
+        "notRepository": "当前目录不是 Git 仓库，请重新检测或初始化仓库。",
+        "gitNotFound": "未找到 Git，请先安装 Git 并重新启动 Kila。"
+      }
+    }
+  }
+}

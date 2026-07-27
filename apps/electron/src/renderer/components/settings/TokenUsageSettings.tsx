@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { BarChart3, Coins, DatabaseZap, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
@@ -22,11 +24,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SettingsCard, SettingsSection } from './primitives'
 
-const RANGE_OPTIONS = [
-  { value: 7, label: '7 天' },
-  { value: 30, label: '30 天' },
-  { value: 60, label: '60 天' },
-] as const
+/** 统计窗口天数选项；label 在渲染时按语言生成 */
+const RANGE_DAY_OPTIONS = [7, 30, 60] as const
 
 const CHART_GRID_STROKE = 'hsl(var(--border) / 0.42)'
 const CHART_INPUT_FILL = 'hsl(var(--chart-1))'
@@ -53,14 +52,14 @@ function formatProviderLabel(item: { provider: string; providerLabel?: string; p
   return item.providerType && item.providerType !== label ? `${label}` : label
 }
 
-function formatTokenWindow(value: number | undefined): string {
-  if (!value) return '未知'
+function formatTokenWindow(value: number | undefined, t: TFunction): string {
+  if (!value) return t('settings.tokenUsage.unknown')
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   if (value >= 1_000) return `${Math.round(value / 1_000)}k`
   return String(value)
 }
 
-function formatModelUnitPrice(model: TokenUsageModelStat): { label: string; source: string } {
+function formatModelUnitPrice(model: TokenUsageModelStat, t: TFunction): { label: string; source: string } {
   const metadata = resolveModelMetadata({
     channelProvider: model.providerType ?? model.provider,
     channelBaseUrl: '',
@@ -70,30 +69,30 @@ function formatModelUnitPrice(model: TokenUsageModelStat): { label: string; sour
   const output = metadata.pricing?.outputPerMillionUsd ?? metadata.pricing?.outputPerMillion
   const symbol = metadata.pricing?.currency === 'CNY' ? '¥' : '$'
   return {
-    label: input !== undefined || output !== undefined ? `${symbol}${input ?? '-'} / ${symbol}${output ?? '-'}` : '未知',
+    label: input !== undefined || output !== undefined ? `${symbol}${input ?? '-'} / ${symbol}${output ?? '-'}` : t('settings.tokenUsage.unknown'),
     source: metadata.resolutionSources.pricing === 'builtin'
-      ? `内置参考${metadata.catalogUpdatedAt ? ` · ${metadata.catalogUpdatedAt}` : ''}`
+      ? `${t('settings.tokenUsage.sourceBuiltinReference')}${metadata.catalogUpdatedAt ? ` · ${metadata.catalogUpdatedAt}` : ''}`
       : metadata.resolutionSources.pricing === 'manual'
-        ? '用户设置'
-        : '未配置',
+        ? t('settings.tokenUsage.sourceManual')
+        : t('settings.tokenUsage.sourceUnset'),
   }
 }
 
-function getModelContextLabel(model: TokenUsageModelStat): { label: string; source: string } {
+function getModelContextLabel(model: TokenUsageModelStat, t: TFunction): { label: string; source: string } {
   const metadata = resolveModelMetadata({
     channelProvider: model.providerType ?? model.provider,
     channelBaseUrl: '',
     modelId: model.modelId,
   })
   return {
-    label: formatTokenWindow(metadata.contextWindowTokens),
+    label: formatTokenWindow(metadata.contextWindowTokens, t),
     source: metadata.resolutionSources.contextWindow === 'builtin'
-      ? '内置'
+      ? t('settings.tokenUsage.sourceBuiltin')
       : metadata.resolutionSources.contextWindow === 'provider-rule'
-        ? '规则'
+        ? t('settings.tokenUsage.sourceRule')
         : metadata.resolutionSources.contextWindow === 'manual'
-          ? '用户设置'
-          : '默认值',
+          ? t('settings.tokenUsage.sourceManual')
+          : t('settings.tokenUsage.sourceDefault'),
   }
 }
 
@@ -121,6 +120,7 @@ function MetricCard(input: {
 }
 
 export function TokenUsageSettings(): React.ReactElement {
+  const { t, i18n } = useTranslation()
   const [days, setDays] = React.useState<number>(30)
   const [stats, setStats] = React.useState<TokenUsageStats | null>(null)
   const [calendarMonthStats, setCalendarMonthStats] = React.useState<TokenUsageStats | null>(null)
@@ -137,7 +137,7 @@ export function TokenUsageSettings(): React.ReactElement {
       setStats(nextStats)
     } catch (error) {
       console.error('[TokenUsageSettings] 加载统计失败:', error)
-      toast.error('加载 Token 统计失败')
+      toast.error(t('settings.tokenUsage.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -213,17 +213,17 @@ export function TokenUsageSettings(): React.ReactElement {
 
     const parts = [
       exceededUsd && budgetStatus.usdLimit
-        ? `成本 ${formatUsd(budgetStatus.usdUsed)} / ${formatUsd(budgetStatus.usdLimit)}`
+        ? t('settings.tokenUsage.budgetCostPart', { used: formatUsd(budgetStatus.usdUsed), limit: formatUsd(budgetStatus.usdLimit) })
         : undefined,
       exceededTokens && budgetStatus.tokenLimit
         ? `Token ${formatInteger(budgetStatus.tokensUsed)} / ${formatInteger(budgetStatus.tokenLimit)}`
         : undefined,
     ].filter(Boolean)
 
-    toast.warning('Token 预算已超过阈值', {
-      description: parts.join('，'),
+    toast.warning(t('settings.tokenUsage.budgetExceeded'), {
+      description: parts.join(t('settings.tokenUsage.listSeparator')),
     })
-  }, [budgetStatus, calendarMonthStats])
+  }, [budgetStatus, calendarMonthStats, t])
 
   const saveBudget = React.useCallback(async (): Promise<void> => {
     const parseOptionalNumber = (value: string): number | undefined => {
@@ -238,16 +238,16 @@ export function TokenUsageSettings(): React.ReactElement {
       tokenMonthlyBudgetTokens: parseOptionalNumber(budgetTokens),
     })
     setSettings(updated)
-    toast.success('Token 预算已保存')
-  }, [budgetTokens, budgetUsd])
+    toast.success(t('settings.tokenUsage.budgetSaved'))
+  }, [budgetTokens, budgetUsd, t])
 
   if (loading && !stats) {
     return (
-      <SettingsSection title="Token 统计" description="正在加载最近窗口的 token usage 聚合数据。">
+      <SettingsSection title={t('settings.tokenUsage.title')} description={t('settings.tokenUsage.loadingDescription')}>
         <SettingsCard divided={false} className="p-6 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Loader2 className="size-4 animate-spin" />
-            正在汇总模型消耗...
+            {t('settings.tokenUsage.aggregating')}
           </div>
         </SettingsCard>
       </SettingsSection>
@@ -256,9 +256,9 @@ export function TokenUsageSettings(): React.ReactElement {
 
   if (!stats) {
     return (
-      <SettingsSection title="Token 统计" description="当前无法加载统计数据。">
+      <SettingsSection title={t('settings.tokenUsage.title')} description={t('settings.tokenUsage.errorDescription')}>
         <SettingsCard divided={false} className="p-6 text-sm text-muted-foreground">
-          请稍后重试。
+          {t('settings.tokenUsage.retryLater')}
         </SettingsCard>
       </SettingsSection>
     )
@@ -267,27 +267,27 @@ export function TokenUsageSettings(): React.ReactElement {
   return (
     <div className="space-y-8">
       <SettingsSection
-        title="Token 统计"
-        description={`统计窗口：${stats.fromDate} → ${stats.toDate}`}
+        title={t('settings.tokenUsage.title')}
+        description={t('settings.tokenUsage.window', { from: stats.fromDate, to: stats.toDate })}
         action={(
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded-xl border border-border/60 bg-muted/35 p-1">
-              {RANGE_OPTIONS.map((option) => (
+              {RANGE_DAY_OPTIONS.map((option) => (
                 <button
-                  key={option.value}
+                  key={option}
                   type="button"
-                  className={option.value === days
+                  className={option === days
                     ? 'rounded-lg bg-background px-3 py-1.5 text-xs font-medium text-foreground'
                     : 'rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground'}
-                  onClick={() => setDays(option.value)}
+                  onClick={() => setDays(option)}
                 >
-                  {option.label}
+                  {t('settings.tokenUsage.rangeDays', { count: option })}
                 </button>
               ))}
             </div>
             <Button variant="outline" size="sm" onClick={() => { void loadStats(days); void loadCalendarMonthStats() }}>
               <RefreshCw className="mr-1 size-4" />
-              刷新
+              {t('settings.about.refresh')}
             </Button>
           </div>
         )}
@@ -295,63 +295,63 @@ export function TokenUsageSettings(): React.ReactElement {
         <SettingsCard divided={false} className="p-4 space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard
-              label="总 Token"
+              label={t('settings.tokenUsage.totalTokens')}
               value={formatInteger(stats.totals.totalTokens)}
-              description={`共 ${stats.totals.requestCount} 次完成请求`}
+              description={t('settings.tokenUsage.requestCount', { count: stats.totals.requestCount })}
             />
             <MetricCard
-              label="输入"
+              label={t('settings.tokenUsage.input')}
               value={formatInteger(stats.totals.inputTokens)}
-              description="Prompt / context 输入"
+              description={t('settings.tokenUsage.inputHint')}
             />
             <MetricCard
-              label="输出"
+              label={t('settings.tokenUsage.output')}
               value={formatInteger(stats.totals.outputTokens)}
-              description="Assistant 输出"
+              description={t('settings.tokenUsage.outputHint')}
             />
             <MetricCard
-              label="缓存"
+              label={t('settings.tokenUsage.cache')}
               value={formatInteger(getCacheTokens(stats.totals))}
               description={`cache read + cache create · hit ${formatPercent(stats.totals.cacheHitRate)}`}
             />
             <MetricCard
-              label="成本"
+              label={t('settings.tokenUsage.cost')}
               value={formatUsd(stats.totals.costUsd)}
-              description="按模型价格表估算"
+              description={t('settings.tokenUsage.costHint')}
             />
           </div>
         </SettingsCard>
       </SettingsSection>
 
       <SettingsSection
-        title="预算与告警"
-        description="按本自然月（每月 1 日至今天）计算；软预算只做可视化提示，不阻断运行。"
+        title={t('settings.tokenUsage.budgetTitle')}
+        description={t('settings.tokenUsage.budgetDescription')}
       >
         <SettingsCard divided={false} className="p-4 space-y-4">
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
             <div>
-              <label htmlFor="token-budget-usd" className="mb-1.5 block text-xs text-muted-foreground">自然月 USD 预算</label>
-              <Input id="token-budget-usd" value={budgetUsd} onChange={(event) => setBudgetUsd(event.target.value)} placeholder="例如 20" inputMode="decimal" />
+              <label htmlFor="token-budget-usd" className="mb-1.5 block text-xs text-muted-foreground">{t('settings.tokenUsage.budgetUsd')}</label>
+              <Input id="token-budget-usd" value={budgetUsd} onChange={(event) => setBudgetUsd(event.target.value)} placeholder={t('settings.tokenUsage.budgetUsdPlaceholder')} inputMode="decimal" />
             </div>
             <div>
-              <label htmlFor="token-budget-tokens" className="mb-1.5 block text-xs text-muted-foreground">自然月 Token 预算</label>
-              <Input id="token-budget-tokens" value={budgetTokens} onChange={(event) => setBudgetTokens(event.target.value)} placeholder="例如 2000000" inputMode="numeric" />
+              <label htmlFor="token-budget-tokens" className="mb-1.5 block text-xs text-muted-foreground">{t('settings.tokenUsage.budgetTokens')}</label>
+              <Input id="token-budget-tokens" value={budgetTokens} onChange={(event) => setBudgetTokens(event.target.value)} placeholder={t('settings.tokenUsage.budgetTokensPlaceholder')} inputMode="numeric" />
             </div>
             <div className="flex items-end">
-              <Button variant="outline" onClick={() => void saveBudget()}>保存预算</Button>
+              <Button variant="outline" onClick={() => void saveBudget()}>{t('settings.tokenUsage.saveBudget')}</Button>
             </div>
           </div>
           {budgetStatus && (
             <div className="grid gap-3 md:grid-cols-2">
               <MetricCard
-                label="成本预算"
-                value={budgetStatus.usdLimit ? `${Math.round(budgetStatus.usdRatio * 100)}%` : '未设置'}
-                description={budgetStatus.usdLimit ? `${formatUsd(budgetStatus.usdUsed)} / ${formatUsd(budgetStatus.usdLimit)}` : '未配置自然月 USD 软阈值'}
+                label={t('settings.tokenUsage.costBudget')}
+                value={budgetStatus.usdLimit ? `${Math.round(budgetStatus.usdRatio * 100)}%` : t('settings.tokenUsage.notSet')}
+                description={budgetStatus.usdLimit ? `${formatUsd(budgetStatus.usdUsed)} / ${formatUsd(budgetStatus.usdLimit)}` : t('settings.tokenUsage.noUsdThreshold')}
               />
               <MetricCard
-                label="Token 预算"
-                value={budgetStatus.tokenLimit ? `${Math.round(budgetStatus.tokenRatio * 100)}%` : '未设置'}
-                description={budgetStatus.tokenLimit ? `${formatInteger(budgetStatus.tokensUsed)} / ${formatInteger(budgetStatus.tokenLimit)}` : '未配置自然月 token 软阈值'}
+                label={t('settings.tokenUsage.tokenBudget')}
+                value={budgetStatus.tokenLimit ? `${Math.round(budgetStatus.tokenRatio * 100)}%` : t('settings.tokenUsage.notSet')}
+                description={budgetStatus.tokenLimit ? `${formatInteger(budgetStatus.tokensUsed)} / ${formatInteger(budgetStatus.tokenLimit)}` : t('settings.tokenUsage.noTokenThreshold')}
               />
             </div>
           )}
@@ -359,15 +359,15 @@ export function TokenUsageSettings(): React.ReactElement {
       </SettingsSection>
 
       <SettingsSection
-        title="每日趋势"
-        description="最近窗口内每日输入 / 输出 token 变化。"
+        title={t('settings.tokenUsage.dailyTitle')}
+        description={t('settings.tokenUsage.dailyDescription')}
       >
         <SettingsCard divided={false} className="p-4">
           <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             <BarChart3 className="size-4" />
             <span>Stacked Bar：input + output</span>
           </div>
-          <div role="img" aria-label={`每日 Token 趋势，共 ${stats.daily.length} 天`} className="h-[280px] w-full">
+          <div role="img" aria-label={t('settings.tokenUsage.dailyChartAria', { count: stats.daily.length })} className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.daily} margin={{ top: 8, right: 16, left: -12, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
@@ -383,22 +383,22 @@ export function TokenUsageSettings(): React.ReactElement {
                       normalizedName === 'inputTokens' ? 'Input' : 'Output',
                     ] as [string, string]
                   }}
-                  labelFormatter={(label) => `日期：${label}`}
+                  labelFormatter={(label) => t('settings.tokenUsage.dateLabel', { date: label })}
                 />
                 <Bar dataKey="inputTokens" stackId="tokens" radius={[8, 8, 0, 0]} fill={CHART_INPUT_FILL} />
                 <Bar dataKey="outputTokens" stackId="tokens" radius={[8, 8, 0, 0]} fill={CHART_OUTPUT_FILL} />
               </BarChart>
             </ResponsiveContainer>
             <div className="sr-only">
-              {stats.daily.map((day) => `${day.date}：输入 ${formatInteger(day.inputTokens)}，输出 ${formatInteger(day.outputTokens)}`).join('；')}
+              {stats.daily.map((day) => t('settings.tokenUsage.dailySummary', { date: day.date, input: formatInteger(day.inputTokens), output: formatInteger(day.outputTokens) })).join(t('settings.tokenUsage.listSeparator'))}
             </div>
           </div>
         </SettingsCard>
       </SettingsSection>
 
       <SettingsSection
-        title="Channel / Model 分布"
-        description="按渠道查看模型消耗占比与明细。"
+        title={t('settings.tokenUsage.distributionTitle')}
+        description={t('settings.tokenUsage.distributionDescription')}
       >
         <SettingsCard divided={false} className="p-4 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -429,7 +429,7 @@ export function TokenUsageSettings(): React.ReactElement {
             <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
                 <DatabaseZap className="size-4" />
-                Channel 摘要
+                {t('settings.tokenUsage.channelSummary')}
               </div>
               <div className="space-y-2">
                 {stats.providers.map((provider) => (
@@ -441,7 +441,7 @@ export function TokenUsageSettings(): React.ReactElement {
                       <span className="text-sm font-medium text-foreground">
                         {formatProviderLabel(provider)}
                       </span>
-                      <span className="text-xs text-muted-foreground">{provider.requestCount} 次</span>
+                      <span className="text-xs text-muted-foreground">{t('settings.tokenUsage.requests', { count: provider.requestCount })}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
                       <div
@@ -473,8 +473,8 @@ export function TokenUsageSettings(): React.ReactElement {
 
               <div className="max-h-[360px] overflow-auto">
                 {filteredModels.length > 0 ? filteredModels.map((model) => {
-                  const context = getModelContextLabel(model)
-                  const unitPrice = formatModelUnitPrice(model)
+                  const context = getModelContextLabel(model, t)
+                  const unitPrice = formatModelUnitPrice(model, t)
                   return (
                     <div
                       key={`${model.provider}:${model.modelId}`}
@@ -501,7 +501,7 @@ export function TokenUsageSettings(): React.ReactElement {
                   )
                 }) : (
                   <div className="flex items-center justify-center px-6 py-12 text-sm text-muted-foreground">
-                    当前筛选下还没有模型统计。
+                    {t('settings.tokenUsage.noModelStats')}
                   </div>
                 )}
               </div>
@@ -511,13 +511,13 @@ export function TokenUsageSettings(): React.ReactElement {
           <div className="rounded-xl border border-border/60 bg-muted/15 p-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-2 text-foreground">
               <Coins className="size-4" />
-              <span className="font-medium">说明</span>
+              <span className="font-medium">{t('settings.tokenUsage.notesTitle')}</span>
             </div>
             <ul className="mt-2 space-y-1.5 leading-5">
-              <li>- 统计来源于 Agent 完成事件里的 usage 字段，按 `~/.kila/token-usage.jsonl` 持久化。</li>
-              <li>- 如果 provider 没返回成本，Kila 会按模型价格表估算；未知模型仍显示 0。</li>
-              <li>- Context 和 Price 来自本地 ModelCatalog，内置价格只做参考估算，可在渠道模型里覆盖。</li>
-              <li>- 当前表格按总 token 从高到低排序。</li>
+              <li>- {t('settings.tokenUsage.note1')}</li>
+              <li>- {t('settings.tokenUsage.note2')}</li>
+              <li>- {t('settings.tokenUsage.note3')}</li>
+              <li>- {t('settings.tokenUsage.note4')}</li>
             </ul>
           </div>
         </SettingsCard>
@@ -525,24 +525,24 @@ export function TokenUsageSettings(): React.ReactElement {
 
       <SettingsSection
         title="Session / Compaction"
-        description="按会话拆分 usage，并汇总当前窗口内已持久化的压缩事件。"
+        description={t('settings.tokenUsage.sessionDescription')}
       >
         <SettingsCard divided={false} className="p-4 space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <MetricCard
-              label="压缩次数"
+              label={t('settings.contextCompaction.compactionCount')}
               value={formatInteger(stats.compaction.count)}
-              description={`最近一次：${stats.compaction.lastCompactedAt ? new Date(stats.compaction.lastCompactedAt).toLocaleString('zh-CN') : '无'}`}
+              description={t('settings.contextCompaction.lastCompactedAt', { time: stats.compaction.lastCompactedAt ? new Date(stats.compaction.lastCompactedAt).toLocaleString(i18n.language) : t('settings.contextCompaction.never') })}
             />
             <MetricCard
-              label="压缩前 Token"
+              label={t('settings.contextCompaction.tokensBefore')}
               value={formatInteger(stats.compaction.tokensBefore)}
-              description="来自 compact_complete.tokensBefore 聚合"
+              description={t('settings.tokenUsage.tokensBeforeHint')}
             />
             <MetricCard
-              label="摘要长度"
+              label={t('settings.contextCompaction.summaryLength')}
               value={formatInteger(stats.compaction.summaryChars)}
-              description="summaryText 字符数，用于判断压缩粒度"
+              description={t('settings.tokenUsage.summaryLengthHint')}
             />
           </div>
 
@@ -570,7 +570,7 @@ export function TokenUsageSettings(): React.ReactElement {
                 </div>
               )) : (
                 <div className="flex items-center justify-center px-6 py-12 text-sm text-muted-foreground">
-                  当前窗口内没有 session 级统计。
+                  {t('settings.tokenUsage.noSessionStats')}
                 </div>
               )}
             </div>

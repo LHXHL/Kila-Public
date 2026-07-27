@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Folder, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FileIndexEntry } from '@kila/shared'
@@ -22,6 +23,7 @@ export interface FileMentionRef {
 
 export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListProps>(
   function FileMentionList({ items, selectedIndex, onSelect }, ref) {
+    const { t } = useTranslation()
     const [localIndex, setLocalIndex] = React.useState(selectedIndex)
     const containerRef = React.useRef<HTMLDivElement>(null)
 
@@ -65,7 +67,7 @@ export const FileMentionList = React.forwardRef<FileMentionRef, FileMentionListP
     if (items.length === 0) {
       return (
         <div className="rounded-xl border bg-popover p-2 text-[11px] text-muted-foreground">
-          无匹配文件
+          {t('fileBrowser.mention.noMatch')}
         </div>
       )
     }

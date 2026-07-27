@@ -10,11 +10,14 @@
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
 
-    <!-- 允许 dyld 环境变量（用于调试和某些功能） -->
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-    <true/>
+    <!--
+      刻意不申请 com.apple.security.cs.allow-dyld-environment-variables。
+      它与下面的 disable-library-validation 组合会让攻击者能用 DYLD_INSERT_LIBRARIES
+      向硬化签名进程注入任意未签名 dylib，等于抵消 hardenedRuntime 的保护。
+      该 entitlement 只在调试场景需要，生产构建不需要；全仓已核对无 DYLD_ 依赖。
+    -->
 
-    <!-- 禁用库验证（允许加载第三方库） -->
+    <!-- 禁用库验证（加载 ext-modules 下随包分发的第三方运行时依赖所需） -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
 

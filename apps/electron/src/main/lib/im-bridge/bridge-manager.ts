@@ -32,7 +32,7 @@ import { getSettings } from '../settings-service'
 import { broadcastSessionChannel } from '../cli-bridge/broadcaster'
 import { registerSessionRuntimeObserver } from '../session-runtime-observers'
 import { createLogger } from '../logger'
-import { imBridgeConfigManager, ImBridgeConfigManager } from './config-manager'
+import { imBridgeConfigManager, type ImBridgeConfigManager } from './config-manager'
 import { ChannelRouter } from './channel-router'
 import { chunkOutboundMessage, renderTelegramOutbound } from './delivery-layer'
 import { HeadlessSessionBridge } from './headless-session-bridge'
@@ -45,6 +45,11 @@ import {
 } from './bridge-session-defaults'
 import { BridgeRateLimiter } from './security/rate-limiter'
 import { buildInboundUserMessage, hasUsableInboundContent } from './security/validators'
+import { evaluateInboundGuard } from './security/inbound-guard'
+import { rejectInboundMessage } from './security/inbound-rejection'
+import { isSenderAllowed } from './security/sender-allowlist'
+import { resolveBridgePermissionMode } from './security/permission-mode'
+import { buildPermissionPromptText } from './permission-prompt-text'
 import type { BridgeAdapter, BridgeAdapterEvent, BridgeInboundMessage } from './adapters/base-adapter'
 import { DiscordAdapter, FeishuAdapter, FeishuMultiAdapter, TelegramAdapter } from './adapters'
 import type { AgentEvent } from '@kila/shared'
@@ -52,7 +57,7 @@ import { createInitialState, reduce as reduceRunState, finalizeIfRunning } from 
 import type { RunState } from './feishu/card-run-state'
 import { WeChatAdapterGroup } from './wechat'
 import { parseWeChatTextApproval } from './wechat/parser'
-import { imBridgeAuditLog, ImBridgeAuditLog } from './audit-log'
+import { imBridgeAuditLog, type ImBridgeAuditLog } from './audit-log'
 import { BridgeLifecycleRegistry, type BridgeSecretState } from './bridge-lifecycle-registry'
 import { FeishuSessionMirrorService } from './feishu/session-mirror'
 import { syncFeishuMirrorSleepBlocker } from './feishu-sleep-blocker'
@@ -243,6 +248,9 @@ export class BridgeManager {
         const { permissionService } = require('../agent-permission-service') as typeof import('../agent-permission-service')
         return permissionService.respondToPermission(requestId, behavior, alwaysAllow)
       },
+      // 审批按钮/审批码同样受身份白名单约束：公共频道里任何成员都能抢先点“允许”是不可接受的
+      isActorAllowed: (channelType, identity) => isSenderAllowed(channelType, this.resolveLiveConfig(), identity),
+      getApprovalMode: (channelType) => this.adapters[channelType].capabilities?.approvalMode ?? 'interactive',
       dispatchPrompt: async (prompt) => {
         const binding = this.channelRouter.listBindings().find((item) => item.endpointKey === prompt.endpointKey)
         if (!binding) {
@@ -255,7 +263,7 @@ export class BridgeManager {
           threadId: binding.threadId,
           endpointKey: binding.endpointKey,
           providerContext: this.buildProviderContext(binding),
-          promptText: this.buildPermissionPromptText(prompt),
+          promptText: buildPermissionPromptText(prompt),
         })
       },
     })
@@ -581,31 +589,6 @@ export class BridgeManager {
         sessionId: binding.sessionId,
       },
     }
-  }
-
-  private buildPermissionPromptText(prompt: {
-    channelType: BridgeChannelType
-    toolName: string
-    description: string
-    approvalCode?: string
-  }): string {
-    if (prompt.channelType === 'wechat') {
-      const code = prompt.approvalCode ?? 'CODE'
-      return [
-        `权限请求：${prompt.toolName}`,
-        prompt.description,
-        `审批码：${code}`,
-        `回复 /allow ${code} 允许一次`,
-        `回复 /allow-always ${code} 总是允许`,
-        `回复 /deny ${code} 拒绝`,
-      ].join('\n')
-    }
-
-    return [
-      `权限请求：${prompt.toolName}`,
-      prompt.description,
-      '请选择允许一次 / 总是允许 / 拒绝',
-    ].join('\n')
   }
 
   private syncWechatAccountIds(): void {
@@ -953,7 +936,15 @@ export class BridgeManager {
 
   private async handleAdapterEvent(event: BridgeAdapterEvent): Promise<void> {
     if (event.type === 'permission_action') {
-      const result = this.permissionBridge.resolveAction(event.action)
+      const result = this.permissionBridge.resolveAction({
+        channelType: event.action.channelType,
+        callbackToken: event.action.callbackToken,
+        endpointKey: event.action.endpointKey,
+        userId: event.action.userId,
+        chatId: event.action.chatId,
+        behavior: event.action.behavior,
+        alwaysAllow: event.action.alwaysAllow,
+      })
       this.auditLog.appendPermissionAction({
         channelType: event.action.channelType,
         endpointKey: event.action.endpointKey,
@@ -1015,50 +1006,20 @@ export class BridgeManager {
       return
     }
 
-    if (!this.rateLimiter.allow(message.endpointKey)) {
-      await this.adapters[message.channelType].sendMessage({
-        chatId: message.chatId,
-        threadId: message.threadId,
-        endpointKey: message.endpointKey,
-        text: '消息过于频繁，请稍后重试。',
-        deliveryKind: 'system',
-        providerContext: message.providerContext,
-      })
-      this.auditLog.appendOutboundMessage({
-        channelType: message.channelType,
-        endpointKey: message.endpointKey,
-        chatId: message.chatId,
-        threadId: message.threadId,
-        text: '消息过于频繁，请稍后重试。',
-        deliveryKind: 'system',
-        reason: 'rate_limited',
-      })
-      return
-    }
-
-    const maxInboundFileBytes = message.channelType === 'telegram'
-      ? this.resolveTelegramConfig().maxInboundFileBytes
-      : message.channelType === 'discord'
-        ? this.resolveDiscordConfig().maxInboundFileBytes
-        : Number.MAX_SAFE_INTEGER
-    const oversizedAttachment = message.attachments.find((attachment) => attachment.size > maxInboundFileBytes)
-    if (oversizedAttachment) {
-      await this.adapters[message.channelType].sendMessage({
-        chatId: message.chatId,
-        threadId: message.threadId,
-        endpointKey: message.endpointKey,
-        text: `附件过大，已拒绝接收：${oversizedAttachment.filename}`,
-        deliveryKind: 'system',
-        providerContext: message.providerContext,
-      })
-      this.auditLog.appendOutboundMessage({
-        channelType: message.channelType,
-        endpointKey: message.endpointKey,
-        chatId: message.chatId,
-        threadId: message.threadId,
-        text: `附件过大，已拒绝接收：${oversizedAttachment.filename}`,
-        deliveryKind: 'system',
-        reason: 'oversized_attachment',
+    // 唯一身份/准入真相源：白名单 + 出站专用绑定 + 频率 + 附件大小
+    const guard = evaluateInboundGuard({
+      message,
+      config: this.resolveLiveConfig(),
+      existingBinding: this.channelRouter.listBindings().find((item) => item.endpointKey === message.endpointKey),
+      rateLimiter: this.rateLimiter,
+    })
+    if (!guard.allowed) {
+      await rejectInboundMessage({
+        message,
+        rejection: guard,
+        adapter: this.adapters[message.channelType],
+        auditLog: this.auditLog,
+        onSendError: (error) => log.error('[IM Bridge] 发送入站拒绝提示失败', error),
       })
       return
     }
@@ -1091,7 +1052,10 @@ export class BridgeManager {
       const action = parseWeChatTextApproval(message.text)
       if (action) {
         const result = this.permissionBridge.resolveTextApproval({
+          channelType: 'wechat',
           endpointKey: message.endpointKey,
+          userId: message.userId,
+          chatId: message.chatId,
           approvalCode: action.approvalCode,
           behavior: action.behavior,
           alwaysAllow: action.alwaysAllow,
@@ -1200,6 +1164,16 @@ export class BridgeManager {
       })
     }
 
+    // 权限模式：默认不覆盖（走 smart 闸门）；只有显式开启 autoApprove 的飞书 Bot 才允许 auto
+    const permissionDecision = resolveBridgePermissionMode({
+      channelType: message.channelType,
+      config: effectiveConfig,
+      botId: message.botId,
+    })
+    if (permissionDecision.reason === 'auto_approve_requires_allowlist') {
+      log.warn('[IM Bridge] 已忽略自动放行：该渠道未配置发送者白名单，回退到权限闸门')
+    }
+
     const result = await this.headlessBridge.sendMessage({
       sessionId: binding.sessionId,
       channelType: message.channelType,
@@ -1209,9 +1183,7 @@ export class BridgeManager {
       overrides: {
         channelId: defaultsResult.channelId,
         modelId: defaultsResult.modelId,
-        ...(message.channelType === 'feishu'
-          ? { permissionModeOverride: 'auto' as const }
-          : {}),
+        ...(permissionDecision.mode ? { permissionModeOverride: permissionDecision.mode } : {}),
       },
     })
 

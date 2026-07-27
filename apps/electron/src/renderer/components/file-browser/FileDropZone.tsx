@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Upload, File, FolderPlus, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -36,13 +37,14 @@ export function FileDropZone({
   selectTooltipText,
   attachTooltipText,
 }: FileDropZoneProps): React.ReactElement {
+  const { t } = useTranslation()
   const [isDragOver, setIsDragOver] = React.useState(false)
   const [isUploading, setIsUploading] = React.useState(false)
   const [uploadProgress, setUploadProgress] = React.useState<{ completed: number; total: number; phase: 'reading' | 'saving' } | null>(null)
 
-  const resolvedDescriptionText = descriptionText ?? '当前会话项目文件夹内可访问'
-  const resolvedSelectTooltipText = selectTooltipText ?? '添加文件到当前会话项目文件夹'
-  const resolvedAttachTooltipText = attachTooltipText ?? '切换当前会话的项目文件夹'
+  const resolvedDescriptionText = descriptionText ?? t('fileBrowser.dropZone.description')
+  const resolvedSelectTooltipText = selectTooltipText ?? t('fileBrowser.dropZone.selectTooltip')
+  const resolvedAttachTooltipText = attachTooltipText ?? t('fileBrowser.dropZone.attachTooltip')
 
   /** 保存文件到目标目录 */
   const saveFiles = React.useCallback(async (files: globalThis.File[]): Promise<void> => {
@@ -66,15 +68,15 @@ export function FileDropZone({
       })
 
       onFilesUploaded()
-      toast.success(`已添加 ${files.length} 个文件`)
+      toast.success(t('fileBrowser.dropZone.uploaded', { count: files.length }))
     } catch (error) {
       console.error('[FileDropZone] 文件上传失败:', error)
-      toast.error('文件上传失败')
+      toast.error(t('fileBrowser.dropZone.uploadFailed'))
     } finally {
       setIsUploading(false)
       setUploadProgress(null)
     }
-  }, [onFilesUploaded, sessionId])
+  }, [onFilesUploaded, sessionId, t])
 
   // ===== 拖拽处理 =====
 
@@ -111,13 +113,13 @@ export function FileDropZone({
     }
 
     if (hasFolders) {
-      toast.info('不支持拖拽文件夹', { description: '请使用「附加文件夹」按钮' })
+      toast.info(t('fileBrowser.dropZone.folderUnsupported'), { description: t('fileBrowser.dropZone.folderUnsupportedHint') })
     }
 
     if (regularFiles.length > 0) {
       await saveFiles(regularFiles)
     }
-  }, [saveFiles])
+  }, [saveFiles, t])
 
   // ===== 按钮点击处理 =====
 
@@ -139,15 +141,15 @@ export function FileDropZone({
       })
 
       onFilesUploaded()
-      toast.success(`已添加 ${result.files.length} 个文件`)
+      toast.success(t('fileBrowser.dropZone.uploaded', { count: result.files.length }))
     } catch (error) {
       console.error('[FileDropZone] 选择文件失败:', error)
-      toast.error('文件上传失败')
+      toast.error(t('fileBrowser.dropZone.uploadFailed'))
     } finally {
       setIsUploading(false)
       setUploadProgress(null)
     }
-  }, [onFilesUploaded, sessionId])
+  }, [onFilesUploaded, sessionId, t])
 
   return (
     <div className="flex-shrink-0 px-3 pt-3 pb-1">
@@ -169,8 +171,8 @@ export function FileDropZone({
             <Loader2 className="size-5 text-muted-foreground animate-spin" />
             <span role="status" className="text-xs text-muted-foreground">
               {uploadProgress?.phase === 'reading'
-                ? `正在读取 ${uploadProgress.completed}/${uploadProgress.total}`
-                : `正在保存 ${uploadProgress?.total ?? 0} 个文件…`}
+                ? t('fileBrowser.dropZone.reading', { completed: uploadProgress.completed, total: uploadProgress.total })
+                : t('fileBrowser.dropZone.saving', { count: uploadProgress?.total ?? 0 })}
             </span>
           </>
         ) : (
@@ -180,7 +182,7 @@ export function FileDropZone({
               isDragOver ? 'text-primary' : 'text-muted-foreground/60',
             )} />
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
-              拖拽文件到此处
+              {t('fileBrowser.dropZone.hint')}
               <br />
               <span className="text-[10px] text-muted-foreground/60">
                 {resolvedDescriptionText}
@@ -197,7 +199,7 @@ export function FileDropZone({
                     onClick={handleSelectFiles}
                   >
                     <File className="size-3" />
-                    选择文件
+                    {t('fileBrowser.dropZone.selectFiles')}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -215,7 +217,7 @@ export function FileDropZone({
                       onClick={onAttachFolder}
                     >
                       <FolderPlus className="size-3" />
-                      附加文件夹
+                      {t('fileBrowser.dropZone.attachFolder')}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   BarChartSpec,
   ComparisonTableSpec,
@@ -68,6 +69,7 @@ function SchemaWidgetRendererInner({
   onDraftIntent,
   draftSource,
 }: SchemaWidgetRendererProps): React.ReactElement {
+  const { t } = useTranslation()
   const [isPinning, setIsPinning] = React.useState(false)
   const canPin = Boolean(sessionId && sourceMessageId && sourceBlockKey)
   const hasHeader = Boolean(title || toolbar || canPin)
@@ -77,7 +79,7 @@ function SchemaWidgetRendererInner({
   }, [onDraftIntent])
 
   const body = React.useMemo(() => {
-    const heading = title?.trim() || undefined
+    const heading = title?.trim() || t('agent.widget.thisWidget')
 
     switch (widgetType) {
       case 'stat-grid':
@@ -86,8 +88,8 @@ function SchemaWidgetRendererInner({
             spec={spec as import('@kila/shared').StatGridSpec}
             onItemClick={onDraftIntent ? ({ item }) => {
               const intent = buildDraftIntent(
-                `基于「${heading || '这个 widget'}」，进一步解释指标「${item.label}」的含义、变化原因和后续建议。`,
-                `分析 ${item.label}`,
+                t('agent.widget.prompts.stat', { widget: heading, metric: item.label }),
+                t('agent.widget.prompts.analyzeLabel', { target: item.label }),
                 draftSource,
               )
               if (intent) emitDraftIntent(intent)
@@ -100,8 +102,8 @@ function SchemaWidgetRendererInner({
             spec={spec as LineChartSpec}
             onPointClick={onDraftIntent ? ({ xValue, seriesLabel, value }) => {
               const intent = buildDraftIntent(
-                `基于「${heading || '这个 widget'}」，解释 ${xValue} 的 ${seriesLabel} = ${value} 的原因，并给出下一步分析建议。`,
-                `分析 ${xValue}`,
+                t('agent.widget.prompts.point', { widget: heading, x: xValue, series: seriesLabel, value }),
+                t('agent.widget.prompts.analyzeLabel', { target: xValue }),
                 draftSource,
               )
               if (intent) emitDraftIntent(intent)
@@ -114,8 +116,8 @@ function SchemaWidgetRendererInner({
             spec={spec as BarChartSpec}
             onBarClick={onDraftIntent ? ({ xValue, seriesLabel, value }) => {
               const intent = buildDraftIntent(
-                `基于「${heading || '这个 widget'}」，解释 ${xValue} 的 ${seriesLabel} = ${value} 的原因，并给出下一步分析建议。`,
-                `分析 ${xValue}`,
+                t('agent.widget.prompts.point', { widget: heading, x: xValue, series: seriesLabel, value }),
+                t('agent.widget.prompts.analyzeLabel', { target: xValue }),
                 draftSource,
               )
               if (intent) emitDraftIntent(intent)
@@ -128,9 +130,12 @@ function SchemaWidgetRendererInner({
             spec={spec as ComparisonTableSpec}
             onRowClick={onDraftIntent ? ({ row }) => {
               const firstValue = Object.values(row)[0]
+              const rowLabel = firstValue === undefined || firstValue === null
+                ? t('agent.widget.prompts.thisRow')
+                : String(firstValue)
               const intent = buildDraftIntent(
-                `基于「${heading || '这个 widget'}」，展开分析这一行数据，并解释它与其他行相比的差异。重点关注 ${String(firstValue ?? '该项')}。`,
-                `分析 ${String(firstValue ?? '该行')}`,
+                t('agent.widget.prompts.row', { widget: heading, row: rowLabel }),
+                t('agent.widget.prompts.analyzeLabel', { target: rowLabel }),
                 draftSource,
               )
               if (intent) emitDraftIntent(intent)
@@ -143,8 +148,8 @@ function SchemaWidgetRendererInner({
             spec={spec as import('@kila/shared').TimelineSpec}
             onItemClick={onDraftIntent ? ({ item }) => {
               const intent = buildDraftIntent(
-                `基于「${heading || '这个 widget'}」，详细解释「${item.title}」阶段的作用、前后依赖以及风险点。`,
-                `展开 ${item.title}`,
+                t('agent.widget.prompts.timeline', { widget: heading, stage: item.title }),
+                t('agent.widget.prompts.expandLabel', { target: item.title }),
                 draftSource,
               )
               if (intent) emitDraftIntent(intent)
@@ -157,16 +162,16 @@ function SchemaWidgetRendererInner({
             spec={spec as FlowDiagramSpec}
             onNodeClick={onDraftIntent ? ({ node }) => {
               const intent = buildDraftIntent(
-                `基于「${heading || '这个 widget'}」，说明节点「${node.label}」在整体流程中的作用与上下游关系。`,
-                `分析 ${node.label}`,
+                t('agent.widget.prompts.node', { widget: heading, node: node.label }),
+                t('agent.widget.prompts.analyzeLabel', { target: node.label }),
                 draftSource,
               )
               if (intent) emitDraftIntent(intent)
             } : undefined}
             onEdgeClick={onDraftIntent ? ({ edge }) => {
               const intent = buildDraftIntent(
-                `基于「${heading || '这个 widget'}」，说明连接「${edge.from} -> ${edge.to}」在整体流程中的作用与上下游关系。`,
-                `分析 ${edge.from}→${edge.to}`,
+                t('agent.widget.prompts.edge', { widget: heading, from: edge.from, to: edge.to }),
+                t('agent.widget.prompts.analyzeLabel', { target: `${edge.from}→${edge.to}` }),
                 draftSource,
               )
               if (intent) emitDraftIntent(intent)
@@ -174,9 +179,9 @@ function SchemaWidgetRendererInner({
           />
         )
       default:
-        return <div className="rounded-lg border border-border/30 bg-muted/20 p-3 text-sm text-muted-foreground">暂不支持该 schema widget。</div>
+        return <div className="rounded-lg border border-border/30 bg-muted/20 p-3 text-sm text-muted-foreground">{t('agent.widget.unsupportedSchema')}</div>
     }
-  }, [draftSource, emitDraftIntent, onDraftIntent, spec, title, widgetType])
+  }, [draftSource, emitDraftIntent, onDraftIntent, spec, t, title, widgetType])
 
   const handlePin = React.useCallback(async (): Promise<void> => {
     if (!canPin || !sessionId || !sourceMessageId || !sourceBlockKey) return
@@ -198,14 +203,14 @@ function SchemaWidgetRendererInner({
         } satisfies SchemaWidgetPayload,
       })
       onPinned?.(pinnedWidget)
-      toast.success('已固定到右侧 Board')
+      toast.success(t('agent.widget.pinned'))
     } catch (error) {
       console.error('[SchemaWidgetRenderer] 固定 widget 失败:', error)
-      toast.error('固定 widget 失败')
+      toast.error(t('agent.widget.pinFailed'))
     } finally {
       setIsPinning(false)
     }
-  }, [canPin, caption, onPinned, sessionId, sourceBlockKey, sourceMessageId, spec, title, widgetType])
+  }, [canPin, caption, onPinned, sessionId, sourceBlockKey, sourceMessageId, spec, t, title, widgetType])
 
   return (
     <div className="group/widget relative my-1.5 w-full overflow-hidden rounded-xl border border-border/30 bg-background/40">
@@ -225,7 +230,7 @@ function SchemaWidgetRendererInner({
                 className="inline-flex items-center gap-1 rounded-md border border-border/25 bg-background/80 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:cursor-wait disabled:opacity-60"
               >
                 <Pin className="size-3.5" />
-                {isPinning ? '固定中…' : '固定'}
+                {isPinning ? t('agent.widget.pinning') : t('agent.widget.pin')}
               </button>
             )}
             {toolbar}

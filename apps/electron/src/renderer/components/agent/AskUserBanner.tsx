@@ -7,6 +7,7 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { allPendingAskUserRequestsAtom } from '@/atoms/agent-permission-atoms'
@@ -33,6 +34,7 @@ interface AskUserBannerProps {
 }
 
 export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const allRequests = useAtomValue(allPendingAskUserRequestsAtom)
   const requests = allRequests.get(sessionId) ?? []
   const [answers, setAnswers] = React.useState<Map<number, QuestionAnswer>>(new Map())
@@ -119,7 +121,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
       await window.electronAPI.respondAskUser({ requestId: request.requestId, answers: answersRecord })
     } catch (error) {
       console.error('[AskUserBanner] 响应失败:', error)
-      setResponseError(error instanceof Error ? error.message : '答案未提交，请重试')
+      setResponseError(error instanceof Error ? error.message : t('agent.askUser.submitFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -128,13 +130,13 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
   const currentQuestion = questions[activeTab]
   if (!currentQuestion) return null
   const expiryHint = remainingMs > 0
-    ? `将在 ${formatRemaining(remainingMs)} 后自动取消`
-    : '请求已过期，正在移除'
+    ? t('agent.askUser.autoCancelIn', { time: formatRemaining(remainingMs) })
+    : t('agent.askUser.expired')
 
   return (
     <div
       role="region"
-      aria-label="Agent 问题"
+      aria-label={t('agent.askUser.regionLabel')}
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget || event.defaultPrevented) return
@@ -164,7 +166,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2">
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">Kila Agent 需要你的输入</span>
+            <span className="text-sm font-medium text-foreground">{t('agent.askUser.title')}</span>
             <span className="text-[11px] text-muted-foreground" aria-live="polite">{expiryHint}</span>
           </div>
           {requests.length > 1 && (
@@ -174,7 +176,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
 
         {/* Tab 栏（多问题时显示） */}
         {questions.length > 1 && (
-          <div role="tablist" aria-label="问题列表" className="flex gap-1">
+          <div role="tablist" aria-label={t('agent.askUser.tabListLabel')} className="flex gap-1">
             {questions.map((q, idx) => {
               const isActive = idx === activeTab
               const hasAnswer = getAnswer(idx).selected.length > 0
@@ -197,7 +199,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
                   `}
                   onClick={() => setActiveTab(idx)}
                 >
-                  {q.header || `问题 ${idx + 1}`}
+                  {q.header || t('agent.askUser.questionFallback', { index: idx + 1 })}
                 </button>
               )
             })}
@@ -235,7 +237,9 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
       <div className="flex items-center justify-end gap-1.5 px-4 pb-3">
         {!isExpired && (
           <span className="text-[10px] text-muted-foreground/40 mr-auto">
-            聚焦卡片后 ↑↓ 选择 · Enter {isLastTab ? '确认' : '下一个'}
+            {t('agent.askUser.keyboardHint', {
+              action: isLastTab ? t('common.confirm') : t('agent.askUser.next'),
+            })}
           </span>
         )}
         {isLastTab && (
@@ -247,7 +251,7 @@ export function AskUserBanner({ sessionId }: AskUserBannerProps): React.ReactEle
             className="h-7 px-3 text-xs"
           >
             <Send className="size-3 mr-1" />
-            确认
+            {t('common.confirm')}
           </Button>
         )}
       </div>
@@ -277,6 +281,7 @@ function QuestionCard({
   onCustomTextChange: (text: string) => void
   onSubmit: () => void
 }): React.ReactElement {
+  const { t } = useTranslation()
   const optionCount = question.options.length
 
   return (
@@ -343,7 +348,7 @@ function QuestionCard({
           <span className={`text-[10px] shrink-0 ${answer.showCustom ? 'text-[hsl(var(--brand-soft-foreground)/0.65)]' : 'text-muted-foreground/50'}`}>
             {optionCount + 1}
           </span>
-          <span className="font-medium">其他...</span>
+          <span className="font-medium">{t('agent.askUser.other')}</span>
         </button>
       </div>
 
@@ -352,8 +357,8 @@ function QuestionCard({
         <input
           type="text"
           className="w-full rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-xs transition-colors duration-200 placeholder:text-muted-foreground/40 focus:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/25"
-          placeholder="输入自定义答案..."
-          aria-label="自定义答案"
+          placeholder={t('agent.askUser.customPlaceholder')}
+          aria-label={t('agent.askUser.customLabel')}
           value={answer.customText}
           disabled={disabled}
           onChange={(e) => onCustomTextChange(e.target.value)}

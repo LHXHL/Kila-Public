@@ -1,10 +1,12 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { settingsDirtyAtom, settingsTabAtom } from '@/atoms/settings-tab'
 import { Panel } from '@/components/app-shell/Panel'
 import { SettingsPanel } from './SettingsPanel'
 
 export function SettingsWindowApp(): React.ReactElement {
+  const { t } = useTranslation()
   const setSettingsTab = useSetAtom(settingsTabAtom)
   const settingsDirty = useAtomValue(settingsDirtyAtom)
   const settingsDirtyRef = React.useRef(settingsDirty)
@@ -20,10 +22,10 @@ export function SettingsWindowApp(): React.ReactElement {
     }
 
     return window.electronAPI.onSettingsNavigate((tab) => {
-      if (settingsDirtyRef.current && !window.confirm('当前设置尚未保存。放弃这些更改并切换页面？')) return
+      if (settingsDirtyRef.current && !window.confirm(t('settings.unsavedConfirm'))) return
       setSettingsTab(tab)
     })
-  }, [setSettingsTab])
+  }, [setSettingsTab, t])
 
   React.useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent): void => {

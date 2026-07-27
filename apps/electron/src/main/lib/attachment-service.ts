@@ -11,12 +11,14 @@
  */
 
 import { readFileSync, writeFileSync, unlinkSync, existsSync, rmSync } from 'node:fs'
-import { extname, basename, join } from 'node:path'
+import { extname, basename, isAbsolute, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { dialog, BrowserWindow } from 'electron'
 import {
+  getAttachmentsDir,
   getConversationAttachmentsDir,
   resolveAttachmentPath,
+  safePathSegment,
 } from './config-paths'
 import type {
   FileAttachment,
@@ -99,6 +101,58 @@ export function getMimeType(ext: string): string {
 }
 
 /**
+ * 从原始文件名提取安全扩展名
+ *
+ * 只保留字母数字，长度上限 16；异常输入统一落到 `.bin`。
+ */
+function safeExtension(filename: string): string {
+  const raw = typeof filename === 'string' ? extname(filename) : ''
+  const normalized = raw.replace(/[^a-zA-Z0-9.]/g, '')
+  if (!normalized.startsWith('.') || normalized.length < 2 || normalized.length > 16) {
+    return '.bin'
+  }
+  // 只允许单段扩展名，杜绝 '..' 与多点构造
+  return /^\.[a-zA-Z0-9]+$/.test(normalized) ? normalized.toLowerCase() : '.bin'
+}
+
+/**
+ * 存量绝对路径附件的放行器
+ *
+ * 早期版本允许把任意绝对路径写进 `attachment.localPath`。
+ * 这类历史数据仍需可读，但绝不能由 Renderer 自由指定路径，
+ * 因此由调用方（IPC 层）注入 Agent 文件访问白名单校验函数。
+ * 不注入时，绝对路径一律拒绝。
+ */
+export interface AttachmentAccessOptions {
+  assertAbsoluteAccess?: (absolutePath: string) => string
+}
+
+/**
+ * 解析附件 localPath
+ *
+ * - 相对路径：强制约束在 `~/.kila/attachments/` 内
+ * - 绝对路径：仅当调用方注入了白名单校验器时才放行
+ */
+function resolveReadableAttachmentPath(
+  localPath: string,
+  options: AttachmentAccessOptions,
+): string {
+  if (typeof localPath !== 'string' || localPath.trim() === '') {
+    throw new Error('附件路径不能为空')
+  }
+
+  if (isAbsolute(localPath)) {
+    if (!options.assertAbsoluteAccess) {
+      throw new Error('附件路径必须是相对路径')
+    }
+    // 存量绝对路径：复用与其它文件 IPC 相同的工作区白名单
+    return options.assertAbsoluteAccess(resolveAttachmentPath(localPath, { allowAbsolute: true }))
+  }
+
+  return resolveAttachmentPath(localPath)
+}
+
+/**
  * 保存附件到本地
  *
  * 将 base64 编码的文件数据解码后写入
@@ -110,14 +164,17 @@ export function getMimeType(ext: string): string {
 export function saveAttachment(input: AttachmentSaveInput): AttachmentSaveResult {
   const { conversationId, filename, mediaType, data } = input
 
-  // 确保目录存在
-  const dir = getConversationAttachmentsDir(conversationId)
+  // 会话 ID 先净化再落盘，避免 '../../../tmp/x' 这类穿越写入任意目录
+  const safeConversationId = safePathSegment(conversationId)
 
-  // 生成唯一文件名
-  const ext = extname(filename) || '.bin'
+  // 确保目录存在
+  const dir = getConversationAttachmentsDir(safeConversationId)
+
+  // 生成唯一文件名：扩展名同样净化，防止 '.php/../../evil' 之类的构造
+  const ext = safeExtension(filename)
   const id = randomUUID()
   const storedFilename = `${id}${ext}`
-  const localPath = `${conversationId}/${storedFilename}`
+  const localPath = `${safeConversationId}/${storedFilename}`
   const fullPath = join(dir, storedFilename)
 
   // base64 解码并写入
@@ -145,8 +202,11 @@ export function saveAttachment(input: AttachmentSaveInput): AttachmentSaveResult
  * @param localPath 相对路径 {conversationId}/{uuid}.ext
  * @returns base64 编码的文件数据
  */
-export function readAttachmentAsBase64(localPath: string): string {
-  const fullPath = resolveAttachmentPath(localPath, { allowAbsolute: true })
+export function readAttachmentAsBase64(
+  localPath: string,
+  options: AttachmentAccessOptions = {},
+): string {
+  const fullPath = resolveReadableAttachmentPath(localPath, options)
 
   if (!existsSync(fullPath)) {
     throw new Error(`附件文件不存在: ${localPath}`)
@@ -161,8 +221,11 @@ export function readAttachmentAsBase64(localPath: string): string {
  *
  * @param localPath 相对路径 {conversationId}/{uuid}.ext
  */
-export function deleteAttachment(localPath: string): void {
-  const fullPath = resolveAttachmentPath(localPath, { allowAbsolute: true })
+export function deleteAttachment(
+  localPath: string,
+  options: AttachmentAccessOptions = {},
+): void {
+  const fullPath = resolveReadableAttachmentPath(localPath, options)
 
   if (existsSync(fullPath)) {
     try {
@@ -182,7 +245,8 @@ export function deleteAttachment(localPath: string): void {
  * @param conversationId 对话 ID
  */
 export function deleteConversationAttachments(conversationId: string): void {
-  const dir = join(resolveAttachmentPath(''), conversationId)
+  // 净化后再拼接，避免 conversationId 携带 '../' 递归删除任意目录
+  const dir = join(getAttachmentsDir(), safePathSegment(conversationId))
 
   if (existsSync(dir)) {
     try {

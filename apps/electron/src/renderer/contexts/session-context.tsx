@@ -31,7 +31,3 @@ export function useSessionId(): string {
 export function useSessionIdOptional(): string | null {
   return React.useContext(SessionContext)
 }
-
-export function useAgentSessionId(): string {
-  return useSessionId()
-}

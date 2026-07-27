@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { RadioTower, RefreshCw } from 'lucide-react'
 import {
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { SettingsCard } from './primitives/SettingsCard'
 import { SettingsSection } from './primitives/SettingsSection'
 import { SettingsSegmentedControl } from './primitives/SettingsSegmentedControl'
+import { getBridgeChannelLabel } from './bridge/bridge-labels'
 import { BridgeBindingsPanel } from './bridge/BridgeBindingsPanel'
 import { BridgeGeneralSettings } from './bridge/BridgeGeneralSettings'
 import { DiscordBridgeSettings } from './bridge/DiscordBridgeSettings'
@@ -53,6 +55,9 @@ const DEFAULT_CONFIG: BridgeConfig = {
     allowP2P: true,
     allowGroup: true,
     requireMention: true,
+    allowedOpenIds: [],
+    allowedChatIds: [],
+    maxInboundFileBytes: 10 * 1024 * 1024,
     streamingCards: true,
     quietWindowMs: 600,
     maxConcurrent: 5,
@@ -63,6 +68,7 @@ const DEFAULT_CONFIG: BridgeConfig = {
     baseUrl: 'https://ilinkai.weixin.qq.com',
     accountIds: [],
     allowedUserIds: [],
+    maxInboundFileBytes: 25 * 1024 * 1024,
     aggregateWindowMs: 1200,
     deferredOutboundTtlMs: 12 * 60 * 60 * 1000,
     contextTtlMs: 24 * 60 * 60 * 1000,
@@ -70,21 +76,7 @@ const DEFAULT_CONFIG: BridgeConfig = {
   },
 }
 
-const TAB_OPTIONS = [
-  { value: 'general', label: '总览' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'discord', label: 'Discord' },
-  { value: 'feishu', label: '飞书' },
-  { value: 'wechat', label: '微信' },
-  { value: 'bindings', label: '绑定管理' },
-] as const
-
-const CHANNEL_LABELS: Record<BridgeChannelType, string> = {
-  telegram: 'Telegram',
-  discord: 'Discord',
-  feishu: '飞书',
-  wechat: '微信',
-}
+const TAB_VALUES = ['general', 'telegram', 'discord', 'feishu', 'wechat', 'bindings'] as const
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -96,6 +88,7 @@ function applyStatus(setStatus: (next: BridgeStatus) => void, nextStatus: Bridge
 }
 
 export function BridgeSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const [tab, setTab] = React.useState<BridgeSettingsTab>('general')
   const [config, setConfig] = React.useState<BridgeConfig>(DEFAULT_CONFIG)
   const [bridgeStatus, setBridgeStatus] = useAtom(bridgeStatusAtom)
@@ -131,13 +124,13 @@ export function BridgeSettings(): React.ReactElement {
       setSessions(nextSessions.map((session) => ({ id: session.id, title: session.title })))
     } catch (error) {
       console.error('[BridgeSettings] 加载失败:', error)
-      toast.error('加载远程渠道配置失败', {
+      toast.error(t('settingsBridge.toast.loadFailed'), {
         description: getErrorMessage(error),
       })
     } finally {
       setLoading(false)
     }
-  }, [setBindings, setBridgeStatus, setWeChatAccounts])
+  }, [setBindings, setBridgeStatus, setWeChatAccounts, t])
 
   React.useEffect(() => {
     void refresh()
@@ -195,17 +188,17 @@ export function BridgeSettings(): React.ReactElement {
       setConfig(saved)
       setTelegramTokenDraft('')
       setDiscordTokenDraft('')
-      toast.success('远程渠道配置已保存')
+      toast.success(t('settingsBridge.toast.saved'))
       await refresh()
     } catch (error) {
       console.error('[BridgeSettings] 保存失败:', error)
-      toast.error('远程渠道配置保存失败', {
+      toast.error(t('settingsBridge.toast.saveFailed'), {
         description: getErrorMessage(error),
       })
     } finally {
       setSaveState('idle')
     }
-  }, [buildConfigInput])
+  }, [buildConfigInput, t])
 
   const testChannel = React.useCallback(async (channel: BridgeChannelType, nextConfig: BridgeConfig) => {
     setTestingChannel(channel)
@@ -215,12 +208,13 @@ export function BridgeSettings(): React.ReactElement {
       const result = await window.electronAPI.testBridgeChannel(channel, buildConfigInput(nextConfig))
       setTestResult(result)
 
+      const channelLabel = getBridgeChannelLabel(t, channel)
       if (result.success) {
-        toast.success(`${CHANNEL_LABELS[channel]} 连接成功`, {
+        toast.success(t('settingsBridge.toast.testSuccess', { channel: channelLabel }), {
           description: result.message,
         })
       } else {
-        toast.error(`${CHANNEL_LABELS[channel]} 连接失败`, {
+        toast.error(t('settingsBridge.toast.testFailed', { channel: channelLabel }), {
           description: result.message,
         })
       }
@@ -236,14 +230,14 @@ export function BridgeSettings(): React.ReactElement {
 
       setTestResult(result)
       console.error('[BridgeSettings] 测试失败:', error)
-      toast.error(`${CHANNEL_LABELS[channel]} 测试失败`, {
+      toast.error(t('settingsBridge.toast.testError', { channel: getBridgeChannelLabel(t, channel) }), {
         description: message,
       })
       return result
     } finally {
       setTestingChannel(null)
     }
-  }, [buildConfigInput])
+  }, [buildConfigInput, t])
 
   const startOrStop = React.useCallback(async (): Promise<void> => {
     if (bridgeStatus.running) {
@@ -288,26 +282,26 @@ export function BridgeSettings(): React.ReactElement {
         title={(
           <div className="flex items-center gap-2">
             <RadioTower className="size-4" />
-            <span>远程渠道</span>
+            <span>{t('settingsBridge.title')}</span>
           </div>
         )}
-        description="统一管理 Telegram、Discord、飞书、微信的远程连接，所有消息都会进入 Kila 会话。"
+        description={t('settingsBridge.description')}
         action={(
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
               <RefreshCw className="mr-1 size-4" />
-              刷新
+              {t('settingsBridge.common.refresh')}
             </Button>
             <Button size="sm" onClick={() => void startOrStop()}>
-              {bridgeStatus.running ? '停止' : '启动'}
+              {bridgeStatus.running ? t('settingsBridge.common.stop') : t('settingsBridge.common.start')}
             </Button>
           </div>
         )}
       >
         <SettingsSegmentedControl
-          label="设置分组"
+          label={t('settingsBridge.tabGroupLabel')}
           value={tab}
-          options={TAB_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+          options={TAB_VALUES.map((value) => ({ value, label: t(`settingsBridge.tabs.${value}`) }))}
           onValueChange={(value) => setTab(value as BridgeSettingsTab)}
         />
       </SettingsSection>
@@ -333,8 +327,9 @@ export function BridgeSettings(): React.ReactElement {
         >
           <div className="p-4 text-sm">
             <div className="font-medium">
-              {CHANNEL_LABELS[activeTestResult.channel]}
-              {activeTestResult.success ? ' 测试成功' : ' 测试失败'}
+              {activeTestResult.success
+                ? t('settingsBridge.testResult.success', { channel: getBridgeChannelLabel(t, activeTestResult.channel) })
+                : t('settingsBridge.testResult.failure', { channel: getBridgeChannelLabel(t, activeTestResult.channel) })}
             </div>
             <div className="mt-1 text-current/90">{activeTestResult.message}</div>
             {activeTestResult.details && (

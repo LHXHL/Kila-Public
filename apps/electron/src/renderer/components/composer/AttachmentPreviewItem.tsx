@@ -6,7 +6,8 @@
  * hover 显示关闭按钮
  */
 
-import * as React from 'react'
+import type * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { X, Paperclip, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -45,6 +46,7 @@ export function AttachmentPreviewItem({
   onRemove,
   className,
 }: AttachmentPreviewItemProps): React.ReactElement {
+  const { t } = useTranslation()
   const fileSizeStr = formatFileSize(size)
 
   if (isImage(mediaType) && previewUrl) {
@@ -77,6 +79,7 @@ export function AttachmentPreviewItem({
           <button
             type="button"
             onClick={onRemove}
+            aria-label={t('common.remove')}
             className={cn(
               'absolute top-1.5 right-1.5 size-[20px] rounded-full',
               'bg-black/50 text-white backdrop-blur-sm',
@@ -116,6 +119,7 @@ export function AttachmentPreviewItem({
       <button
         type="button"
         onClick={onRemove}
+        aria-label={t('common.remove')}
         className={cn(
           'absolute top-1/2 right-2 -translate-y-1/2 size-[20px] rounded-full',
           'flex items-center justify-center',

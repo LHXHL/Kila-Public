@@ -1,0 +1,133 @@
+{
+  "session": {
+    "header": {
+      "messages_one": "{{count}} message",
+      "messages_other": "{{count}} messages",
+      "scheduledTasks": "Scheduled Tasks"
+    },
+    "sidePanel": {
+      "files": "File Workbench",
+      "web": "Web Preview",
+      "tools": "Tool Calls",
+      "git": "Git Status",
+      "fallbackTitle": "Tools",
+      "resize": "Resize side panel",
+      "close": "Close side panel"
+    },
+    "workbench": {
+      "noProjectPath": "No project folder to browse yet",
+      "selectFolder": "Choose Folder",
+      "selectFolderHint": "Choose the project folder for this session",
+      "projectLocked": "The project folder is locked once the first message is sent",
+      "switchingFolder": "Switching project folder",
+      "recentFiles": "Recently Opened",
+      "emptyProject": "Choose a project folder to get started.",
+      "resizeExplorer": "Resize Explorer",
+      "resizeExplorerHint": "Drag to resize Explorer, double-click to reset",
+      "folderSwitched": "Workbench folder switched to {{name}}",
+      "folderSwitchFailed": "Could not switch the workbench folder"
+    },
+    "pinnedWidget": {
+      "emptyTitle": "Select a pinned widget",
+      "emptyDescription": "Widgets you pin in the transcript show up here so you can keep them in view."
+    },
+    "toolCalls": {
+      "loading": "Loading tool calls…",
+      "loadFailed": "Could not load tool calls",
+      "retry": "Retry",
+      "emptyTitle": "No tool calls yet",
+      "emptyDescription": "When the agent searches, reads or writes files, runs commands or calls MCP, the details show up here.",
+      "noTextResult": "No text output",
+      "running": "Running…",
+      "status": {
+        "running": "Running",
+        "error": "Failed",
+        "backgrounded": "In background",
+        "pending": "Pending"
+      }
+    },
+    "webPreview": {
+      "title": "Web Preview",
+      "subtitle": "Click Start to launch the local preview server, or enter an http / https address.",
+      "navigation": "Web preview navigation",
+      "start": "Start the local preview server",
+      "stop": "Stop the local preview server",
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload page",
+      "urlLabel": "Preview address",
+      "urlPlaceholder": "Enter a URL, or start a preview server…",
+      "openExternal": "Open in external browser",
+      "invalidUrl": "Only http and https addresses are supported",
+      "loadFailed": "The page failed to load",
+      "serverRunning": "Local preview server running at {{url}}",
+      "emptyTitle": "Enter a URL or click Start to launch the local preview server",
+      "emptyWithProject": "HTML files preview automatically when opened. Start also serves this session's project folder locally.",
+      "emptyWithoutProject": "This session has no project folder yet."
+    },
+    "git": {
+      "noProject": "This session has no project folder.",
+      "loading": "Reading Git status…",
+      "loadFailedTitle": "Unable to read Git status",
+      "retry": "Retry",
+      "refresh": "Refresh",
+      "notRepoTitle": "Git is not set up in this folder",
+      "notRepoDescription": "You can still chat and edit files. Once a Git repository is initialized, diffs, the staging area, commits and worktrees show up here.",
+      "init": "Initialize Git Repository",
+      "recheck": "Check Again",
+      "clean": "Working tree clean",
+      "status": {
+        "conflicted": "Conflicted",
+        "untracked": "Untracked",
+        "deleted": "Deleted",
+        "renamed": "Renamed",
+        "modified": "Modified"
+      },
+      "file": {
+        "stage": "Stage",
+        "unstage": "Unstage",
+        "discard": "Discard changes"
+      },
+      "staged": "Staged · {{count}}",
+      "unstageAll": "Unstage all",
+      "changes": "Changes · {{count}}",
+      "stageAll": "Stage all",
+      "runChangesTitle": "Changes from this run",
+      "runChangesChip": "File snapshot · {{count}}",
+      "runChangesEmpty": "No file changes detected in this run.",
+      "runChangesFilter": "This run {{count}}",
+      "generateReview": "Draft review task",
+      "insertIntoComposer": "Insert into composer",
+      "insertPathIntoComposer": "Insert {{path}} into the composer",
+      "reviewPromptHeader": "Review the changes made during this agent run, focusing on correctness, regression risk and missing tests:",
+      "reviewPromptFooter": "Then list actionable fixes and describe how you verified them.",
+      "worktreeCreate": "Create worktree",
+      "worktreeRemove": "Remove worktree",
+      "worktreePathPlaceholder": "Absolute folder path",
+      "worktreeBranchPlaceholder": "New branch name",
+      "worktreeConfirmRemove": "Remove this worktree?\n{{path}}",
+      "create": "Create",
+      "diffSourceWorktree": "Working tree",
+      "diffSourceStaged": "Staged",
+      "diffLoading": "Loading diff…",
+      "diffEmpty": "There is no text diff to show for this file.",
+      "diffTruncated": "This diff is too large — only the first part is shown.",
+      "diffSelectFile": "Select a file to view its diff",
+      "hunkStage": "Stage",
+      "hunkUnstage": "Unstage",
+      "hunkDiscard": "Discard",
+      "confirmDiscardFiles_one": "Discard working tree changes in {{count}} file? This cannot be undone.",
+      "confirmDiscardFiles_other": "Discard working tree changes in {{count}} files? This cannot be undone.",
+      "confirmDiscardHunk": "Discard this hunk? This cannot be undone.",
+      "commitPlaceholder": "Commit message",
+      "commit": "Commit",
+      "commitFiles_one": "Commit {{count}} file",
+      "commitFiles_other": "Commit {{count}} files",
+      "error": {
+        "readFailed": "Could not read Git status. Please try again.",
+        "notRepository": "This folder is not a Git repository. Check again or initialize one.",
+        "gitNotFound": "Git was not found. Install Git and restart Kila."
+      }
+    }
+  }
+}

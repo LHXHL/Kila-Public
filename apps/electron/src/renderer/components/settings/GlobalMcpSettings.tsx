@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useSetAtom } from 'jotai'
+import { useTranslation } from 'react-i18next'
 import { FolderOpen, Pencil, Plug, ShieldCheck, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -26,6 +27,7 @@ const TRANSPORT_LABELS: Record<string, string> = {
 }
 
 export function GlobalMcpSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const bumpCapabilitiesVersion = useSetAtom(workspaceCapabilitiesVersionAtom)
 
   const [viewMode, setViewMode] = React.useState<ViewMode>('list')
@@ -57,7 +59,7 @@ export function GlobalMcpSettings(): React.ReactElement {
   const handleDelete = async (serverName: string): Promise<void> => {
     const entry = mcpConfig.servers[serverName]
     if (entry?.isBuiltin) return
-    if (!confirm(`确定删除 MCP 服务器「${serverName}」？此操作不可恢复。`)) return
+    if (!confirm(t('settings.mcp.deleteConfirm', { name: serverName }))) return
 
     try {
       const newServers = { ...mcpConfig.servers }
@@ -117,8 +119,8 @@ export function GlobalMcpSettings(): React.ReactElement {
   return (
     <div className="space-y-8">
       <SettingsSection
-        title="MCP 服务器"
-        description="全局 MCP 配置，所有会话共享同一套服务器能力"
+        title={t('settings.mcp.title')}
+        description={t('settings.mcp.description')}
         action={
           <div className="flex items-center gap-2">
             {mcpPath && (
@@ -131,22 +133,22 @@ export function GlobalMcpSettings(): React.ReactElement {
                     <FolderOpen size={16} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>打开 mcp.json</TooltipContent>
+                <TooltipContent>{t('settings.mcp.openConfigFile')}</TooltipContent>
               </Tooltip>
             )}
             <Button size="sm" onClick={() => setViewMode('create')}>
               <Plug size={16} />
-              <span>添加服务器</span>
+              <span>{t('settings.mcp.addServer')}</span>
             </Button>
           </div>
         }
       >
         {loading ? (
-          <div className="text-sm text-muted-foreground py-8 text-center">加载中...</div>
+          <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
         ) : serverEntries.length === 0 ? (
           <SettingsCard divided={false}>
             <div className="text-sm text-muted-foreground py-12 text-center">
-              还没有配置任何全局 MCP 服务器
+              {t('settings.mcp.empty')}
             </div>
           </SettingsCard>
         ) : (
@@ -183,6 +185,7 @@ interface McpServerRowProps {
 }
 
 function McpServerRow({ name, entry, onEdit, onDelete, onToggle }: McpServerRowProps): React.ReactElement {
+  const { t } = useTranslation()
   const isBuiltin = entry.isBuiltin === true
 
   return (
@@ -195,12 +198,12 @@ function McpServerRow({ name, entry, onEdit, onDelete, onToggle }: McpServerRowP
           {isBuiltin && (
             <EntityMetadataChip tone="accent">
               <ShieldCheck size={12} />
-              内置
+              {t('settings.mcp.builtin')}
             </EntityMetadataChip>
           )}
           <EntityMetadataChip>{TRANSPORT_LABELS[entry.type] ?? entry.type}</EntityMetadataChip>
           <EntityMetadataChip tone={entry.enabled ? 'accent' : 'neutral'}>
-            {entry.enabled ? 'Enabled' : 'Disabled'}
+            {entry.enabled ? t('common.enabled') : t('common.notEnabled')}
           </EntityMetadataChip>
         </>
       )}
@@ -209,7 +212,7 @@ function McpServerRow({ name, entry, onEdit, onDelete, onToggle }: McpServerRowP
         <button
           onClick={onEdit}
           className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-          title="编辑"
+          title={t('settings.appearance.edit')}
         >
           <Pencil size={14} />
         </button>
@@ -217,7 +220,7 @@ function McpServerRow({ name, entry, onEdit, onDelete, onToggle }: McpServerRowP
           <button
             onClick={onDelete}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            title="删除"
+            title={t('common.delete')}
           >
             <Trash2 size={14} />
           </button>

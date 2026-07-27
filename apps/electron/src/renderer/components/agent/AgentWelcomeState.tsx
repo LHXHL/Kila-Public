@@ -1,12 +1,12 @@
-import * as React from 'react'
+import type * as React from 'react'
 import { useAtomValue } from 'jotai'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { ArrowRight, Sparkles, GitBranch, PenLine, Search } from 'lucide-react'
 import { UserAvatar } from '@/components/message/UserAvatar'
 import { userProfileAtom } from '@/atoms/user-profile'
 import { sessionQuickSuggestionsAtom } from '@/atoms/agent-ui-atoms'
 import type { QuickSuggestion } from '@kila/shared'
-
-const WELCOME_DESCRIPTION = '描述要完成的任务，或选择一个常用操作。'
 
 interface AgentWelcomeStateProps {
   sessionPath?: string | null
@@ -20,32 +20,35 @@ interface StarterPrompt {
   icon: React.ComponentType<{ className?: string }>
 }
 
-const FALLBACK_PROMPTS: StarterPrompt[] = [
-  {
-    title: '梳理今天要推进的事',
-    detail: '目标、约束、第一步',
-    prompt: '帮我梳理今天这个会话要推进的工作：先确认目标、列出约束，再给出可执行的第一步。',
-    icon: PenLine,
-  },
-  {
-    title: '审查当前项目风险',
-    detail: '入口、变更点、验证路径',
-    prompt: '请从当前项目出发，帮我做一次快速代码审查：找入口、关键数据流、潜在风险，并给出验证步骤。',
-    icon: Search,
-  },
-  {
-    title: '把想法拆成计划',
-    detail: '范围、取舍、落地顺序',
-    prompt: '我有一个粗略想法，帮我把它拆成清晰计划：范围、非目标、实现顺序、验证方式都要列出来。',
-    icon: GitBranch,
-  },
-]
+/** 无 LLM 建议缓存时的静态起步提示 */
+function getFallbackPrompts(t: TFunction): StarterPrompt[] {
+  return [
+    {
+      title: t('agent.welcome.prompts.plan.title'),
+      detail: t('agent.welcome.prompts.plan.detail'),
+      prompt: t('agent.welcome.prompts.plan.prompt'),
+      icon: PenLine,
+    },
+    {
+      title: t('agent.welcome.prompts.review.title'),
+      detail: t('agent.welcome.prompts.review.detail'),
+      prompt: t('agent.welcome.prompts.review.prompt'),
+      icon: Search,
+    },
+    {
+      title: t('agent.welcome.prompts.breakdown.title'),
+      detail: t('agent.welcome.prompts.breakdown.detail'),
+      prompt: t('agent.welcome.prompts.breakdown.prompt'),
+      icon: GitBranch,
+    },
+  ]
+}
 
 const ICONS: React.ComponentType<{ className?: string }>[] = [PenLine, Search, GitBranch]
 
-function getDisplayName(userName: string): string {
+function getDisplayName(userName: string, t: TFunction): string {
   const trimmed = userName.trim()
-  return trimmed || '你'
+  return trimmed || t('agent.welcome.fallbackName')
 }
 
 function toStarterPrompts(suggestions: QuickSuggestion[]): StarterPrompt[] {
@@ -61,13 +64,14 @@ export function AgentWelcomeState({
   sessionPath,
   onUsePrompt,
 }: AgentWelcomeStateProps): React.ReactElement {
+  const { t } = useTranslation()
   const userProfile = useAtomValue(userProfileAtom)
   const suggestions = useAtomValue(sessionQuickSuggestionsAtom)
-  const displayName = getDisplayName(userProfile.userName)
+  const displayName = getDisplayName(userProfile.userName, t)
   const projectName = sessionPath?.split(/[\\/]/).filter(Boolean).pop() ?? null
 
   // LLM 建议已在应用启动时生成并缓存，直接读取；无缓存则显示静态 fallback
-  const displayPrompts = suggestions.length > 0 ? toStarterPrompts(suggestions) : FALLBACK_PROMPTS
+  const displayPrompts = suggestions.length > 0 ? toStarterPrompts(suggestions) : getFallbackPrompts(t)
 
   return (
     <div className="flex h-full min-h-[460px] items-center justify-center px-4 py-8 md:px-8">
@@ -80,10 +84,12 @@ export function AgentWelcomeState({
           />
           <div className="min-w-0 flex-1">
             <h1 className="text-balance text-[28px] font-semibold leading-tight tracking-tight text-foreground md:text-[32px]">
-              {displayName}，今天想和 Kila 做点什么？
+              {t('agent.welcome.greeting', { name: displayName })}
             </h1>
             <p className="mt-3 max-w-[560px] text-pretty text-sm leading-6 text-muted-foreground md:text-[15px]">
-              {projectName ? `当前项目：${projectName}。描述要完成的任务，或选择一个常用操作。` : WELCOME_DESCRIPTION}
+              {projectName
+                ? t('agent.welcome.descriptionWithProject', { project: projectName })
+                : t('agent.welcome.description')}
             </p>
             {sessionPath && <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70" title={sessionPath}>{sessionPath}</p>}
           </div>

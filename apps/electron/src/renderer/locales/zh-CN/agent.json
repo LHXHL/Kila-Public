@@ -1,0 +1,293 @@
+{
+  "agent": {
+    "placeholderWithChannel": "输入消息... (Enter 发送，Shift+Enter 换行，@ 引用文件，/ 调用 Skill，# 调用 MCP)",
+    "placeholderNoChannel": "请先配置并启用可用渠道",
+    "configureChannel": "请先配置并启用可用渠道",
+    "goToSettings": "前往设置",
+    "retryLater": "请稍后再试，或检查当前渠道和模型是否可用",
+    "regenerateFailed": "重新生成失败",
+    "sendFailed": "发送消息失败",
+    "stopFirst": "请先停止当前任务后，再发送带附件的新消息",
+    "steerNotSupported": "当前 provider 不支持运行中干预",
+    "waitComplete": "请等待当前任务完成，或先停止后再发送新消息",
+    "steerNoAttachment": "运行中干预暂不支持附件",
+
+    "permission": {
+      "regionLabel": "权限确认",
+      "title": "需要确认",
+      "dangerousTitle": "危险操作需要确认",
+      "autoDenyIn": "将在 {{time}} 后自动拒绝",
+      "expired": "请求已过期，正在移除",
+      "enterHint": "聚焦卡片后按 Enter 允许",
+      "dangerousHint": "危险操作请点击按钮确认",
+      "deny": "拒绝",
+      "allow": "允许",
+      "alwaysAllow": "本次会话总是允许",
+      "submitFailed": "操作未提交，请重试"
+    },
+
+    "askUser": {
+      "regionLabel": "Agent 问题",
+      "title": "Kila Agent 需要你的输入",
+      "autoCancelIn": "将在 {{time}} 后自动取消",
+      "expired": "请求已过期，正在移除",
+      "tabListLabel": "问题列表",
+      "questionFallback": "问题 {{index}}",
+      "keyboardHint": "聚焦卡片后 ↑↓ 选择 · Enter {{action}}",
+      "next": "下一个",
+      "other": "其他...",
+      "customPlaceholder": "输入自定义答案...",
+      "customLabel": "自定义答案",
+      "submitFailed": "答案未提交，请重试"
+    },
+
+    "composer": {
+      "placeholder": "输入消息...",
+      "send": "发送消息",
+      "addToQueue": "加入等待区",
+      "stopGenerating": "停止生成",
+      "attach": "添加附件",
+      "queueTitle": "等待区",
+      "queued": "已加入等待区",
+      "queuedAttachment": "附件",
+      "incognitoOn": "隐身模式已开启 — 本条消息不加入记忆",
+      "incognitoOff": "点击开启隐身模式",
+      "dismissSuggestion": "忽略建议",
+      "dismissFolderNotice": "关闭文件夹附加提示",
+      "editingTitle": "编辑已发送消息",
+      "editingHint": "重新发送后，这条消息之后的内容会按新输入重新执行。",
+      "editResendFailed": "编辑重发失败",
+      "autoSendFailed": "自动发送配置消息失败",
+      "draftRestored": "消息已恢复到输入框，请重试",
+      "readAttachmentsFailed": "读取原消息附件失败"
+    },
+
+    "message": {
+      "listLabel": "消息列表",
+      "loadingTranscript": "正在加载会话记录…",
+      "transcriptLoadFailed": "会话记录加载失败",
+      "loadFailed": "会话消息加载失败",
+      "loadingEarlier": "正在加载更早消息…",
+      "loadEarlier": "加载更早消息（{{loaded}}/{{total}}）",
+      "loadEarlierFailed": "加载更早消息失败",
+      "sourceScheduledTask": "定时任务",
+      "sourceManual": "手动",
+      "editAndResend": "编辑后重发",
+      "rewindToMessage": "回退到此消息",
+      "regenerate": "重新生成",
+      "branchSession": "分叉会话",
+      "compactContext": "压缩上下文",
+      "retryInNewSession": "在新会话中重试",
+      "imageRetryTitle": "点击重试读取图片",
+      "imageLoadFailedRetry": "图片读取失败，重试",
+      "copyMarkdown": "复制 Markdown",
+      "copyPlainText": "复制纯文本",
+      "moreCopyOptions": "更多复制选项",
+      "userAvatarAlt": "用户头像"
+    },
+
+    "retry": {
+      "runningTitle": "正在重试",
+      "failedTitle": "重试失败",
+      "runningCount": "重试中 ({{current}}/{{max}})",
+      "failedCount": "重试失败 ({{current}}/{{max}})",
+      "countdown": "重试倒计时 {{seconds}} 秒 ({{current}}/{{max}})",
+      "attemptHistory": "尝试历史：",
+      "attemptLine": "第 {{attempt}} 次 ({{time}}) - {{reason}}",
+      "attemptRunning": "正在进行第 {{attempt}} 次尝试...",
+      "waitingNext": "等待 {{seconds}} 秒后开始第 {{attempt}} 次尝试",
+      "runtime": "运行时: {{value}}",
+      "platform": "平台: {{value}}",
+      "model": "模型: {{value}}",
+      "workspace": "工作区: {{value}}",
+      "showStderr": "显示 stderr 输出",
+      "showStack": "显示堆栈跟踪"
+    },
+
+    "tool": {
+      "input": "输入",
+      "result": "结果",
+      "details": "工具详情",
+      "resultError": "执行结果异常",
+      "copyFull": "复制完整内容",
+      "copiedToast": "工具完整内容已复制",
+      "copyFailedToast": "复制工具完整内容失败，请重试",
+      "previewLimited": "界面仅显示性能受限预览，可复制完整内容",
+      "generatedImages": "生成图片",
+      "consecutiveCalls": "连续工具调用",
+      "moreTargets_other": "另 {{count}} 项",
+      "collapseActivities": "收起工具活动",
+      "expandActivities_other": "展开全部 {{count}} 项工具活动",
+      "collapseLines": "收起行预览",
+      "expandLines_other": "展开 {{count}} 行",
+      "copyFullOutput": "复制完整输出",
+      "fullOutputCopied": "完整输出已复制",
+      "fullOutputCopiedLabel": "已复制完整输出",
+      "copyFullOutputFailed": "复制完整输出失败，请重试",
+      "previewOmittedChars_other": "界面预览已省略 {{chars}} 字符，可复制完整输出",
+      "resultTruncated": "[界面预览已截断，复制可获取完整结果]",
+      "taskList": "任务列表",
+      "todoCount_other": "{{count}} 项任务"
+    },
+
+    "thinking": {
+      "running": "思考中…",
+      "runningWithPreview": "思考中: {{preview}}…",
+      "thoughtFor": "Kila 思考了 {{duration}}",
+      "done": "Kila 完成了思考",
+      "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
+      "durationSeconds": "{{seconds}} 秒",
+      "durationMilliseconds": "{{milliseconds}} 毫秒",
+      "truncated_other": "思考详情过长，界面省略 {{chars}} 字符"
+    },
+
+    "workflow": {
+      "thinkingCount_other": "{{count}} 次思考",
+      "expandDetails": "展开更多过程详情",
+      "collapseDetails": "收起过程详情"
+    },
+
+    "payload": {
+      "stringTruncated_other": "[字符串已截断 {{count}} 字符]",
+      "tooDeep": "[内容过深，已省略]",
+      "moreItems_other": "[另有 {{count}} 项]",
+      "moreFields_other": "[还有更多字段，预览仅显示前 {{count}} 个]",
+      "previewLimited": "[结构化预览已限制，复制可获取完整内容]",
+      "charsTruncated_other": "[截断 {{count}} 个字符]"
+    },
+
+    "attachment": {
+      "loading": "正在加载 {{filename}}",
+      "loadFailed": "图片加载失败：{{filename}}",
+      "saveAs": "另存为",
+      "saveImage": "保存图片",
+      "addFailed": "添加附件失败：{{filename}}",
+      "openDialogFailed": "打开文件选择器失败",
+      "folderAttached_other": "已附加 {{count}} 个文件夹",
+      "folderAttachFailed": "附加文件夹失败：{{message}}",
+      "dataUnavailable": "附件数据不可用",
+      "readdFiles": "请重新添加：{{files}}",
+      "saveFailed": "附件保存失败",
+      "keptInComposer": "附件仍保留在输入区，请重试",
+      "saveCountMismatch": "预期保存 {{expected}} 个附件，实际保存 {{actual}} 个"
+    },
+
+    "session": {
+      "rewindTitle": "回退到这条消息？",
+      "rewindDescription": "该消息之后的会话记录会被删除，Agent 运行时状态也会重建。建议先创建分叉会话保留当前路线。项目文件不会自动回滚。",
+      "rewindConfirm": "确认回退",
+      "rewound": "会话已回退",
+      "rewoundDescription": "后续消息已移除；如需保留另一条路线，请先使用“分叉会话”",
+      "rewindFailed": "回退会话失败",
+      "branched": "已创建分叉会话",
+      "branchedDescription": "{{title}} 已打开；项目、模型和能力配置已继承",
+      "branchFailed": "创建分叉会话失败",
+      "retryNewSessionPrompt": "上个会话的 id 是 {{sessionId}}，可以参考同项目目录下的会话继续完成工作"
+    },
+
+    "pending": {
+      "title": "待处理请求",
+      "subtitle": "点击可跳转到对应会话",
+      "ariaLabel_other": "待处理请求 {{count}}",
+      "permission": "权限请求",
+      "permissionWithTool": "权限 · {{tool}}",
+      "askUser": "提问 · {{topic}}",
+      "askUserFallback": "需要输入",
+      "sessionFallback": "会话 {{id}}"
+    },
+
+    "memory": {
+      "longTerm": "长期记忆",
+      "relatedSession": "相关会话",
+      "notebook": "笔记",
+      "providerLocalShort": "本地",
+      "providerUnknown": "记忆来源",
+      "providerNowledge": "Nowledge + 本地",
+      "providerLocal": "本地记忆",
+      "emptyContent": "未返回可展示的内容片段",
+      "truncatedNote": "内容较长，这里仅展示召回时保存的前 1600 个字符。",
+      "recallTitle": "本轮记忆召回",
+      "itemCount_other": "{{count}} 项",
+      "workingMemory": "工作记忆",
+      "scopeGlobal": "全局",
+      "scopeProject": "项目",
+      "legacyNoDetails": "旧记录未保存召回详情。",
+      "emptyRecall": "本轮没有召回内容。",
+      "readOnly": "只读",
+      "writeFailed": "整理失败",
+      "written_other": "新增 {{count}} 条",
+      "recallError": "召回失败，已降级",
+      "recallDisabled": "未启用记忆",
+      "recalled_other": "召回 {{count}} 项",
+      "badgeAria": "{{summary}}，点击查看召回详情"
+    },
+
+    "widget": {
+      "renderFailed": "Widget 渲染失败",
+      "boundaryFallback": "Widget 渲染失败，已安全回退。",
+      "cannotRender": "Widget 无法渲染",
+      "loadTimeout": "Widget 运行环境加载超时，请检查应用资源或重试",
+      "retryRender": "重试渲染",
+      "openLinkFailed": "无法打开 Widget 链接",
+      "showCode": "查看代码",
+      "hideCode": "隐藏代码",
+      "pin": "固定",
+      "pinning": "固定中…",
+      "pinned": "已固定到右侧 Board",
+      "pinFailed": "固定 widget 失败",
+      "unsupportedSchema": "暂不支持该 schema widget。",
+      "thisWidget": "这个 widget",
+      "draftTitle": "已从 widget 生成追问草稿",
+      "prompts": {
+        "analyzeLabel": "分析 {{target}}",
+        "expandLabel": "展开 {{target}}",
+        "thisRow": "该行",
+        "stat": "基于「{{widget}}」，进一步解释指标「{{metric}}」的含义、变化原因和后续建议。",
+        "point": "基于「{{widget}}」，解释 {{x}} 的 {{series}} = {{value}} 的原因，并给出下一步分析建议。",
+        "row": "基于「{{widget}}」，展开分析这一行数据，并解释它与其他行相比的差异。重点关注 {{row}}。",
+        "timeline": "基于「{{widget}}」，详细解释「{{stage}}」阶段的作用、前后依赖以及风险点。",
+        "node": "基于「{{widget}}」，说明节点「{{node}}」在整体流程中的作用与上下游关系。",
+        "edge": "基于「{{widget}}」，说明连接「{{from}} -> {{to}}」在整体流程中的作用与上下游关系。"
+      }
+    },
+
+    "chart": {
+      "barAria": "柱状图，共显示 {{groups}} 组、{{series}} 个系列",
+      "barTitle": "柱状图：{{series}}",
+      "lineAria": "折线图，共 {{points}} 个数据点、{{series}} 个系列",
+      "lineTitle": "折线图：{{series}}",
+      "truncatedBars": "数据量较大，仅显示前 {{shown}} 组，另有 {{hidden}} 组未绘制。",
+      "truncatedPoints": "数据量较大，仅显示前 {{shown}} 个点，另有 {{hidden}} 个点未绘制。"
+    },
+
+    "mention": {
+      "emptySkill": "无匹配命令或 Skill",
+      "emptyMcp": "无匹配 MCP 服务",
+      "compactDescription": "压缩会话历史以节省 token"
+    },
+
+    "welcome": {
+      "greeting": "{{name}}，今天想和 Kila 做点什么？",
+      "fallbackName": "你",
+      "description": "描述要完成的任务，或选择一个常用操作。",
+      "descriptionWithProject": "当前项目：{{project}}。描述要完成的任务，或选择一个常用操作。",
+      "prompts": {
+        "plan": {
+          "title": "梳理今天要推进的事",
+          "detail": "目标、约束、第一步",
+          "prompt": "帮我梳理今天这个会话要推进的工作：先确认目标、列出约束，再给出可执行的第一步。"
+        },
+        "review": {
+          "title": "审查当前项目风险",
+          "detail": "入口、变更点、验证路径",
+          "prompt": "请从当前项目出发，帮我做一次快速代码审查：找入口、关键数据流、潜在风险，并给出验证步骤。"
+        },
+        "breakdown": {
+          "title": "把想法拆成计划",
+          "detail": "范围、取舍、落地顺序",
+          "prompt": "我有一个粗略想法，帮我把它拆成清晰计划：范围、非目标、实现顺序、验证方式都要列出来。"
+        }
+      }
+    }
+  }
+}
