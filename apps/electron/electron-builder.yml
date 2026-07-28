@@ -27,6 +27,11 @@ asar: true
 # electron-builder 25.x 尚无 electronFuses 配置项，改用 afterPack 钩子调用 @electron/fuses
 afterPack: scripts/apply-fuses.cjs
 
+# macOS 签名后处理：未签名构建（无 Apple Developer ID 证书时）ad-hoc 签名 + hardened runtime
+# 会导致 EXC_BAD_ACCESS / Invalid Page 启动崩溃，这里在签名后检测并重签清除 hardened runtime。
+# 已具备正式 Team ID 签名时自动跳过，不影响正式签名 + 公证流程。
+afterSign: scripts/repack-adhoc-mac.cjs
+
 # 跳过 npm install（代码已被 esbuild/Vite 打包，npm 不识别 workspace:* 协议）
 npmRebuild: false
 
