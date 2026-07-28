@@ -129,17 +129,13 @@
     },
     "packages/core": {
       "name": "@kila/core",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@kila/shared": "workspace:*",
         "shiki": "^3.22.0",
       },
       "devDependencies": {
-        "@types/uuid": "^11.0.0",
         "typescript": "^5.0.0",
-      },
-      "peerDependencies": {
-        "@modelcontextprotocol/sdk": ">=1.0.0",
       },
     },
     "packages/shared": {
@@ -872,8 +868,6 @@
     "@types/unist": ["@types/unist@3.0.3", "", {}, "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q=="],
 
     "@types/use-sync-external-store": ["@types/use-sync-external-store@0.0.6", "", {}, "sha512-zFDAD+tlpf2r4asuHEj0XH6pY6i0g5NeAHPn+15wk3BV6JA69eERFXC1gyGThDkVa1zCyKr5jox1+2LbV/AMLg=="],
-
-    "@types/uuid": ["@types/uuid@11.0.0", "", { "dependencies": { "uuid": "*" } }, "sha512-HVyk8nj2m+jcFRNazzqyVKiZezyhDKrGUA3jlEcg/nZ6Ms+qHwocba1Y/AaVaznJTAM9xpdFSh+ptbNrhOGvZA=="],
 
     "@types/verror": ["@types/verror@1.10.11", "", {}, "sha512-RlDm9K7+o5stv0Co8i8ZRGxDbrTxhJtgjqjFyVh/tXQyl/rYtTKlnTvZ88oSTeYREWurwx20Js4kTuKCsFkUtg=="],
 
