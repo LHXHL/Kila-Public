@@ -79,9 +79,11 @@ jobs:
 
   # ============================================
   # macOS — x64 (Intel)
+  # 注:用 macos-latest(arm64 runner)交叉编译 x64,避开 macos-13 Intel runner
+  # 供应紧张导致的长排队。electron-builder 原生支持 arm64 上 --x64 交叉打包。
   # ============================================
   build-macos-x64:
-    runs-on: macos-13  # Intel runner
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
