@@ -118,30 +118,97 @@ export function lookupProviderDbModel(
 }
 
 /**
+ * 模型原厂商的 provider id（用于全局兜底时优先选中）。
+ *
+ * 同一个 modelId 常在多个 provider 下出现，且 context 常不一致：原厂商报真实窗口，
+ * 聚合商 / 中转商常限制得更小（如 gpt-5.4 在 openai 是 1050K，在 abacus 只有 400K）。
+ * 全局兜底优先选原厂商，避免拿小窗口导致过早压缩；其次取所有命中的最大 context。
+ * 这里只列「自家出模型」的厂商，不含 openrouter / aihubmix / siliconflow 等聚合商。
+ */
+const OFFICIAL_VENDOR_PROVIDER_IDS = new Set([
+  'openai',
+  'anthropic',
+  'google',
+  'gemini',
+  'deepseek',
+  'zai',
+  'zhipu',
+  'glm',
+  'moonshot',
+  'kimi',
+  'qwen',
+  'alibaba',
+  'minimax',
+  'baichuan',
+  'yi',
+  '01-ai',
+  'stepfun',
+  'xiaomi',
+  'sensetime',
+  'sensenova',
+  'meta',
+  'mistral',
+  'cohere',
+  'perplexity',
+  'x-ai',
+  'grok',
+])
+
+/** 取模型 context 窗口；缺失视为 0（参与最大值比较时不被选中）。 */
+function modelContextWindow(model: ProviderDbModel): number {
+  return model.limit?.context ?? 0
+}
+
+/**
+ * 从一批全局命中里选出最可信的一条：原厂商优先，其次 context 最大。
+ *
+ * 原厂商 entry 反映模型原生能力（窗口、reasoning、vision），聚合商常缩限窗口；
+ * 取最大 context 是聚合场景下的保守兜底——宁可不压，不可误压。
+ */
+export function pickBestGlobalHit(
+  hits: Array<{ provider: ProviderDbProvider; model: ProviderDbModel }>,
+): { provider: ProviderDbProvider; model: ProviderDbModel } | undefined {
+  if (hits.length === 0) return undefined
+  if (hits.length === 1) return hits[0]
+  const official = hits.filter((hit) => OFFICIAL_VENDOR_PROVIDER_IDS.has(hit.provider.id))
+  const pool = official.length > 0 ? official : hits
+  return pool.reduce((best, hit) =>
+    modelContextWindow(hit.model) > modelContextWindow(best.model) ? hit : best,
+  )
+}
+
+/**
  * 跨 provider 全局搜模型（用于用户输入了 `gpt-4o-mini` 这种去前缀 ID 时）。
  *
- * 优先精确匹配，找不到再尝试 base id（去掉 `vendor/` 前缀）匹配。
+ * 选择策略：原厂商 entry 优先（窗口 / 能力画像最准），其次取所有命中的最大 context。
+ * 避免聚合商的小窗口 entry 导致 capabilityProviderId 配置不精确时误判窗口、过早压缩。
+ * 先精确匹配，找不到再尝试 base id（去掉 `vendor/` 前缀）匹配。
  */
 export function findProviderDbModel(
   modelId: string,
 ): { provider: ProviderDbProvider; model: ProviderDbModel } | undefined {
   const db = loadProviderDb()
-  // 1. 精确
+  // 1. 精确匹配：收集全部命中，按官方优先 + 最大 context 选最佳
+  const exactHits: Array<{ provider: ProviderDbProvider; model: ProviderDbModel }> = []
   for (const provider of Object.values(db.providers)) {
     const model = provider.models.find((m) => m.id === modelId)
-    if (model) return { provider, model }
+    if (model) exactHits.push({ provider, model })
   }
+  const bestExact = pickBestGlobalHit(exactHits)
+  if (bestExact) return bestExact
+
   // 2. base id 匹配（去掉 vendor/ 前缀）
   const slashIndex = modelId.indexOf('/')
   if (slashIndex <= 0) return undefined
   const baseId = modelId.slice(slashIndex + 1)
+  const baseHits: Array<{ provider: ProviderDbProvider; model: ProviderDbModel }> = []
   for (const provider of Object.values(db.providers)) {
     const model = provider.models.find((m) => {
       const mSlash = m.id.indexOf('/')
       const mBase = mSlash > 0 ? m.id.slice(mSlash + 1) : m.id
       return mBase === baseId
     })
-    if (model) return { provider, model }
+    if (model) baseHits.push({ provider, model })
   }
-  return undefined
+  return pickBestGlobalHit(baseHits)
 }

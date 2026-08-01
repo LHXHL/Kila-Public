@@ -226,3 +226,106 @@ describe('Agent stream 终态收敛', () => {
     expect((assistant?.events ?? []).some((event) => event.type === 'retry_attempt')).toBe(true)
   })
 })
+
+/** 构造可观察每次 query 传入 prompt 的 adapter，用于验证压缩后自动续跑。 */
+function createPromptAwareAdapter(
+  passes: Array<(prompt: string | undefined) => AgentEvent[]>,
+): { adapter: AgentProviderAdapter; prompts: Array<string | undefined> } {
+  const prompts: Array<string | undefined> = []
+  const adapter: AgentProviderAdapter = {
+    ownsRetry: true,
+    query: (options) => {
+      prompts.push(options.prompt)
+      const events = passes[Math.min(prompts.length - 1, passes.length - 1)]?.(options.prompt) ?? []
+      return (async function* () {
+        yield* events
+      })()
+    },
+    abort: () => {},
+    dispose: () => {},
+  }
+  return { adapter, prompts }
+}
+
+describe('压缩后自动续跑', () => {
+  const truncatedPassEvents: AgentEvent[] = [
+    { type: 'text_delta', text: '前半段' },
+    { type: 'compacting' },
+    { type: 'compact_complete', reason: 'threshold', willRetry: false },
+    { type: 'complete', stopReason: 'length' },
+  ]
+
+  test('Given 压缩后回复被 maxTokens 截断，When 流结束，Then 自动以接力 prompt 续跑一次并合并为同一条 assistant 消息', async () => {
+    const context = createContext()
+    const { adapter, prompts } = createPromptAwareAdapter([
+      () => truncatedPassEvents,
+      () => [
+        { type: 'text_delta', text: '后半段' },
+        { type: 'complete', stopReason: 'stop' },
+      ],
+    ])
+
+    const result = await runWithAdapter(adapter, context.input)
+    const messages = getAgentMessages(context.sessionId)
+    const assistants = messages.filter((message) => message.role === 'assistant')
+
+    // 续跑了一次，且第二次 query 用的是接力 prompt。
+    expect(prompts).toHaveLength(2)
+    expect(prompts[1]).toContain('继续完成')
+    // 两段输出合并为同一条 assistant 消息，终态为成功。
+    expect(result.outcomes).toEqual(['success'])
+    expect(assistants).toHaveLength(1)
+    expect(assistants[0]?.content).toBe('前半段后半段')
+    // 压缩边界与续跑说明各落一条 status 消息。
+    expect(messages.some((message) => message.role === 'status' && message.content.startsWith('上下文已压缩'))).toBe(true)
+    expect(messages.some((message) => message.role === 'status' && message.content.includes('已自动继续'))).toBe(true)
+  })
+
+  test('Given 压缩后回复正常结束（stopReason=stop），When 流结束，Then 不触发续跑', async () => {
+    const context = createContext()
+    const { adapter, prompts } = createPromptAwareAdapter([
+      () => [
+        { type: 'text_delta', text: '完整回复' },
+        { type: 'compact_complete', reason: 'threshold', willRetry: false },
+        { type: 'complete', stopReason: 'stop' },
+      ],
+    ])
+
+    const result = await runWithAdapter(adapter, context.input)
+
+    expect(prompts).toHaveLength(1)
+    expect(result.outcomes).toEqual(['success'])
+    expect(getAgentMessages(context.sessionId).some((message) => (
+      message.role === 'status' && message.content.includes('已自动继续')
+    ))).toBe(false)
+  })
+
+  test('Given 未发生压缩但回复被截断，When 流结束，Then 不触发续跑', async () => {
+    const context = createContext()
+    const { adapter, prompts } = createPromptAwareAdapter([
+      () => [
+        { type: 'text_delta', text: '被截断的回复' },
+        { type: 'complete', stopReason: 'length' },
+      ],
+    ])
+
+    const result = await runWithAdapter(adapter, context.input)
+
+    expect(prompts).toHaveLength(1)
+    expect(result.outcomes).toEqual(['success'])
+  })
+
+  test('Given 续跑后再次压缩且再次截断，When 流结束，Then 续跑上限为一次防止死循环', async () => {
+    const context = createContext()
+    const { adapter, prompts } = createPromptAwareAdapter([
+      () => truncatedPassEvents,
+      () => truncatedPassEvents,
+    ])
+
+    const result = await runWithAdapter(adapter, context.input)
+
+    // 第二次仍被截断也不再续跑，总共只有两次 query。
+    expect(prompts).toHaveLength(2)
+    expect(result.outcomes).toEqual(['success'])
+  })
+})

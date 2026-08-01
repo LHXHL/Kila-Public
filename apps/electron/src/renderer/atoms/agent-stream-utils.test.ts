@@ -193,6 +193,23 @@ describe('Agent 流式重试与终态', () => {
     expect(error.retrying).toBeUndefined()
   })
 
+  test('Given compact_failed When 应用 Then 清压缩态但保持会话运行（不中断）', () => {
+    // 压缩失败是瞬时/可重试错误，Pi 会自动重试摘要或继续 agent 主循环。
+    // 这里必须保持 running: true，等 agent_settled 自然收敛，否则表现为「压缩中断会话」。
+    const compactingState = { ...initialState, running: true, isCompacting: true }
+    const failed = applyAgentEvent(compactingState, {
+      type: 'compact_failed',
+      message: 'summary provider rate limited',
+      willRetry: true,
+      reason: 'threshold',
+    })
+
+    expect(failed.isCompacting).toBe(false)
+    expect(failed.summarizationRetry).toBeUndefined()
+    // 关键不变量：会话仍处于运行态
+    expect(failed.running).toBe(true)
+  })
+
   test('Given Pi retry_failed 后紧接 typed_error When 应用 Then 保留失败历史且不重复最终 attempt', () => {
     const withAttempt = applyAgentEvent(initialState, {
       type: 'retry_attempt',

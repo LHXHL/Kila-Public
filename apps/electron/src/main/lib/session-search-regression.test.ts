@@ -2,8 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentEvent, SessionMessage, SessionMeta } from '@kila/shared'
-import { compactAgentEventsForPersistence } from './agent-orchestrator-stream'
+import { compactAgentEventsForPersistence, type AgentEvent, type SessionMessage, type SessionMeta } from '@kila/shared'
 import { createPiEventMapper } from './adapters/pi-agent-adapter'
 import { getSearchIndexPath } from './config-paths'
 import {
@@ -180,6 +179,6 @@ describe('session search regression', () => {
         isError: false,
       },
     ])
-    expect(completed.some((event) => event.type === 'tool_update')).toBe(false)
+    expect(completed.some((event: AgentEvent) => event.type === 'tool_update')).toBe(false)
   })
 })

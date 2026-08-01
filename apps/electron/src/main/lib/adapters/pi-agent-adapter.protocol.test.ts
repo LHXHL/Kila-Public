@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { resolvePiApiType, resolvePiModelMetadata } from './pi-agent-adapter'
+import {
+  createPiEventMapper,
+  mapPiErrorMessageToKilaEvent,
+  mapPiEventToKilaEvents,
+  resolvePiApiType,
+  resolvePiModelMetadata,
+} from './pi-agent-adapter'
 
 describe('Pi 渠道协议映射', () => {
   test('Given 渠道显式声明 apiType, When 构建 Pi 模型, Then 以协议配置而非模型名称决定 API', () => {
@@ -77,7 +83,31 @@ test('Given capabilityProviderId 命中的 Provider DB 模型画像, When 生成
   })
 })
 
-import { createPiEventMapper, mapPiErrorMessageToKilaEvent, mapPiEventToKilaEvents } from './pi-agent-adapter'
+test('Given capabilityProviderId 配错但模型在 DB 全局存在 When 用全局兜底 entry Then 不退化到 32K 兜底窗口', () => {
+  // 用户场景：step 渠道 capabilityProviderId 配成 'openai'（协议兼容），但 step-3.7-flash 实际
+  // 归属 stepfun-step-plan。lookupProviderDbModel('openai', 'step-3.7-flash') 命中失败，
+  // agent-orchestrator-context.ts 会回退到 findProviderDbModel 全局搜索并命中 256K。
+  // 这里验证 resolveModelMetadata 接受全局兜底 entry 时的窗口契约。
+  const metadata = resolvePiModelMetadata(
+    {
+      provider: 'openai',
+      capabilityProviderId: 'openai',
+      baseUrl: 'https://api.stepfun.com/step_plan/v1',
+      apiType: 'openai',
+    },
+    'step-3.7-flash',
+    undefined,
+    undefined,
+    {
+      id: 'step-3.7-flash',
+      tool_call: true,
+      modalities: { input: ['text', 'image'], output: ['text'] },
+      limit: { context: 256000, output: 256000 },
+    },
+  )
+
+  expect(metadata.contextWindowTokens).toBe(256000)
+})
 
 describe('Pi Provider 错误映射', () => {
   test('Given 403 用户组无路由权限 When 映射错误 Then 不误报 API Key', () => {
@@ -281,6 +311,41 @@ describe('Pi 事件边界', () => {
       expect.objectContaining({ type: 'error', message: '连接在响应完成前断开' }),
     ])
     expect(mapper.flush()).toEqual([])
+  })
+
+  test('Given compaction_end 带 errorMessage When 映射 Then 产出非终态 compact_failed 而非裸 error', () => {
+    // 压缩失败是瞬时/可重试错误，Pi 的 willRetry 为真时会自动重试摘要或继续 agent 主循环。
+    // 映射成裸 error 会让 orchestrator 收敛为 error 终态、渲染层把会话打成 stopped（压缩中断会话）。
+    const events = mapPiEventToKilaEvents({
+      type: 'compaction_end',
+      reason: 'threshold',
+      result: undefined,
+      aborted: false,
+      willRetry: true,
+      errorMessage: 'summary provider rate limited',
+    } as any)
+
+    expect(events).toEqual([{
+      type: 'compact_failed',
+      message: expect.any(String),
+      willRetry: true,
+      reason: 'threshold',
+    }])
+    // 关键不变量：绝不产出裸 error 终态
+    expect(events.some((e) => e.type === 'error')).toBe(false)
+  })
+
+  test('Given compaction_end 的 noop 文案 When 映射 Then 仍走 compact_noop 良性分支', () => {
+    const events = mapPiEventToKilaEvents({
+      type: 'compaction_end',
+      reason: 'manual',
+      result: undefined,
+      aborted: false,
+      willRetry: false,
+      errorMessage: 'Nothing to compact',
+    } as any)
+
+    expect(events).toEqual([{ type: 'compact_noop', message: expect.any(String) }])
   })
 
   test('Given message_end 的 toolUse stopReason When 直接映射 Then 标记为中间文本', () => {

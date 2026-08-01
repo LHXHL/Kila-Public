@@ -469,7 +469,14 @@ export function mapPiEventToKilaEvents(
       const noopMessage = getCompactionNoopMessage(event.errorMessage)
       if (noopMessage) return [{ type: 'compact_noop', message: noopMessage }]
       if (event.errorMessage) {
-        return [{ type: 'error', message: friendlyErrorMessage(event.errorMessage) }]
+        // 压缩失败是瞬时/可重试错误，不是会话终态。Pi 0.82 的 willRetry 为真时会自动重试摘要
+        // 或继续 agent 主循环；映射成裸 error 会让渲染层把会话打成 stopped（「压缩中断会话」）。
+        return [{
+          type: 'compact_failed',
+          message: friendlyErrorMessage(event.errorMessage),
+          willRetry: event.willRetry,
+          reason: event.reason,
+        }]
       }
       if (event.aborted || !event.result) return []
       return [{
@@ -1156,6 +1163,9 @@ export class PiAgentAdapter implements AgentProviderAdapter {
     })()
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
+        // compact() 的 reject 已由 compaction_end 事件映射（compact_failed / compact_noop）；
+        // noop 再 push 会重复发终态。只有 prompt 提交和其他非压缩异常才走通用错误映射。
+        if (getCompactionNoopMessage(error)) return
         queue.push(mapPiErrorMessageToKilaEvent(message))
       })
       .finally(() => {

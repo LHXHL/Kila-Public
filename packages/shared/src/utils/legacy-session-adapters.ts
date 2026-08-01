@@ -3,6 +3,7 @@ import type {
   FileAttachment,
   SessionMessage,
 } from '../types'
+import { compactAgentEventsForPersistence } from './agent-events-compact'
 
 const LEGACY_ATTACHED_FILES_REGEX = /<attached_files>\n?([\s\S]*?)\n?<\/attached_files>\n*/i
 
@@ -75,6 +76,13 @@ export function sessionMessageToLegacyAgentMessage(message: SessionMessage): Age
     ? message.attachments
     : parsed.attachments
 
+  // 惰性规范化：老会话的 thinking_delta / tool_update 可能是逐 token 碎片，
+  // 在读取出口合并成聚合事件。新数据已是聚合态，此调用为 no-op（短路返回原数组）。
+  // 保留「无 events 即 undefined」语义，避免给无事件消息注入空数组。
+  const events = message.events && message.events.length > 0
+    ? compactAgentEventsForPersistence(message.events)
+    : message.events
+
   return {
     id: message.id,
     role: message.role === 'assistant' || message.role === 'status' || message.role === 'tool'
@@ -84,7 +92,7 @@ export function sessionMessageToLegacyAgentMessage(message: SessionMessage): Age
     createdAt: message.createdAt,
     model: message.model,
     attachments,
-    events: message.events,
+    events,
     errorCode: message.errorCode,
     errorTitle: message.errorTitle,
     errorDetails: message.errorDetails,

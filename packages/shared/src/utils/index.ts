@@ -59,6 +59,7 @@ export {
   sessionMessageToLegacyAgentMessage,
   withLegacyAttachedFilesBlock,
 } from './legacy-session-adapters'
+export { compactAgentEventsForPersistence } from './agent-events-compact'
 export {
   getThinkingBudgetTokens,
   isThinkingLevelEnabled,

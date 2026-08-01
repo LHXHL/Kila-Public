@@ -29,7 +29,8 @@ import { setWidgetDraftProposalAtom, buildAssistantTurnTimelineEntries, type Age
 import { agentMessageHydratingAtom } from '@/atoms/agent-ui-atoms'
 import { useBackgroundTasks } from '@/hooks/useBackgroundTasks'
 import { userProfileAtom } from '@/atoms/user-profile'
-import { AgentMessageItem, RetryingNotice, AssistantTurnTimeline } from './AgentMessageItem'
+import { AgentMessageItem, AssistantTurnTimeline } from './AgentMessageItem'
+import { RetryingNotice, CompactingNotice } from './agent-stream-notices'
 import { MemoryTraceBadge } from './MemoryTraceBadge'
 import { AgentWelcomeState } from './AgentWelcomeState'
 import { Button } from '@/components/ui/button'
@@ -335,6 +336,11 @@ export const AgentMessages = React.memo(function AgentMessages({
                     animate
                   />
                   <MemoryTraceBadge trace={streamState?.memoryTrace} />
+                  {streamState?.isCompacting && (
+                    <div className="mb-2.5 w-full">
+                      <CompactingNotice retry={streamState.summarizationRetry} />
+                    </div>
+                  )}
                   {retrying && (
                     <div className="mb-2.5 w-full">
                       <RetryingNotice retrying={retrying} />

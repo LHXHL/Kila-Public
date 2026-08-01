@@ -28,7 +28,7 @@ import {
   type AnyAgentTool,
 } from './agent-tool-names'
 import { resolveChannelModel } from './channel-model-resolution'
-import { lookupProviderDbModel } from './provider-db-loader'
+import { findProviderDbModel, lookupProviderDbModel } from './provider-db-loader'
 import { createTrackedBashOperations } from './process-registry'
 import { memoryLifecycleManager } from './memory/lifecycle-manager'
 import { composeAgentPrompt } from './memory/prompt-compose'
@@ -262,10 +262,17 @@ export async function buildAgentRunContext(
 
   // channel.provider 代表实际的 endpoint 实例；capabilityProviderId 才是模型能力目录的可选真相源。
   // 例如自定义 OpenRouter 端点可维持 provider='company-router'，同时关联 capabilityProviderId='openrouter'。
-  const providerDbEntry = lookupProviderDbModel(
+  let providerDbEntry = lookupProviderDbModel(
     channelContext.channel.capabilityProviderId ?? channelContext.channel.provider,
     resolvedModel,
   )
+  // 指定 provider 查不到时，跨 provider 全局兜底。
+  // capabilityProviderId 是可选项，用户常按「协议兼容」配成 'openai'（stepfun / deepseek 等都走 OpenAI 协议），
+  // 但模型实际归属于另一个 provider（如 step-3.7-flash 属于 stepfun-step-plan，context=256K）。
+  // 不兜底会让这些模型静默退化到 FALLBACK_CONTEXT_WINDOW_TOKENS(32K)，进而过早触发压缩。
+  if (!providerDbEntry) {
+    providerDbEntry = findProviderDbModel(resolvedModel)?.model
+  }
   const modelMetadata = resolveModelMetadata({
     channelProvider: channelContext.channel.provider,
     channelBaseUrl: channelContext.channel.baseUrl,

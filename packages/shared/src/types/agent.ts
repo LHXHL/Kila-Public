@@ -356,6 +356,10 @@ export type AgentEvent =
     }
   // Pi 手动压缩的良性空操作（会话过小或已经压缩），不能伪装成真正的压缩边界。
   | { type: 'compact_noop'; message: string }
+  // 压缩失败（瞬时 / 可重试错误）。不是会话终态：Pi 的 willRetry 为真时会自动重试摘要
+  // 或继续 agent 主循环；只有最终 agent_settled 失败才映射为 error 终态。映射成裸 error
+  // 会让渲染层提前把会话打成 stopped，表现为「压缩中断会话」。
+  | { type: 'compact_failed'; message: string; willRetry: boolean; reason?: 'manual' | 'threshold' | 'overflow' }
   // 摘要生成的重试进度（Pi 0.82 起）；压缩期间不给反馈，用户会面对十几秒的静默。
   | { type: 'summarization_retry'; attempt: number; delaySeconds?: number; phase: 'scheduled' | 'start' | 'finished' }
   // 权限请求

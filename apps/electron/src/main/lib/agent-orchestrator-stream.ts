@@ -5,15 +5,16 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import type {
-  AgentEvent,
-  AgentMessage,
-  AgentProviderAdapter,
-  AgentRunOutcome,
-  MemoryRunTrace,
-  AgentSendInput,
-  RetryAttempt,
-  TypedError,
+import {
+  compactAgentEventsForPersistence,
+  type AgentEvent,
+  type AgentMessage,
+  type AgentProviderAdapter,
+  type AgentRunOutcome,
+  type MemoryRunTrace,
+  type AgentSendInput,
+  type RetryAttempt,
+  type TypedError,
 } from '@kila/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { friendlyErrorMessage, isPromptTooLongError } from './adapters/pi-agent-adapter'
@@ -103,55 +104,17 @@ function formatCompactionNoopStatus(event: CompactNoopEvent): string {
 }
 
 /**
- * 流式进度只用于实时展示，持久化时每个工具最多保留一份未完成输出。
- * 已有最终 tool_result 时删除中间 tool_update，避免长命令输出按更新次数膨胀。
+ * 压缩后自动续跑的接力 prompt。
+ *
+ * Pi 的 threshold 压缩发生在 agent loop 结束之后且 willRetry 恒为 false：若本轮回复
+ * 是被 maxTokens 截断的（stopReason=length），Pi 不会自动继续，任务就停在半截。
+ * Kila 在压缩完成后以这条 prompt 接力一次，让模型基于压缩摘要继续未完成的部分。
  */
-export function compactAgentEventsForPersistence(events: readonly AgentEvent[]): AgentEvent[] {
-  const compacted: Array<AgentEvent | null> = []
-  const toolUpdateIndexes = new Map<string, number>()
+const COMPACTION_AUTO_CONTINUE_PROMPT =
+  '上一条回复因上下文限制被截断，上下文已完成压缩。请基于压缩摘要中的进度，直接继续完成尚未完成的任务，不要重复已输出的内容。'
 
-  for (const event of events) {
-    if (event.type === 'tool_start') {
-      toolUpdateIndexes.delete(event.toolUseId)
-      compacted.push(event)
-      continue
-    }
-
-    if (event.type === 'tool_update') {
-      const existingIndex = toolUpdateIndexes.get(event.toolUseId)
-      if (typeof existingIndex !== 'number') {
-        toolUpdateIndexes.set(event.toolUseId, compacted.length)
-        compacted.push(event)
-        continue
-      }
-
-      const existing = compacted[existingIndex]
-      if (existing?.type !== 'tool_update') {
-        toolUpdateIndexes.set(event.toolUseId, compacted.length)
-        compacted.push(event)
-        continue
-      }
-      const partialText = event.partialText.startsWith(existing.partialText)
-        ? event.partialText
-        : existing.partialText + event.partialText
-      compacted[existingIndex] = {
-        ...existing,
-        ...event,
-        partialText,
-      }
-      continue
-    }
-
-    if (event.type === 'tool_result') {
-      const updateIndex = toolUpdateIndexes.get(event.toolUseId)
-      if (typeof updateIndex === 'number') compacted[updateIndex] = null
-      toolUpdateIndexes.delete(event.toolUseId)
-    }
-    compacted.push(event)
-  }
-
-  return compacted.filter((event): event is AgentEvent => event !== null)
-}
+const COMPACTION_AUTO_CONTINUE_STATUS =
+  '检测到回复在上下文压缩前被截断，已自动继续完成剩余任务。'
 
 function persistAssistantMessage(
   sessionId: string,
@@ -201,10 +164,12 @@ const RETRY_HISTORY_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
  * - `model_resolved`：由 attemptBuffer.modelEvent 单独承载
  * - `compact_complete`：压缩边界的唯一真相源是独立的 `role: 'status'` 消息。
  *   两处同时落盘会让设置页的压缩次数、tokensBefore 累计和摘要长度统计全部翻倍。
+ * - `compact_failed`：压缩未成功，无 usage / tokensBefore 可记，只用于实时清掉 UI 压缩态。
  */
 const UNBUFFERED_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
   'model_resolved',
   'compact_complete',
+  'compact_failed',
 ])
 
 function createAttemptBuffer(model: string): AttemptBuffer {
@@ -276,6 +241,11 @@ export async function runAgentStream({
   let attemptBuffer = createAttemptBuffer(activeModel)
   // Pi 内部自动重试的当前 attempt 编号，用于识别“新 attempt”并只在切换时重置一次持久化缓冲。
   let lastPersistedRetryAttempt: number | undefined
+  // 本轮最终 complete 事件的 stopReason；'length' 表示回复被 maxTokens 截断。
+  let lastStopReason: string | undefined
+  // 压缩后自动续跑只允许一次，防止「截断 → 压缩 → 续跑」退化成无限循环。
+  let autoContinueUsed = false
+  let activeQueryOptions = queryOptions
   // 本轮尚未落盘的压缩事件。一轮内可能压缩多次，逐条落盘避免漏计。
   const pendingCompactionEvents: CompactCompleteEvent[] = []
   let lastCompactionNoopEvent: CompactNoopEvent | null = null
@@ -416,7 +386,7 @@ export async function runAgentStream({
     let shouldRetry = false
 
     try {
-      for await (const event of adapter.query(queryOptions)) {
+      for await (const event of adapter.query(activeQueryOptions)) {
         if (!canContinue(sessionId)) break
 
         const timelineEvent = stampTimelineEvent(event)
@@ -495,6 +465,11 @@ export async function runAgentStream({
           attemptBuffer.modelEvent = timelineEvent
         }
 
+        if (timelineEvent.type === 'complete') {
+          // 记录最终 stopReason：'length' 表示回复被 maxTokens 截断，是压缩后自动续跑的触发信号。
+          lastStopReason = timelineEvent.stopReason
+        }
+
         if (timelineEvent.type === 'compact_complete') {
           pendingCompactionEvents.push(timelineEvent)
           lastCompactionNoopEvent = null
@@ -502,6 +477,12 @@ export async function runAgentStream({
         }
         if (timelineEvent.type === 'compact_noop') {
           lastCompactionNoopEvent = timelineEvent
+        }
+        // 压缩失败是非终态事件：不写 terminalError，不动 onComplete 收敛。
+        // Pi 的 willRetry 为真时会自动重试摘要或继续 agent 主循环，会话保持运行态直到 agent_settled。
+        // 这里只清掉可能悬挂的 noop 标记，避免上一轮的良性提示压住本轮进度。
+        if (timelineEvent.type === 'compact_failed') {
+          lastCompactionNoopEvent = null
         }
 
         if (!UNBUFFERED_EVENT_TYPES.has(timelineEvent.type)) {
@@ -545,6 +526,32 @@ export async function runAgentStream({
         return
       }
 
+      // 压缩后自动续跑：本轮发生过压缩且最终回复被 maxTokens 截断（Pi 的 threshold 压缩
+      // willRetry 恒为 false，不会自动继续），Kila 以接力 prompt 在同一产品轮内续跑一次。
+      // attemptBuffer 不落盘，两段输出最终合并为同一条 assistant 消息，避免 UI 闪烁与重复。
+      if (
+        pendingCompactionEvents.length > 0
+        && lastStopReason === 'length'
+        && !autoContinueUsed
+        && canContinue(sessionId)
+      ) {
+        autoContinueUsed = true
+        lastStopReason = undefined
+        lastCompactionNoopEvent = null
+        terminalError = null
+        lastPersistedRetryAttempt = undefined
+        activeQueryOptions = {
+          ...queryOptions,
+          prompt: COMPACTION_AUTO_CONTINUE_PROMPT,
+          rawPrompt: COMPACTION_AUTO_CONTINUE_PROMPT,
+          promptImages: undefined,
+        }
+        log.info('[Agent流] 压缩前回复被截断，自动续跑一次:', sessionId)
+        // 重置 attempt 让下一次迭代回到 attempt=1 重新执行（不触发外层重试的延迟与事件）。
+        attempt = 0
+        continue
+      }
+
       const compactionCount = persistTurnArtifacts()
       if (compactionCount > 0) {
         if (shouldPersistRunMemory(input.incognito)) {
@@ -562,6 +569,18 @@ export async function runAgentStream({
           createdAt: Date.now(),
           model: activeModel,
           events: [lastCompactionNoopEvent],
+          messageSource: sourceMeta.messageSource,
+          messageSourceLabel: sourceMeta.messageSourceLabel,
+          relatedTaskId: sourceMeta.relatedTaskId,
+        })
+      }
+      if (autoContinueUsed) {
+        appendAgentMessage(sessionId, {
+          id: randomUUID(),
+          role: 'status',
+          content: COMPACTION_AUTO_CONTINUE_STATUS,
+          createdAt: Date.now(),
+          model: activeModel,
           messageSource: sourceMeta.messageSource,
           messageSourceLabel: sourceMeta.messageSourceLabel,
           relatedTaskId: sourceMeta.relatedTaskId,

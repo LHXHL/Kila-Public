@@ -938,6 +938,7 @@ export function applyAgentEvent(prev: AgentStreamState, event: AgentEvent): Agen
 
     case 'compact_complete':
     case 'compact_noop':
+    case 'compact_failed':
       return { ...prev, isCompacting: false, summarizationRetry: undefined }
 
     // Pi 摘要重试：scheduled/start 保持压缩态并给出可见进度，finished 只收掉进度条

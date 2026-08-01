@@ -18,21 +18,12 @@ const ITEM_PRESENTATION = {
   notebook: { labelKey: 'agent.memory.notebook', Icon: BookOpen },
 } as const
 
-function getProviderLabel(item: MemoryRecallTraceItem, t: TFunction): string {
-  if (item.provider === 'nowledge') return 'Nowledge'
-  if (item.provider === 'local') return t('agent.memory.providerLocalShort')
-  return t('agent.memory.providerUnknown')
-}
-
 function RecallItem({ item }: { item: MemoryRecallTraceItem }): React.ReactElement {
   const { t } = useTranslation()
   const { Icon, labelKey } = ITEM_PRESENTATION[item.kind]
   const label = t(labelKey)
-  const metadata = [
-    getProviderLabel(item, t),
-    item.source,
-    item.category,
-  ].filter(Boolean)
+  // 本地记忆已移除，来源单一，不再暴露 provider；仅保留 source / category 等补充说明
+  const metadata = [item.source, item.category].filter(Boolean)
 
   return (
     <details className="group rounded-lg bg-muted/35 open:bg-muted/50">
@@ -137,9 +128,7 @@ export function MemoryTraceBadge({ trace }: { trace?: MemoryRunTrace }): React.R
   const { t } = useTranslation()
   if (!trace) return null
 
-  const providerLabel = trace.provider === 'nowledge'
-    ? t('agent.memory.providerNowledge')
-    : t('agent.memory.providerLocal')
+  const providerLabel = t('agent.memory.source')
   const recalledCount = trace.recalledMemoryCount + trace.relatedThreadCount + trace.notebookCount
   const statusLabel = trace.recallStatus === 'error'
     ? t('agent.memory.recallError')
