@@ -1,6 +1,6 @@
 {
   "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts": {
-    "lines": 1248
+    "lines": 1247
   },
   "apps/electron/src/main/lib/im-bridge/adapters/feishu-adapter.ts": {
     "lines": 888
@@ -29,11 +29,8 @@
   "apps/electron/src/renderer/components/ai-elements/message.tsx": {
     "lines": 1039
   },
-  "apps/electron/src/renderer/components/app-shell/LeftSidebar.tsx": {
-    "lines": 937
-  },
   "apps/electron/src/renderer/components/settings/ChannelForm.tsx": {
-    "lines": 964
+    "lines": 963
   },
   "packages/shared/src/types/agent.ts": {
     "lines": 1111
