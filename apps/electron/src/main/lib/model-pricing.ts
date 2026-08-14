@@ -31,7 +31,7 @@ const ZERO_MODEL_COST: ModelCost = {
 
 let piAiCompatModulePromise: Promise<PiAiCompatModule> | undefined
 
-function loadPiAiCompat(): Promise<PiAiCompatModule> {
+export function loadPiAiCompat(): Promise<PiAiCompatModule> {
   piAiCompatModulePromise ??= loadExternalEsm<PiAiCompatModule>('@earendil-works/pi-ai/compat')
   return piAiCompatModulePromise
 }
@@ -40,7 +40,7 @@ function hasNonZeroCost(cost: ModelCost | undefined): cost is ModelCost {
   return Boolean(cost && (cost.input > 0 || cost.output > 0 || cost.cacheRead > 0 || cost.cacheWrite > 0))
 }
 
-function normalizeModelKey(value: string): string {
+export function normalizeModelKey(value: string): string {
   return value
     .trim()
     .toLowerCase()
@@ -64,7 +64,7 @@ function isMoonshotBaseUrl(baseUrl?: string): boolean {
   return Boolean(baseUrl && /moonshot|kimi/i.test(baseUrl))
 }
 
-function inferProviderCandidates(channelProvider?: string, baseUrl?: string, modelId?: string): string[] {
+export function inferProviderCandidates(channelProvider?: string, baseUrl?: string, modelId?: string): string[] {
   const candidates: string[] = []
   const normalizedProvider = channelProvider?.trim()
   const normalizedModel = normalizeModelKey(modelId ?? '')
@@ -113,7 +113,7 @@ function inferProviderCandidates(channelProvider?: string, baseUrl?: string, mod
   return Array.from(new Set(candidates))
 }
 
-function modelIdCandidates(modelId: string): string[] {
+export function modelIdCandidates(modelId: string): string[] {
   const normalized = normalizeModelKey(modelId)
   const candidates = new Set<string>([
     modelId,

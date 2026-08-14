@@ -23,9 +23,13 @@ function statusToBoolean(status: 'supported' | 'unsupported' | 'unknown'): boole
 
 export function resolveModelCapabilities(input: ResolveModelCapabilitiesInput): ModelCapabilities {
   const metadata = resolveModelMetadata(input)
+  // abilities 来源只可能是 explicit/builtin/provider-rule/fallback；'inference' 仅属
+  // context 窗口的来源枚举，这里显式收窄，避免类型联合外泄。
   const source = metadata.resolutionSources.abilities === 'manual'
     ? 'explicit'
-    : metadata.resolutionSources.abilities
+    : metadata.resolutionSources.abilities === 'inference'
+      ? 'fallback'
+      : metadata.resolutionSources.abilities
 
   return {
     supportsTools: statusToBoolean(metadata.abilities.tools),

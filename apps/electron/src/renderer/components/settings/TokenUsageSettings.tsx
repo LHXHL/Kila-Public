@@ -86,13 +86,11 @@ function getModelContextLabel(model: TokenUsageModelStat, t: TFunction): { label
   })
   return {
     label: formatTokenWindow(metadata.contextWindowTokens, t),
-    source: metadata.resolutionSources.contextWindow === 'builtin'
-      ? t('settings.tokenUsage.sourceBuiltin')
-      : metadata.resolutionSources.contextWindow === 'provider-rule'
-        ? t('settings.tokenUsage.sourceRule')
-        : metadata.resolutionSources.contextWindow === 'manual'
-          ? t('settings.tokenUsage.sourceManual')
-          : t('settings.tokenUsage.sourceDefault'),
+    source: metadata.resolutionSources.contextWindow === 'manual'
+      ? t('settings.tokenUsage.sourceManual')
+      : metadata.resolutionSources.contextWindow === 'inference'
+        ? t('settings.tokenUsage.sourceInference')
+        : t('settings.tokenUsage.sourceDefault'),
   }
 }
 

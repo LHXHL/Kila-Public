@@ -100,10 +100,12 @@ export function buildModelCapabilityChips(option: ModelOption): ModelCapabilityC
 
   const chips: ModelCapabilityChip[] = []
 
-  if (metadata.contextWindowTokens) {
+  // context 窗口单一数据源：resolveModelMetadata 已按 手动覆盖 ?? 模型名推断 计算。
+  const contextWindow = metadata.contextWindowTokens
+  if (contextWindow) {
     chips.push({
       key: 'context-window',
-      label: formatContextWindow(metadata.contextWindowTokens),
+      label: formatContextWindow(contextWindow),
     })
   }
   if (metadata.abilities.tools === 'supported') {

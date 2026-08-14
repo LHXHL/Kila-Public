@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import type { AgentSendInput, KilaPermissionMode, MemoryRunTrace, PermissionRequest, AskUserRequest } from '@kila/shared'
-import { buildSessionContextSnapshot, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
+import { buildSessionContextSnapshot, inferContextWindow, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { buildPromptImages, splitAttachmentsForPiPrompt } from './adapters/pi-history-converter'
 import type { AgentEventBus } from './agent-event-bus'
@@ -431,7 +431,8 @@ export async function buildAgentRunContext(
   ])
   const contextSnapshot = buildSessionContextSnapshot({
     modelId: resolvedModel,
-    contextWindow: modelMetadata.contextWindowTokens,
+    // 预发快照与运行时 buildPiModel 保持同源：走模型名推断，不依赖 Provider DB / 内置目录。
+    contextWindow: inferContextWindow(resolvedModel),
     historyTurns,
     systemPrompt: systemPromptText,
     dynamicContext: dynamicCtx,

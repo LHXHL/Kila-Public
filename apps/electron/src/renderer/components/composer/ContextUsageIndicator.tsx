@@ -6,11 +6,10 @@
  * 避免流式更新时穿透 React.memo。
  */
 
-import * as React from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useAtomValue } from 'jotai'
 import { Gauge } from 'lucide-react'
-import { agentContextStatusAtomFamily, prefetchProviderDbModelAtom } from '@/atoms/agent-context-atoms'
+import { agentContextStatusAtomFamily } from '@/atoms/agent-context-atoms'
 import { formatTokenCount } from '@/atoms/usage-atoms'
 import { cn } from '@/lib/utils'
 import { ToolbarHoverPopover } from './ToolbarHoverPopover'
@@ -48,15 +47,6 @@ export function ContextUsageIndicator({
 }: ContextUsageIndicatorProps) {
   const { t } = useTranslation()
   const contextStatus = useAtomValue(agentContextStatusAtomFamily(sessionId))
-  const prefetchProviderDbModel = useSetAtom(prefetchProviderDbModelAtom)
-
-  // modelId 变化时异步预取 Provider DB entry，让静态估算（发消息前）也能拿到正确的 DB 窗口。
-  // 流式开始后 streamState.contextWindow 优先级最高，此时预取结果不再关键，但成本极低。
-  React.useEffect(() => {
-    if (contextStatus.modelId) {
-      void prefetchProviderDbModel(contextStatus.modelId)
-    }
-  }, [contextStatus.modelId, prefetchProviderDbModel])
 
   const hasData = typeof contextStatus.inputTokens === 'number' && contextStatus.inputTokens > 0
   const percent = hasData && contextStatus.contextWindow && contextStatus.inputTokens

@@ -212,7 +212,6 @@ function buildInitialFormState(
   }
 }
 
-
 export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirtyChange, embedded = false }: ChannelFormProps) {
   const isEdit = channel !== null
   const formIdentity = isEdit ? channel.id : preset?.id ?? 'new'
@@ -281,7 +280,6 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
   }, [dirty, onDirtyChange])
 
   React.useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
-
   React.useEffect(() => {
     setName(initialFormState.name)
     setProvider(initialFormState.provider)
@@ -744,8 +742,9 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                   metadataOverride: model.metadataOverride,
                   capabilitiesOverride: model.capabilities,
                 })
+                // context 窗口单一数据源：resolveModelMetadata 已按 手动覆盖 ?? 模型名推断 计算
+                const contextWindow = metadata.contextWindowTokens
                 const isExpanded = expandedModelId === model.id
-
                 return (
                   <div key={model.id} className="px-4 py-3">
                     <div className="flex items-start gap-3">
@@ -777,7 +776,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                            {formatTokenCount(metadata.contextWindowTokens, t)}
+                            {formatTokenCount(contextWindow, t)}
                           </span>
                           {ABILITY_ITEMS.map(({ key, icon: Icon }) => {
                             const status = metadata.abilities[key]
@@ -832,7 +831,7 @@ export default function ChannelForm({ channel, preset, onSaved, onCancel, onDirt
                               min={1}
                               value={model.metadataOverride?.contextWindowTokens ?? ''}
                               onChange={(e) => handleSetNumberOverride(model.id, 'contextWindowTokens', e.target.value)}
-                              placeholder={metadata.contextWindowTokens ? String(metadata.contextWindowTokens) : t('settings.tokenUsage.unknown')}
+                              placeholder={contextWindow ? String(contextWindow) : t('settings.tokenUsage.unknown')}
                               className="h-8 text-xs"
                             />
                           </label>

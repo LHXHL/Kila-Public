@@ -38,6 +38,16 @@ export type {
   ResolvedModelMetadata,
 } from '../model-catalog'
 export {
+  CODEX_GPT_54_55_CONTEXT_WINDOW,
+  CODEX_GPT_54_MINI_CONTEXT_WINDOW,
+  CODEX_GPT_56_CONTEXT_WINDOW,
+  DEFAULT_CONTEXT_WINDOW,
+  ONE_MILLION_CONTEXT_WINDOW,
+  inferCodexAlignedGPT5ContextWindow,
+  inferContextWindow,
+  supports1MContext,
+} from './context-window'
+export {
   buildSessionContextSnapshot,
   estimateSessionContext,
 } from './estimate-session-context'

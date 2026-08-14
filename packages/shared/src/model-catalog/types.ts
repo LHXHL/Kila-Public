@@ -45,7 +45,7 @@ export interface ModelCatalogEntry extends ModelMetadata {
   source: 'builtin'
 }
 
-export type MetadataResolutionSource = 'manual' | 'builtin' | 'provider-rule' | 'fallback' | 'none'
+export type MetadataResolutionSource = 'manual' | 'inference' | 'builtin' | 'provider-rule' | 'fallback' | 'none'
 
 export interface ResolvedModelMetadata extends ModelMetadata {
   resolutionSources: {

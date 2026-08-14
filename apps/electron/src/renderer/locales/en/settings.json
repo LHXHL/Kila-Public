@@ -480,6 +480,7 @@
       "sourceBuiltinReference": "Built-in reference",
       "sourceRule": "Rule",
       "sourceManual": "User setting",
+      "sourceInference": "Inferred",
       "sourceDefault": "Default",
       "sourceUnset": "Not configured"
     },

@@ -92,7 +92,7 @@ describe('resolveModelCapabilities', () => {
       supportsTools: true,
       supportsThinking: true,
       supportsVision: true,
-      contextWindow: 400000,
+      contextWindow: 200000,
       source: 'builtin',
     })
   })
@@ -110,12 +110,12 @@ describe('resolveModelCapabilities', () => {
       supportsTools: true,
       supportsThinking: false,
       supportsVision: true,
-      contextWindow: 128000,
+      contextWindow: 200000,
       source: 'builtin',
     })
   })
 
-  test('falls back conservatively for unknown custom models', () => {
+  test('infers the default window for unknown custom models', () => {
     expect(typeof resolveModelCapabilities).toBe('function')
     if (typeof resolveModelCapabilities !== 'function') return
 
@@ -128,7 +128,7 @@ describe('resolveModelCapabilities', () => {
       supportsTools: false,
       supportsThinking: false,
       supportsVision: false,
-      contextWindow: undefined,
+      contextWindow: 200000,
       source: 'fallback',
     })
   })
@@ -187,13 +187,13 @@ describe('resolveModelCapabilities', () => {
       modelId: 'glm-4.5',
     })
 
-    expect(metadata.contextWindowTokens).toBe(128000)
+    expect(metadata.contextWindowTokens).toBe(200000)
     expect(metadata.abilities.tools).toBe('supported')
     expect(metadata.abilities.reasoning).toBe('supported')
     expect(metadata.pricing?.currency).toBe('CNY')
     expect(metadata.pricing?.inputPerMillion).toBe(4)
     expect(metadata.pricing?.outputPerMillion).toBe(16)
-    expect(metadata.resolutionSources.contextWindow).toBe('builtin')
+    expect(metadata.resolutionSources.contextWindow).toBe('inference')
     expect(metadata.resolutionSources.pricing).toBe('builtin')
   })
 
@@ -208,11 +208,11 @@ describe('resolveModelCapabilities', () => {
     })
 
     expect(metadata.id).toBe('glm-4.5-air')
-    expect(metadata.contextWindowTokens).toBe(128000)
+    expect(metadata.contextWindowTokens).toBe(200000)
     expect(metadata.pricing?.currency).toBe('CNY')
     expect(metadata.pricing?.inputPerMillion).toBe(1.2)
     expect(metadata.pricing?.outputPerMillion).toBe(8)
-    expect(metadata.resolutionSources.contextWindow).toBe('builtin')
+    expect(metadata.resolutionSources.contextWindow).toBe('inference')
     expect(metadata.resolutionSources.pricing).toBe('builtin')
   })
 
@@ -249,7 +249,7 @@ describe('resolveModelCapabilities', () => {
     expect(metadata.pricing?.currency).toBe('CNY')
     expect(metadata.pricing?.inputPerMillion).toBe(7)
     expect(metadata.pricing?.outputPerMillion).toBe(21)
-    expect(metadata.resolutionSources.contextWindow).toBe('builtin')
+    expect(metadata.resolutionSources.contextWindow).toBe('inference')
     expect(metadata.resolutionSources.pricing).toBe('builtin')
   })
 

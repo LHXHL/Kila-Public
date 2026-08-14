@@ -54,7 +54,7 @@ describe('Pi 渠道协议映射', () => {
 })
 
 
-test('Given capabilityProviderId 命中的 Provider DB 模型画像, When 生成 Pi 模型元数据, Then DB 能力优先进入 Pi runtime', () => {
+test('Given capabilityProviderId 命中的 Provider DB 模型画像, When 生成 Pi 模型元数据, Then DB 能力进入 Pi runtime 而窗口走模型名推断', () => {
   const metadata = resolvePiModelMetadata(
     {
       provider: 'company-router',
@@ -74,7 +74,9 @@ test('Given capabilityProviderId 命中的 Provider DB 模型画像, When 生成
     },
   )
 
-  expect(metadata.contextWindowTokens).toBe(512000)
+  // context 窗口已切换为单一数据源（模型名推断），DB 的 limit.context 不再参与；
+  // DB 仍提供 abilities 与 maxOutputTokens。
+  expect(metadata.contextWindowTokens).toBe(200000)
   expect(metadata.maxOutputTokens).toBe(64000)
   expect(metadata.abilities).toMatchObject({
     tools: 'supported',
@@ -83,11 +85,11 @@ test('Given capabilityProviderId 命中的 Provider DB 模型画像, When 生成
   })
 })
 
-test('Given capabilityProviderId 配错但模型在 DB 全局存在 When 用全局兜底 entry Then 不退化到 32K 兜底窗口', () => {
+test('Given capabilityProviderId 配错但模型在 DB 全局存在 When 用全局兜底 entry Then 能力画像可用且窗口不退化', () => {
   // 用户场景：step 渠道 capabilityProviderId 配成 'openai'（协议兼容），但 step-3.7-flash 实际
   // 归属 stepfun-step-plan。lookupProviderDbModel('openai', 'step-3.7-flash') 命中失败，
-  // agent-orchestrator-context.ts 会回退到 findProviderDbModel 全局搜索并命中 256K。
-  // 这里验证 resolveModelMetadata 接受全局兜底 entry 时的窗口契约。
+  // agent-orchestrator-context.ts 会回退到 findProviderDbModel 全局搜索并命中。
+  // context 窗口统一走模型名推断，DB entry 只负责能力画像，不再依赖 32K/DB 窗口兜底。
   const metadata = resolvePiModelMetadata(
     {
       provider: 'openai',
@@ -106,7 +108,8 @@ test('Given capabilityProviderId 配错但模型在 DB 全局存在 When 用全�
     },
   )
 
-  expect(metadata.contextWindowTokens).toBe(256000)
+  expect(metadata.contextWindowTokens).toBe(200000)
+  expect(metadata.abilities.tools).toBe('supported')
 })
 
 describe('Pi Provider 错误映射', () => {

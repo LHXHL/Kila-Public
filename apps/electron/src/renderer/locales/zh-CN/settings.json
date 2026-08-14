@@ -479,6 +479,7 @@
       "sourceBuiltinReference": "内置参考",
       "sourceRule": "规则",
       "sourceManual": "用户设置",
+      "sourceInference": "推断",
       "sourceDefault": "默认值",
       "sourceUnset": "未配置"
     },

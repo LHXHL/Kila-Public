@@ -24,6 +24,7 @@ import type {
 import { PiAgentAdapter } from './adapters/pi-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
+import { createSessionRuntimeBridge } from './session-service'
 import { getAgentSessionWorkspacePath, getWorkspaceFilesDir } from './config-paths'
 import { getSessionMeta } from './session-manager'
 import { saveAgentFilesToRoot } from './agent-file-save'
@@ -123,7 +124,9 @@ export async function runAgent(
 /**
  * 无渲染进程的 Agent 运行（供飞书 Bridge 等外部调用方使用）
  *
- * 如果桌面窗口存在，同时注册 webContents 以便事件同步到桌面端 UI。
+ * 如果桌面窗口存在，注册 webContents 让流式事件同步推送到桌面端 UI。
+ * 事件必须经 session-service 的 bridge 转换为 SESSION_IPC_CHANNELS：
+ * 渲染层只监听 SESSION 通道，AGENT 通道仅存在于主进程内部流转。
  * 事件同时通过 EventBus listeners 分发给飞书 Bridge。
  */
 export async function runAgentHeadless(
@@ -134,20 +137,21 @@ export async function runAgentHeadless(
     onTitleUpdated: (title: string) => void
   },
 ): Promise<void> {
-  // 尝试注册主窗口 webContents，让流式事件同步推送到桌面端
+  // 尝试注册主窗口 webContents（经 bridge 转换通道），让流式事件同步推送到桌面端
   const win = BrowserWindow.getAllWindows()[0]
   const wc = win && !win.isDestroyed() ? win.webContents : null
+  const bridged = wc ? createSessionRuntimeBridge(wc) : null
   const owner = Symbol(input.sessionId)
   const previousRoute = sessionWebContents.get(input.sessionId)
-  if (wc) sessionWebContents.set(input.sessionId, { owner, webContents: wc })
+  if (bridged) sessionWebContents.set(input.sessionId, { owner, webContents: bridged })
 
   try {
     await orchestrator.sendMessage(input, {
       onError: (error) => {
         callbacks.onError(error)
-        // 同步到渲染进程
-        if (wc && !wc.isDestroyed()) {
-          wc.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
+        // 同步到渲染进程（bridge 会转换为 SESSION_IPC_CHANNELS）
+        if (bridged && !bridged.isDestroyed()) {
+          bridged.send(AGENT_IPC_CHANNELS.STREAM_ERROR, {
             sessionId: input.sessionId,
             error,
           })
@@ -155,9 +159,9 @@ export async function runAgentHeadless(
       },
       onComplete: (messages, outcome = 'success') => {
         callbacks.onComplete()
-        // 同步到渲染进程
-        if (wc && !wc.isDestroyed()) {
-          wc.send(AGENT_IPC_CHANNELS.STREAM_COMPLETE, {
+        // 同步到渲染进程（bridge 会转换为 SESSION_IPC_CHANNELS）
+        if (bridged && !bridged.isDestroyed()) {
+          bridged.send(AGENT_IPC_CHANNELS.STREAM_COMPLETE, {
             sessionId: input.sessionId,
             outcome,
             messages,
@@ -166,9 +170,9 @@ export async function runAgentHeadless(
       },
       onTitleUpdated: (title) => {
         callbacks.onTitleUpdated(title)
-        // 同步到渲染进程
-        if (wc && !wc.isDestroyed()) {
-          wc.send(AGENT_IPC_CHANNELS.TITLE_UPDATED, {
+        // 同步到渲染进程（bridge 会转换为 SESSION_IPC_CHANNELS）
+        if (bridged && !bridged.isDestroyed()) {
+          bridged.send(AGENT_IPC_CHANNELS.TITLE_UPDATED, {
             sessionId: input.sessionId,
             title,
           })

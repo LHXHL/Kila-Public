@@ -1,6 +1,7 @@
 import type { ModelCapabilitiesOverride, ModelMetadataOverride, ProviderType } from '../types/channel'
 import type {
   AbilityStatus,
+  MetadataResolutionSource,
   ModelAbilities,
   ModelMetadata,
   ModelPricing,
@@ -10,6 +11,7 @@ import type { ExtraCapabilities } from './extra-capabilities'
 import type { ProviderDbModel } from './provider-db'
 import { cloneExtraCapabilities } from './extra-capabilities'
 import { lookupModel } from './catalog'
+import { inferContextWindow } from '../utils/context-window'
 
 export interface ResolveModelMetadataInput {
   channelProvider: string
@@ -129,7 +131,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('claude')) {
     return {
       provider: 'anthropic',
-      contextWindowTokens: 200000,
       abilities: {
         tools: 'supported',
         reasoning: /claude[- ](opus|sonnet|haiku).*[- ]4|4[.-]/.test(modelName) ? 'supported' : 'unsupported',
@@ -144,7 +145,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('gemini')) {
     return {
       provider: 'google',
-      contextWindowTokens: modelName.includes('1.5') || modelName.includes('2.5') ? 1000000 : 128000,
       abilities: {
         tools: 'supported',
         reasoning: /gemini[- ](2\.5|3)|thinking/.test(modelName) ? 'supported' : 'unsupported',
@@ -159,7 +159,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('gpt-5')) {
     return {
       provider: 'openai',
-      contextWindowTokens: 400000,
       abilities: {
         tools: 'supported',
         reasoning: 'supported',
@@ -174,7 +173,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('gpt-image')) {
     return {
       provider: 'openai',
-      contextWindowTokens: 128000,
       abilities: {
         tools: 'unsupported',
         reasoning: 'unsupported',
@@ -189,7 +187,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (/\bo[134]\b|o[134][.-]/.test(modelName)) {
     return {
       provider: 'openai',
-      contextWindowTokens: 200000,
       abilities: {
         tools: 'supported',
         reasoning: 'supported',
@@ -204,7 +201,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('gpt-4.1')) {
     return {
       provider: 'openai',
-      contextWindowTokens: 1047576,
       abilities: {
         tools: 'supported',
         reasoning: 'unsupported',
@@ -219,7 +215,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('gpt-4o')) {
     return {
       provider: 'openai',
-      contextWindowTokens: 128000,
       abilities: {
         tools: 'supported',
         reasoning: 'unsupported',
@@ -234,7 +229,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('gpt-4') || modelName.includes('gpt-3.5')) {
     return {
       provider: 'openai',
-      contextWindowTokens: modelName.includes('32k') ? 32768 : 128000,
       abilities: {
         tools: 'supported',
         reasoning: 'unsupported',
@@ -251,7 +245,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
     const isModernAgent = /glm-(5|4[.](5|6|7))/.test(modelName)
     return {
       provider: 'zhipu',
-      contextWindowTokens: isVision ? 131072 : isModernAgent ? 200000 : 128000,
       abilities: {
         tools: 'supported',
         reasoning: isModernAgent ? 'supported' : 'unknown',
@@ -267,7 +260,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
     const isOmni = modelName.includes('omni') || modelName.includes('v2.5')
     return {
       provider: 'minimax',
-      contextWindowTokens: modelName.includes('v2.5') || modelName.includes('v2-pro') ? 1000000 : 262144,
       abilities: {
         tools: 'supported',
         reasoning: 'supported',
@@ -282,7 +274,6 @@ function providerRuleMetadata(input: ResolveModelMetadataInput): Partial<ModelMe
   if (modelName.includes('minimax-')) {
     return {
       provider: 'minimax',
-      contextWindowTokens: modelName.includes('m1') || modelName.includes('text-01') ? 1000192 : 204800,
       abilities: {
         tools: 'supported',
         reasoning: 'supported',
@@ -373,7 +364,6 @@ export function providerDbModelToMetadata(
     id: model.id,
     displayName: model.display_name ?? model.name ?? model.id,
     releasedAt: model.release_date,
-    contextWindowTokens: model.limit?.context,
     maxOutputTokens: model.limit?.output,
     abilities,
     pricing,
@@ -397,20 +387,16 @@ export function resolveModelMetadata(input: ResolveModelMetadataInput): Resolved
     provider: providerRule.provider ?? input.channelProvider,
     id: input.modelId,
     displayName: input.modelName ?? input.modelId,
-    contextWindowTokens: providerRule.contextWindowTokens,
+    contextWindowTokens: inferContextWindow(input.modelId),
     abilities: providerRule.abilities ?? UNKNOWN_ABILITIES,
     source: 'builtin',
   }
 
-  const contextSource = metadataOverride?.contextWindowTokens !== undefined
+  // context 窗口单一数据源：手动覆盖 > 模型名推断。不再从 Provider DB / 内置目录 /
+  // provider 规则取窗口，避免三套来源各自给数导致「显示与运行时不一致」。
+  const contextSource: MetadataResolutionSource = metadataOverride?.contextWindowTokens !== undefined
     ? 'manual'
-    : base.contextWindowTokens !== undefined
-      ? dbEntry
-        ? 'builtin'
-        : builtin
-          ? 'builtin'
-          : 'provider-rule'
-      : 'fallback'
+    : 'inference'
 
   const abilitiesSource = hasAbilityOverride(metadataOverride)
     ? 'manual'
@@ -432,7 +418,7 @@ export function resolveModelMetadata(input: ResolveModelMetadataInput): Resolved
 
   return {
     ...base,
-    contextWindowTokens: metadataOverride?.contextWindowTokens ?? base.contextWindowTokens,
+    contextWindowTokens: metadataOverride?.contextWindowTokens ?? inferContextWindow(input.modelId),
     maxOutputTokens: metadataOverride?.maxOutputTokens ?? base.maxOutputTokens,
     abilities: mergeAbilities(base.abilities, metadataOverride?.abilities),
     pricing: mergePricing(base.pricing, metadataOverride?.pricing),

@@ -39,9 +39,10 @@ import type {
 } from '@kila/shared'
 import { extractKilaImageAttachments, inferApiTypeFromProvider, resolveModelMetadata, resolveThinkingLevel, detectBackgroundEvents, type ModelCapabilitiesOverride } from '@kila/shared'
 import { convertHistoryToPiMessages } from './pi-history-converter'
-import { deriveCompactionSettings, estimateCjkRatio, getCompactionNoopMessage, mapPiUsageToAgentEventUsage, parseManualCompactCommand, resolveEffectiveContextWindow, toPiCompactionSettings, waitForCompactionToSettle } from '../compaction-settings'
+import { deriveCompactionSettings, estimateCjkRatio, getCompactionNoopMessage, mapPiUsageToAgentEventUsage, parseManualCompactCommand, toPiCompactionSettings, waitForCompactionToSettle } from '../compaction-settings'
 import { getPiAgentDir, getPiSessionDir } from '../config-paths'
 import { resolveModelCost } from '../model-pricing'
+import { resolvePiModelContextWindow, resolvePiModelMaxTokens } from '../pi-model-catalog'
 import {
   createKilaModelRuntime,
   updateKilaModelRuntimeApiKey,
@@ -283,11 +284,9 @@ export async function buildPiModel(
   // 如果 API 真不支持图片，会在 adapter 层捕获错误并给出清晰提示。
   const includeImage = metadata.abilities.vision === 'supported' || (hasImages ?? false)
 
-  // 窗口未知时必须保守：告诉本地小模型「你有 20 万窗口」会让它跳过压缩直撞 overflow。
-  const contextWindow = resolveEffectiveContextWindow(metadata)
-  if (contextWindow.source === 'fallback') {
-    log.warn(`[Pi Agent] 模型 ${modelId} 上下文窗口未知，按保守默认 ${contextWindow.contextWindowTokens} 处理`)
-  }
+  // context window / maxTokens 以 Pi SDK catalog + 模型名推断为准；手动覆盖优先，未知回 200K。
+  const contextWindow = await resolvePiModelContextWindow(channel, modelId, metadataOverride?.contextWindowTokens)
+  const maxTokens = await resolvePiModelMaxTokens(channel, modelId, metadataOverride?.maxOutputTokens)
 
   return {
     id: modelId,
@@ -298,8 +297,8 @@ export async function buildPiModel(
     reasoning: metadata.abilities.reasoning === 'supported',
     input: includeImage ? ['text', 'image'] : ['text'],
     cost,
-    contextWindow: contextWindow.contextWindowTokens,
-    maxTokens: metadata.maxOutputTokens ?? 32768,
+    contextWindow,
+    maxTokens,
   }
 }
 
