@@ -21,6 +21,7 @@ import {
 } from './nowledge-payload'
 import type { MemoryProvider } from './provider'
 import { memoryStateStore, type MemoryStateStore } from './state-store'
+import { chunkThreadMessages } from './thread-batch'
 import { patchMarkdownSection } from './working-memory-patch'
 import type {
   MemoryConnectionsInput,
@@ -358,25 +359,43 @@ export class NowledgeMemoryProvider implements MemoryProvider {
     const syncedCount = existingState?.lastAppendedMessageSeq ?? 0
     const nextMessages = input.messages.slice(syncedCount)
 
+    if (nextMessages.length === 0) {
+      return
+    }
+
+    // 分批发送：Nowledge 写入路径对每条消息做嵌入与索引，长会话全量一次发送
+    // 容易撞客户端超时；分批后单请求负载小，每批成功即推进 lastAppendedMessageSeq，
+    // 中途失败时下一轮只补发剩余批次，不再整轮全量重发。
+    const batches = chunkThreadMessages(nextMessages)
+    const threadTimeoutMs = Math.max(this.options.timeoutMs, MIN_THREAD_SYNC_TIMEOUT_MS)
+
+    let seq = syncedCount
+    let appendFrom = 0
+
     if (syncedCount === 0) {
+      // nextMessages 非空时批次必然存在；守卫仅为满足严格类型检查
+      const firstBatch = batches[0]
+      if (!firstBatch) return
       try {
         await this.request('/threads', {
           method: 'POST',
-          timeoutMs: Math.max(this.options.timeoutMs, MIN_THREAD_SYNC_TIMEOUT_MS),
+          timeoutMs: threadTimeoutMs,
           body: {
             thread_id: input.threadId,
             title: input.threadTitle,
-            messages: input.messages,
+            messages: firstBatch.messages,
             source: 'kila',
             project: input.projectPath,
             workspace: input.projectPath,
           },
         })
+        seq = syncedCount + firstBatch.endSeq
+        appendFrom = 1
         this.stateStore.patchThreadState(input.sessionId, {
           threadId: input.threadId,
           threadTitle: input.threadTitle,
           projectPath: input.projectPath,
-          lastAppendedMessageSeq: input.messages.length,
+          lastAppendedMessageSeq: seq,
           lastError: undefined,
         })
         this.stateStore.appendRuntimeEvent({
@@ -384,9 +403,8 @@ export class NowledgeMemoryProvider implements MemoryProvider {
           threadId: input.threadId,
           eventType: 'thread_created',
           status: 'success',
-          detail: `created thread with ${input.messages.length} messages`,
+          detail: `created thread with ${firstBatch.messages.length} messages`,
         })
-        return
       } catch (error) {
         if (!this.isThreadAlreadyExistsError(error)) {
           this.stateStore.patchThreadState(input.sessionId, {
@@ -404,36 +422,38 @@ export class NowledgeMemoryProvider implements MemoryProvider {
           })
           throw error
         }
+        // 409 线程已存在：状态丢失或并发创建，全部批次改走 append
       }
     }
 
-    if (nextMessages.length === 0) {
-      return
+    for (const batch of batches.slice(appendFrom)) {
+      // endSeq 是相对 nextMessages 的偏移，转成全局序号再推进与幂等
+      const batchEndSeq = syncedCount + batch.endSeq
+      await this.request(`/threads/${encodeURIComponent(input.threadId)}/append`, {
+        method: 'POST',
+        timeoutMs: threadTimeoutMs,
+        body: {
+          messages: batch.messages,
+          deduplicate: true,
+          idempotency_key: `${input.threadId}:${batchEndSeq}`,
+        },
+      })
+      seq = batchEndSeq
+      this.stateStore.patchThreadState(input.sessionId, {
+        threadId: input.threadId,
+        threadTitle: input.threadTitle,
+        projectPath: input.projectPath,
+        lastAppendedMessageSeq: seq,
+        lastError: undefined,
+      })
+      this.stateStore.appendRuntimeEvent({
+        sessionId: input.sessionId,
+        threadId: input.threadId,
+        eventType: 'thread_appended',
+        status: 'success',
+        detail: `appended ${batch.messages.length} messages`,
+      })
     }
-
-    await this.request(`/threads/${encodeURIComponent(input.threadId)}/append`, {
-      method: 'POST',
-      timeoutMs: Math.max(this.options.timeoutMs, MIN_THREAD_SYNC_TIMEOUT_MS),
-      body: {
-        messages: nextMessages,
-        deduplicate: true,
-        idempotency_key: `${input.threadId}:${input.messages.length}`,
-      },
-    })
-    this.stateStore.patchThreadState(input.sessionId, {
-      threadId: input.threadId,
-      threadTitle: input.threadTitle,
-      projectPath: input.projectPath,
-      lastAppendedMessageSeq: input.messages.length,
-      lastError: undefined,
-    })
-    this.stateStore.appendRuntimeEvent({
-      sessionId: input.sessionId,
-      threadId: input.threadId,
-      eventType: 'thread_appended',
-      status: 'success',
-      detail: `appended ${nextMessages.length} messages`,
-    })
   }
 
   private isThreadAlreadyExistsError(error: unknown): boolean {

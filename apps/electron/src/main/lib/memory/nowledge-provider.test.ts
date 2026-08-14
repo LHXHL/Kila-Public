@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { NowledgeMemoryProvider } from './nowledge-provider'
+import { MemoryStateStore } from './state-store'
 
 type FetchCall = {
   url: string
@@ -23,8 +27,15 @@ function createProvider(): NowledgeMemoryProvider {
   })
 }
 
+/** 线程同步分批测试的临时状态目录（MemoryStateStore 每次 patch 都会持久化写文件） */
+const tempDirs: string[] = []
+
 afterEach(() => {
   globalThis.fetch = originalFetch
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop()
+    if (dir) rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 describe('NowledgeMemoryProvider API mapping', () => {
@@ -217,5 +228,136 @@ describe('NowledgeMemoryProvider API mapping', () => {
     await expect(createProvider().write({ content: '测试记忆' })).rejects.toThrow(
       'Kila 无法通过 Nowledge 本地 API 认证。请重新执行“自动检测并启用”，同步最新的本地 API Key。',
     )
+  })
+})
+
+describe('NowledgeMemoryProvider 线程同步分批', () => {
+  function createBatchMessages(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      role: 'user' as const,
+      content: `message-${i}`,
+    }))
+  }
+
+  function createProviderWithStore() {
+    // MemoryStateStore 每次 patch 都会持久化写文件，测试必须用独立临时文件
+    // 隔离状态，避免测试间串扰（共享路径会读到上一轮残留）。
+    const dir = mkdtempSync(join(tmpdir(), 'kila-memory-test-'))
+    tempDirs.push(dir)
+    const store = new MemoryStateStore(join(dir, 'memory-state.json'))
+    return {
+      provider: new NowledgeMemoryProvider(
+        {
+          baseUrl: 'http://127.0.0.1:14242',
+          timeoutMs: 1_000,
+          mode: 'nowledge',
+        },
+        { stateStore: store },
+      ),
+      store,
+    }
+  }
+
+  test('Given 首次同步 15 条消息，When captureThread，Then 创建线程带第一批，剩余批次逐个 append，状态推进到 15', async () => {
+    const calls: FetchCall[] = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init })
+      return jsonResponse({ success: true })
+    }) as unknown as typeof fetch
+
+    const { provider, store } = createProviderWithStore()
+    await provider.captureThread({
+      sessionId: 'session-batch-1',
+      threadId: 'thread-batch-1',
+      threadTitle: '分批测试',
+      messages: createBatchMessages(15),
+    })
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0]!.url).toBe('http://127.0.0.1:14242/threads')
+    expect(calls[0]!.init?.method).toBe('POST')
+    const createBody = JSON.parse(String(calls[0]!.init?.body)) as { messages: unknown[] }
+    expect(createBody.messages).toHaveLength(10)
+
+    expect(calls[1]!.url).toBe('http://127.0.0.1:14242/threads/thread-batch-1/append')
+    const appendBody = JSON.parse(String(calls[1]!.init?.body)) as { messages: unknown[]; idempotency_key: string }
+    expect(appendBody.messages).toHaveLength(5)
+    expect(appendBody.idempotency_key).toBe('thread-batch-1:15')
+
+    expect(store.getThreadState('session-batch-1')?.lastAppendedMessageSeq).toBe(15)
+  })
+
+  test('Given 已有同步进度 seq=10，When 再同步 10 条新消息，Then 只发一次 append，不重复创建线程', async () => {
+    const calls: FetchCall[] = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init })
+      return jsonResponse({ success: true })
+    }) as unknown as typeof fetch
+
+    const { provider, store } = createProviderWithStore()
+    await provider.captureThread({
+      sessionId: 'session-batch-2',
+      threadId: 'thread-batch-2',
+      messages: createBatchMessages(10),
+    })
+    calls.length = 0
+
+    await provider.captureThread({
+      sessionId: 'session-batch-2',
+      threadId: 'thread-batch-2',
+      messages: createBatchMessages(20),
+    })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe('http://127.0.0.1:14242/threads/thread-batch-2/append')
+    const body = JSON.parse(String(calls[0]!.init?.body)) as { messages: unknown[] }
+    expect(body.messages).toHaveLength(10)
+    expect(store.getThreadState('session-batch-2')?.lastAppendedMessageSeq).toBe(20)
+  })
+
+  test('Given 线程已存在返回 409，When 首次同步，Then 全部批次走 append 路径', async () => {
+    const calls: FetchCall[] = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init })
+      if (String(input).endsWith('/threads') && init?.method === 'POST') {
+        return jsonResponse({ detail: 'Thread already exists' }, 409)
+      }
+      return jsonResponse({ success: true })
+    }) as unknown as typeof fetch
+
+    const { provider, store } = createProviderWithStore()
+    await provider.captureThread({
+      sessionId: 'session-batch-3',
+      threadId: 'thread-batch-3',
+      messages: createBatchMessages(12),
+    })
+
+    expect(calls).toHaveLength(3) // 1 次创建(409) + 2 批 append(10+2)
+    expect(calls[0]!.url).toBe('http://127.0.0.1:14242/threads')
+    expect(calls[1]!.url).toBe('http://127.0.0.1:14242/threads/thread-batch-3/append')
+    const body = JSON.parse(String(calls[1]!.init?.body)) as { messages: unknown[] }
+    expect(body.messages).toHaveLength(10)
+    expect(store.getThreadState('session-batch-3')?.lastAppendedMessageSeq).toBe(12)
+  })
+
+  test('Given 中间批次 append 失败，When captureThread 抛错，Then 已成功批次的状态已推进，失败批次不推进', async () => {
+    let callCount = 0
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      callCount += 1
+      if (init?.method === 'POST' && callCount === 2) {
+        return jsonResponse({ detail: 'Internal error' }, 500)
+      }
+      return jsonResponse({ success: true })
+    }) as unknown as typeof fetch
+
+    const { provider, store } = createProviderWithStore()
+    await expect(provider.captureThread({
+      sessionId: 'session-batch-4',
+      threadId: 'thread-batch-4',
+      messages: createBatchMessages(15),
+    })).rejects.toThrow('Nowledge request failed')
+
+    // 创建成功（第一批 10 条）后第二批失败：seq 应停在 10
+    expect(store.getThreadState('session-batch-4')?.lastAppendedMessageSeq).toBe(10)
   })
 })
