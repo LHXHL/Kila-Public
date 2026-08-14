@@ -276,9 +276,14 @@ describe('压缩后自动续跑', () => {
     expect(result.outcomes).toEqual(['success'])
     expect(assistants).toHaveLength(1)
     expect(assistants[0]?.content).toBe('前半段后半段')
-    // 压缩边界与续跑说明各落一条 status 消息。
-    expect(messages.some((message) => message.role === 'status' && message.content.startsWith('上下文已压缩'))).toBe(true)
-    expect(messages.some((message) => message.role === 'status' && message.content.includes('已自动继续'))).toBe(true)
+    // 压缩对用户无感：压缩边界 status 仍落盘（events 承载 compact_complete 供统计），
+    // 但正文为空；续跑不产生任何展示性 status。
+    const compactionStatuses = messages.filter((message) => (
+      message.role === 'status' && !message.errorCode
+    ))
+    expect(compactionStatuses.length).toBeGreaterThan(0)
+    expect(compactionStatuses.every((message) => message.content === '')).toBe(true)
+    expect(messages.some((message) => message.role === 'status' && message.content.includes('已自动继续'))).toBe(false)
   })
 
   test('Given 压缩后回复正常结束（stopReason=stop），When 流结束，Then 不触发续跑', async () => {

@@ -130,9 +130,18 @@ export const AgentMessages = React.memo(function AgentMessages({
     }
   }, [sessionId])
 
+  // 压缩边界等「无正文」status 消息只承载统计事件（compact_complete），不参与对话展示：
+  // 上下文压缩对用户无感。错误 status（errorCode）与有正文 status 照常渲染。
+  const visibleMessages = React.useMemo(
+    () => messages.filter((message) => (
+      message.role !== 'status' || Boolean(message.errorCode) || Boolean(message.content.trim())
+    )),
+    [messages],
+  )
+
   React.useEffect(() => {
     if (ready) return
-    if (messages.length === 0 && !streaming) {
+    if (visibleMessages.length === 0 && !streaming) {
       setReady(true)
       return
     }
@@ -143,7 +152,7 @@ export const AgentMessages = React.memo(function AgentMessages({
       })
     })
     return () => { cancelled = true }
-  }, [messages, streaming, ready])
+  }, [visibleMessages, streaming, ready])
 
   const streamingContent = streamState?.content ?? ''
   const smoothContent = useSmoothStreamContent(streamingContent)
@@ -161,7 +170,7 @@ export const AgentMessages = React.memo(function AgentMessages({
     hasVisibleStreamingContent: Boolean(visibleStreamingContent),
     hasTimelineEntries: timelineEntries.length > 0,
     retrying: Boolean(retrying),
-    messages,
+    messages: visibleMessages,
   })
 
   const { tasks: backgroundTasks } = useBackgroundTasks(sessionId)
@@ -185,19 +194,19 @@ export const AgentMessages = React.memo(function AgentMessages({
   }, [sessionId, setWidgetDraftProposal])
 
   React.useEffect(() => {
-    const ids = messages.map((message) => message.id)
+    const ids = visibleMessages.map((message) => message.id)
     pruneMessageIds(ids)
-  }, [messages, pruneMessageIds])
+  }, [visibleMessages, pruneMessageIds])
 
   React.useEffect(() => {
-    const activeIds = new Set(messages.map((message) => message.id))
+    const activeIds = new Set(visibleMessages.map((message) => message.id))
 
     for (const id of messageElementRefCallbacks.current.keys()) {
       if (!activeIds.has(id)) {
         messageElementRefCallbacks.current.delete(id)
       }
     }
-  }, [messages])
+  }, [visibleMessages])
 
   const getMessageElementRef = React.useCallback((id: string) => {
     const existing = messageElementRefCallbacks.current.get(id)
@@ -212,7 +221,7 @@ export const AgentMessages = React.memo(function AgentMessages({
   }, [observeMessageElement])
 
   React.useEffect(() => {
-    const predictions = messages.map((message) => [
+    const predictions = visibleMessages.map((message) => [
       message.id,
       resolvePredictedMessageHeight({
         message,
@@ -226,7 +235,7 @@ export const AgentMessages = React.memo(function AgentMessages({
     setPredictedHeights(predictions)
   }, [
     assistantMessageWidth,
-    messages,
+    visibleMessages,
     onCompact,
     onRegenerateTurn,
     onRetry,
@@ -236,7 +245,7 @@ export const AgentMessages = React.memo(function AgentMessages({
   ])
 
   const minimapItems: MinimapItem[] = React.useMemo(
-    () => messages.map((m) => ({
+    () => visibleMessages.map((m) => ({
       id: m.id,
       role: m.role === 'user' ? 'user' : m.role === 'status' ? 'status' as const : 'assistant',
       preview: getMessagePreviewText(m).slice(0, 80),
@@ -244,7 +253,7 @@ export const AgentMessages = React.memo(function AgentMessages({
       model: m.model,
       heightPx: getHeightPx(m.id),
     })),
-    [getHeightPx, messages, userProfile.avatar]
+    [getHeightPx, visibleMessages, userProfile.avatar]
   )
 
   return (
@@ -253,14 +262,14 @@ export const AgentMessages = React.memo(function AgentMessages({
       initial="instant"
     >
       <ConversationContent className="py-5">
-        {messages.length === 0 && initialLoading ? (
+        {visibleMessages.length === 0 && initialLoading ? (
           <div role="status" className="flex min-h-[280px] items-center justify-center px-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
               {t('agent.message.loadingTranscript')}
             </div>
           </div>
-        ) : messages.length === 0 && loadError ? (
+        ) : visibleMessages.length === 0 && loadError ? (
           <div role="alert" className="flex min-h-[280px] items-center justify-center px-6">
             <div className="flex max-w-sm flex-col items-center gap-3 text-center">
               <AlertCircle className="size-8 text-destructive" />
@@ -275,7 +284,7 @@ export const AgentMessages = React.memo(function AgentMessages({
               )}
             </div>
           </div>
-        ) : messages.length === 0 && !hasLiveAssistantTurn ? (
+        ) : visibleMessages.length === 0 && !hasLiveAssistantTurn ? (
           <AgentWelcomeState sessionPath={sessionPath} onUsePrompt={onUseStarterPrompt} />
         ) : (
           <div ref={setTranscriptElement} className="w-full px-4 md:px-8 xl:px-10" role="log" aria-live="polite" aria-label={t('agent.message.listLabel')}>
@@ -294,15 +303,15 @@ export const AgentMessages = React.memo(function AgentMessages({
                 </Button>
               </div>
             )}
-            {messages.map((msg: AgentMessage, index) => (
+            {visibleMessages.map((msg: AgentMessage, index) => (
               <div
                 key={msg.id}
                 data-message-id={msg.id}
                 ref={getMessageElementRef(msg.id)}
                 style={{
-                  contentVisibility: streaming && index === messages.length - 1 ? 'visible' : 'auto',
+                  contentVisibility: streaming && index === visibleMessages.length - 1 ? 'visible' : 'auto',
                   containIntrinsicSize: `auto ${Math.round(getHeightPx(msg.id))}px`,
-                  contain: streaming && index === messages.length - 1 ? undefined : 'layout paint style',
+                  contain: streaming && index === visibleMessages.length - 1 ? undefined : 'layout paint style',
                 }}
               >
                 <AgentMessageItem
@@ -318,7 +327,7 @@ export const AgentMessages = React.memo(function AgentMessages({
                   onCompact={onCompact}
                   onPinnedWidget={handlePinnedWidget}
                   onWidgetDraftIntent={handleWidgetDraftIntent}
-                  followUpSuggestion={index === messages.length - 1 ? followUpSuggestion : null}
+                  followUpSuggestion={index === visibleMessages.length - 1 ? followUpSuggestion : null}
                   onUseFollowUp={onUseFollowUp}
                 />
               </div>

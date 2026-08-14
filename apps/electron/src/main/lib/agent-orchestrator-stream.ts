@@ -65,42 +65,16 @@ function getRetryDelayMs(attempt: number): number {
 }
 
 type CompactCompleteEvent = Extract<AgentEvent, { type: 'compact_complete' }>
-type CompactNoopEvent = Extract<AgentEvent, { type: 'compact_noop' }>
 
-/** 压缩摘要那次模型调用的 token 合计，仅用于状态卡展示。 */
-function sumCompactionUsageTokens(event: CompactCompleteEvent): number {
-  const usage = event.usage
-  if (!usage) return 0
-  return (usage.inputTokens || 0)
-    + (usage.outputTokens || 0)
-    + (usage.cacheReadTokens || 0)
-    + (usage.cacheCreationTokens || 0)
-}
-
-function formatCompactionStatus(event: CompactCompleteEvent): string {
-  const lines = [
-    '上下文已压缩。Kila 已保留原始 JSONL 历史，并将 Pi runtime 的压缩结果作为后续模型上下文边界。',
-  ]
-
-  const meta: string[] = []
-  if (event.reason) meta.push(`reason=${event.reason}`)
-  if (typeof event.tokensBefore === 'number') meta.push(`tokensBefore=${event.tokensBefore}`)
-  if (typeof event.estimatedTokensAfter === 'number') meta.push(`tokensAfter=${event.estimatedTokensAfter}`)
-  const summaryTokens = sumCompactionUsageTokens(event)
-  if (summaryTokens > 0) meta.push(`summaryTokens=${summaryTokens}`)
-  if (event.firstKeptEntryId) meta.push(`firstKeptEntryId=${event.firstKeptEntryId}`)
-  if (typeof event.willRetry === 'boolean') meta.push(`willRetry=${event.willRetry}`)
-  if (meta.length > 0) lines.push(meta.join(' · '))
-
-  if (event.summaryText) {
-    lines.push(`summary: ${event.summaryText.slice(0, 1200)}`)
-  }
-
-  return lines.join('\n')
-}
-
-function formatCompactionNoopStatus(event: CompactNoopEvent): string {
-  return `未执行上下文压缩：${event.message}`
+/**
+ * 压缩边界 status 消息的正文。
+ *
+ * 上下文压缩对用户无感：对话流不展示压缩总结、token 统计或技术说明。
+ * 该 status 消息仍然落盘（events 承载 compact_complete，是设置页压缩统计
+ * 与 token 用量的唯一真相源），但正文置空，渲染层对无正文 status 直接跳过。
+ */
+function formatCompactionStatus(_event: CompactCompleteEvent): string {
+  return ''
 }
 
 /**
@@ -112,9 +86,6 @@ function formatCompactionNoopStatus(event: CompactNoopEvent): string {
  */
 const COMPACTION_AUTO_CONTINUE_PROMPT =
   '上一条回复因上下文限制被截断，上下文已完成压缩。请基于压缩摘要中的进度，直接继续完成尚未完成的任务，不要重复已输出的内容。'
-
-const COMPACTION_AUTO_CONTINUE_STATUS =
-  '检测到回复在上下文压缩前被截断，已自动继续完成剩余任务。'
 
 function persistAssistantMessage(
   sessionId: string,
@@ -248,7 +219,6 @@ export async function runAgentStream({
   let activeQueryOptions = queryOptions
   // 本轮尚未落盘的压缩事件。一轮内可能压缩多次，逐条落盘避免漏计。
   const pendingCompactionEvents: CompactCompleteEvent[] = []
-  let lastCompactionNoopEvent: CompactNoopEvent | null = null
   let terminalError: string | null = null
 
   const sourceMeta = { messageSource, messageSourceLabel, relatedTaskId }
@@ -472,18 +442,11 @@ export async function runAgentStream({
 
         if (timelineEvent.type === 'compact_complete') {
           pendingCompactionEvents.push(timelineEvent)
-          lastCompactionNoopEvent = null
           recordCompactionUsage(timelineEvent)
         }
-        if (timelineEvent.type === 'compact_noop') {
-          lastCompactionNoopEvent = timelineEvent
-        }
-        // 压缩失败是非终态事件：不写 terminalError，不动 onComplete 收敛。
-        // Pi 的 willRetry 为真时会自动重试摘要或继续 agent 主循环，会话保持运行态直到 agent_settled。
-        // 这里只清掉可能悬挂的 noop 标记，避免上一轮的良性提示压住本轮进度。
-        if (timelineEvent.type === 'compact_failed') {
-          lastCompactionNoopEvent = null
-        }
+        // compact_failed 是非终态事件：不写 terminalError，不动 onComplete 收敛。
+        // Pi 的 willRetry 为真时会自动重试摘要或继续 agent 主循环，会话保持运行态
+        // 直到 agent_settled；此处无需额外处理，事件经 eventBus 实时推送清理 UI 压缩态。
 
         if (!UNBUFFERED_EVENT_TYPES.has(timelineEvent.type)) {
           attemptBuffer.events.push(timelineEvent)
@@ -537,7 +500,6 @@ export async function runAgentStream({
       ) {
         autoContinueUsed = true
         lastStopReason = undefined
-        lastCompactionNoopEvent = null
         terminalError = null
         lastPersistedRetryAttempt = undefined
         activeQueryOptions = {
@@ -561,30 +523,6 @@ export async function runAgentStream({
             messages: getAgentMessages(sessionId),
           })
         }
-      } else if (lastCompactionNoopEvent) {
-        appendAgentMessage(sessionId, {
-          id: randomUUID(),
-          role: 'status',
-          content: formatCompactionNoopStatus(lastCompactionNoopEvent),
-          createdAt: Date.now(),
-          model: activeModel,
-          events: [lastCompactionNoopEvent],
-          messageSource: sourceMeta.messageSource,
-          messageSourceLabel: sourceMeta.messageSourceLabel,
-          relatedTaskId: sourceMeta.relatedTaskId,
-        })
-      }
-      if (autoContinueUsed) {
-        appendAgentMessage(sessionId, {
-          id: randomUUID(),
-          role: 'status',
-          content: COMPACTION_AUTO_CONTINUE_STATUS,
-          createdAt: Date.now(),
-          model: activeModel,
-          messageSource: sourceMeta.messageSource,
-          messageSourceLabel: sourceMeta.messageSourceLabel,
-          relatedTaskId: sourceMeta.relatedTaskId,
-        })
       }
       touchAgentSession(sessionId)
       onComplete(completeWithPostRun())
