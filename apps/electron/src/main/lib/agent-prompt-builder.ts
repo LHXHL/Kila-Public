@@ -5,7 +5,8 @@
  *
  * 设计策略（参考 Craft Agent OSS）：
  * - 静态 system prompt（buildSystemPromptAppend）：保持稳定以提升缓存命中率
- * - 动态 per-message 上下文（buildDynamicContext）：注入到用户消息前，每次实时读取磁盘
+ * - 动态 runtime snapshot：只在首次运行、内容变化或压缩后注入一次
+ * - 易变 per-message 上下文（buildDynamicContext）：只保留时钟信息，避免重复发送稳定配置
  */
 
 import type { KilaPermissionMode } from '@kila/shared'
@@ -26,6 +27,7 @@ interface SystemPromptContext {
   projectName?: string
   projectPath?: string
   projectProfileId?: string
+  /** 仅为兼容旧调用方保留；会话 ID 不再进入 system prompt。 */
   sessionId: string
   permissionMode: KilaPermissionMode
   /** 会话级覆盖的 prompt ID（优先于全局 activePromptId） */
@@ -155,7 +157,6 @@ Kila 的长期记忆完全由本机 Nowledge 管理。未配置 Nowledge 时记�
 - 全局 Agent 配置: ${configDir}/global-agent/
 - 全局 MCP 配置: ${configDir}/global-agent/mcp.json
 - 全局 Skills 目录: ${configDir}/global-agent/.agents/skills/
-- 当前会话 ID: ${ctx.sessionId}
 
 ### MCP 配置格式
 mcp.json 的顶层 key 必须是 \`servers\`（不是 mcpServers），示例：
@@ -245,6 +246,24 @@ interface DynamicContext {
   agentCwd?: string
 }
 
+/**
+ * 可缓存的 runtime context 投影。
+ *
+ * DeepSeek Harness 将运行时事实作为独立 snapshot 放入消息历史，而不是每轮重建
+ * system prompt。这里保持同样的边界：`perMessageContext` 只含时钟，稳定配置放在
+ * `runtimeSnapshot`，由 Pi adapter 在需要时注入一次。
+ */
+export interface DynamicContextProjection {
+  /** 每轮都允许更新的最小上下文（当前时间/时区）。 */
+  perMessageContext: string
+  /** 稳定 runtime snapshot（包含 session ID，但不污染 system prompt）。 */
+  runtimeSnapshot: string
+  /** 用于判断 snapshot 是否发生变化的稳定指纹。 */
+  runtimeSnapshotFingerprint: string
+  /** 兼容诊断/上下文估算的完整文本。 */
+  fullContext: string
+}
+
 function formatContextTime(now: Date, timeZone: string): string {
   return now.toLocaleString('zh-CN', {
     weekday: 'long',
@@ -258,41 +277,46 @@ function formatContextTime(now: Date, timeZone: string): string {
   })
 }
 
-/**
- * 构建每条消息的动态上下文
- *
- * 包含当前时间、工作区实时状态（MCP 服务器 + Skills）和工作目录。
- * 每次调用都从磁盘实时读取，确保配置变更后下一条消息即可感知。
- */
-export async function buildDynamicContext(ctx: DynamicContext): Promise<string> {
-  const sections: string[] = []
+function hashContext(text: string): string {
+  // FNV-1a：无需引入 crypto，且在不同平台上对同一 UTF-16 文本稳定。
+  let hash = 2166136261
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
 
-  // 当前时间
+async function buildDynamicContextProjectionInternal(ctx: DynamicContext): Promise<DynamicContextProjection> {
+  const stableSections: string[] = []
   const now = new Date()
   const userProfile = getUserProfile()
   const systemTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   const userTimeZone = userProfile.timeZone || systemTimeZone
 
-  sections.push(`**系统时间: ${formatContextTime(now, systemTimeZone)}**`)
-
-  const userContextLines = [
-    `- 用户称呼: ${userProfile.userName}`,
+  const perMessageLines = [
+    `**系统时间: ${formatContextTime(now, systemTimeZone)}**`,
+    `<user_clock_context>`,
     `- 用户本地时间: ${formatContextTime(now, userTimeZone)}`,
     `- 用户时区: ${userTimeZone}`,
     '- 解释“明天”“下周”“今晚”等相对时间时，优先使用这个时区',
+    '</user_clock_context>',
   ]
 
+  const userContextLines = [
+    `- 用户称呼: ${userProfile.userName}`,
+    `- 用户时区: ${userTimeZone}`,
+  ]
   const locationParts = [userProfile.city, userProfile.country].filter(Boolean)
   if (locationParts.length > 0) {
     userContextLines.push(`- 用户位置: ${locationParts.join(' / ')}`)
   }
-
-  sections.push(`<user_context>\n${userContextLines.join('\n')}\n</user_context>`)
+  stableSections.push(`<user_context>\n${userContextLines.join('\n')}\n</user_context>`)
 
   if (ctx.sessionId) {
     const scheduledTaskContext = getScheduledTaskRunContext(ctx.sessionId)
     if (scheduledTaskContext) {
-      sections.push(`<scheduled_task_context>
+      stableSections.push(`<scheduled_task_context>
 你当前正在执行一个后台定时任务。
 
 - 任务 ID: ${scheduledTaskContext.taskId}
@@ -304,16 +328,12 @@ export async function buildDynamicContext(ctx: DynamicContext): Promise<string> 
     }
   }
 
-  // 项目实时状态
   const projectLines: string[] = []
+  if (ctx.projectName) projectLines.push(`项目: ${ctx.projectName}`)
 
-  if (ctx.projectName) {
-    projectLines.push(`项目: ${ctx.projectName}`)
-  }
-
-  // MCP 服务器列表
   const mcpConfig = getGlobalAgentMcpConfig()
   const serverEntries = Object.entries(mcpConfig.servers ?? {})
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
   if (serverEntries.length > 0) {
     projectLines.push('全局 MCP 服务器:')
     for (const [name, entry] of serverEntries) {
@@ -325,8 +345,9 @@ export async function buildDynamicContext(ctx: DynamicContext): Promise<string> 
     }
   }
 
-  // Skills 列表（Pi 会自动发现，使用前先读取对应 SKILL.md）
-  const skills = getGlobalAgentSkills()
+  const skills = [...getGlobalAgentSkills()].sort((left, right) => (
+    left.slug < right.slug ? -1 : left.slug > right.slug ? 1 : 0
+  ))
   if (skills.length > 0) {
     const skillsRoot = getGlobalAgentSkillsDir()
     projectLines.push('全局 Skills（匹配时请先用 read 工具读取对应 SKILL.md，再按其中流程执行）:')
@@ -336,8 +357,6 @@ export async function buildDynamicContext(ctx: DynamicContext): Promise<string> 
     }
   }
 
-
-  // Cua Driver 桌面操控状态
   try {
     if (await isCuaDriverEnabled()) {
       projectLines.push('桌面操控 (Cua Driver): 已启用')
@@ -355,14 +374,37 @@ export async function buildDynamicContext(ctx: DynamicContext): Promise<string> 
   } catch {
     // 检测失败时静默跳过
   }
-  if (projectLines.length > 0) {
-    sections.push(`<project_state>\n${projectLines.join('\n')}\n</project_state>`)
-  }
+  if (projectLines.length > 0) stableSections.push(`<project_state>\n${projectLines.join('\n')}\n</project_state>`)
+  if (ctx.agentCwd) stableSections.push(`<working_directory>${ctx.agentCwd}</working_directory>`)
 
-  // 工作目录
-  if (ctx.agentCwd) {
-    sections.push(`<working_directory>${ctx.agentCwd}</working_directory>`)
-  }
+  // session ID 只出现在一次性 runtime snapshot，不再改变 system prompt 的缓存前缀。
+  if (ctx.sessionId) stableSections.unshift(`<session_context>\n- 会话 ID: ${ctx.sessionId}\n</session_context>`)
 
-  return sections.join('\n\n')
+  const runtimeSnapshotBody = stableSections.join('\n\n')
+  const runtimeSnapshot = runtimeSnapshotBody
+    ? `Current runtime context snapshot (apply only to this session):\n${runtimeSnapshotBody}`
+    : ''
+  const perMessageContext = perMessageLines.join('\n')
+
+  return {
+    perMessageContext,
+    runtimeSnapshot,
+    runtimeSnapshotFingerprint: hashContext(runtimeSnapshotBody),
+    fullContext: [perMessageContext, runtimeSnapshot].filter(Boolean).join('\n\n'),
+  }
+}
+
+/** 构建可缓存/易变分离的动态上下文。 */
+export async function buildDynamicContextProjection(ctx: DynamicContext): Promise<DynamicContextProjection> {
+  return buildDynamicContextProjectionInternal(ctx)
+}
+
+/**
+ * 构建每条消息的动态上下文
+ *
+ * 返回兼容旧调用方的完整文本；新调用方应使用 buildDynamicContextProjection，
+ * 将稳定工作区状态作为 snapshot，仅在变化或压缩后注入。
+ */
+export async function buildDynamicContext(ctx: DynamicContext): Promise<string> {
+  return (await buildDynamicContextProjectionInternal(ctx)).fullContext
 }
