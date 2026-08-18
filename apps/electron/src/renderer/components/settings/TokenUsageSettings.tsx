@@ -86,11 +86,13 @@ function getModelContextLabel(model: TokenUsageModelStat, t: TFunction): { label
   })
   return {
     label: formatTokenWindow(metadata.contextWindowTokens, t),
-    source: metadata.resolutionSources.contextWindow === 'manual'
-      ? t('settings.tokenUsage.sourceManual')
-      : metadata.resolutionSources.contextWindow === 'inference'
-        ? t('settings.tokenUsage.sourceInference')
-        : t('settings.tokenUsage.sourceDefault'),
+    source: metadata.resolutionSources.contextWindow === 'builtin'
+      ? t('settings.tokenUsage.sourceBuiltin')
+      : metadata.resolutionSources.contextWindow === 'provider-rule'
+        ? t('settings.tokenUsage.sourceRule')
+        : metadata.resolutionSources.contextWindow === 'manual'
+          ? t('settings.tokenUsage.sourceManual')
+          : t('settings.tokenUsage.sourceDefault'),
   }
 }
 
@@ -310,7 +312,7 @@ export function TokenUsageSettings(): React.ReactElement {
             <MetricCard
               label={t('settings.tokenUsage.cache')}
               value={formatInteger(getCacheTokens(stats.totals))}
-              description={`cache read + cache create · hit ${formatPercent(stats.totals.cacheHitRate)}`}
+              description={`cache read + cache create · hit ${formatPercent(stats.totals.cacheHitRate)} · coverage ${formatPercent(stats.totals.cacheCoverageRate)}`}
             />
             <MetricCard
               label={t('settings.tokenUsage.cost')}

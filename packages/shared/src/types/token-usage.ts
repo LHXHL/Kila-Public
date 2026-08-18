@@ -32,6 +32,8 @@ export interface TokenUsageTotals {
   cacheCreationTokens: number
   totalTokens: number
   costUsd: number
+  /** cacheRead / (input + cacheRead + cacheCreation)，反映全部上下文 token 的实际复用率。 */
+  cacheCoverageRate?: number
   cacheHitRate?: number
 }
 

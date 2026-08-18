@@ -52,6 +52,7 @@ describe('token usage service', () => {
       expect(second.totals.totalTokens).toBe(450)
       expect(second.models[0]?.modelId).toBe('gpt-4o')
       expect(second.models[0]?.requestCount).toBe(2)
+      expect(second.totals.cacheCoverageRate).toBeCloseTo(25 / 325)
       expect(existsSync(join(dir, 'token-usage-2026-05.jsonl'))).toBe(true)
     } finally {
       if (originalConfigDir === undefined) {
