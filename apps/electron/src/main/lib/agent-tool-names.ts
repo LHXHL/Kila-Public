@@ -26,6 +26,37 @@ const log = createLogger('Agent 工具名')
 // biome-ignore lint/suspicious/noExplicitAny: Pi 把 execute 声明为属性且 Static<TParameters> 在 strictFunctionTypes 下逆变，AgentTool<TObject> / AgentTool<unknown> 都无法容纳异构工具数组；这里是全仓唯一收口点
 export type AnyAgentTool = AgentTool<any>
 
+/**
+ * 规范化工具定义，使同一组工具在不同启动/文件系统顺序下产生字节一致的请求前缀。
+ *
+ * 只排序对象 key，不排序 schema 数组（required/enum/anyOf 的顺序可能具有语义），
+ * 因此不会改变工具行为；返回新对象也避免破坏 MCP/内置工具持有的原始 schema。
+ */
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => canonicalizeJson(item))
+  if (!value || typeof value !== 'object') return value
+
+  const input = value as Record<string, unknown>
+  const output: Record<string, unknown> = {}
+  for (const key of Object.keys(input).sort()) {
+    output[key] = canonicalizeJson(input[key])
+  }
+  return output
+}
+
+export function canonicalizeAgentTools(tools: AnyAgentTool[]): AnyAgentTool[] {
+  return [...tools]
+    .sort((left, right) => {
+      if (left.name < right.name) return -1
+      if (left.name > right.name) return 1
+      return 0
+    })
+    .map((tool) => ({
+      ...tool,
+      parameters: canonicalizeJson(tool.parameters) as never,
+    }))
+}
+
 /** 工具名归一化：冲突判定必须大小写不敏感，否则 `Read` 会绕过 `read` 的占位 */
 export function normalizeToolNameKey(name: string): string {
   return name.trim().toLowerCase()

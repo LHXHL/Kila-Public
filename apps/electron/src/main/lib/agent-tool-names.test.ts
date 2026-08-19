@@ -9,6 +9,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   collectReservedToolNames,
+  canonicalizeAgentTools,
   ensureUniqueToolName,
   mergeAgentTools,
   normalizeToolNameKey,
@@ -161,5 +162,35 @@ describe('mergeAgentTools 冲突策略', () => {
     ])
 
     expect(merged.map((tool) => tool.name)).toEqual(['read'])
+  })
+})
+
+describe('canonicalizeAgentTools 缓存前缀稳定性', () => {
+  test('工具按 code-unit 名称排序且 schema object key 顺序稳定', () => {
+    const first = createTool('z_tool', 'z')
+    first.parameters = {
+      required: ['b', 'a'],
+      properties: { z: { type: 'string' }, a: { type: 'string' } },
+      type: 'object',
+    } as never
+    const second = createTool('a_tool', 'a')
+    second.parameters = {
+      type: 'object',
+      properties: { a: { type: 'string' }, z: { type: 'string' } },
+      required: ['b', 'a'],
+    } as never
+
+    const canonical = canonicalizeAgentTools([first, second])
+    expect(canonical.map((tool) => tool.name)).toEqual(['a_tool', 'z_tool'])
+    expect(JSON.stringify(canonical[0]?.parameters)).toBe(JSON.stringify({
+      properties: { a: { type: 'string' }, z: { type: 'string' } },
+      required: ['b', 'a'],
+      type: 'object',
+    }))
+    expect(JSON.stringify(canonical[1]?.parameters)).toBe(JSON.stringify({
+      properties: { a: { type: 'string' }, z: { type: 'string' } },
+      required: ['b', 'a'],
+      type: 'object',
+    }))
   })
 })

@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import type { AgentSendInput, KilaPermissionMode, MemoryRunTrace, PermissionRequest, AskUserRequest } from '@kila/shared'
-import { buildSessionContextSnapshot, inferContextWindow, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
+import { buildSessionContextSnapshot, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { buildPromptImages, splitAttachmentsForPiPrompt } from './adapters/pi-history-converter'
 import type { AgentEventBus } from './agent-event-bus'
@@ -16,13 +16,14 @@ import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
 import { resolveShell } from './shell-resolver'
 import { buildShellPromptSection } from './shell-resolution'
 import { getSettings } from './settings-service'
-import { buildDynamicContext, buildSystemPromptAppend } from './agent-prompt-builder'
+import { buildDynamicContextProjection, buildSystemPromptAppend } from './agent-prompt-builder'
 import { permissionService, type PermissionResolution } from './agent-permission-service'
 import { askUserService } from './agent-ask-user-service'
 import { appendAgentMessage, getAgentMessages } from './agent-message-store'
 import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
 import {
   collectReservedToolNames,
+  canonicalizeAgentTools,
   mergeAgentTools,
   normalizeToolNameKey,
   type AnyAgentTool,
@@ -283,7 +284,7 @@ export async function buildAgentRunContext(
     providerDbEntry,
   })
 
-  const dynamicCtx = await buildDynamicContext({
+  const dynamicProjection = await buildDynamicContextProjection({
     sessionId,
     projectName,
     agentCwd,
@@ -341,7 +342,13 @@ export async function buildAgentRunContext(
     incognito: input.incognito,
   })
 
-  const finalPrompt = composeAgentPrompt(dynamicCtx, memoryContext.text, enrichedMessage)
+  // 稳定 runtime context 由 Pi adapter 作为一次性 snapshot 注入；每轮 prompt 只保留
+  // 时钟等易变信息，避免把 MCP/Skills/工作目录重复发送并破坏 append-only 前缀。
+  const finalPrompt = composeAgentPrompt(
+    dynamicProjection.perMessageContext,
+    memoryContext.text,
+    enrichedMessage,
+  )
 
   const thinkingLevel = resolveThinkingLevel({
     thinkingLevel: inputThinkingLevel ?? appSettings.agentThinkingLevel,
@@ -423,19 +430,18 @@ export async function buildAgentRunContext(
   )
 
   // 合并顺序即优先级：先到者保留，内置工具永远排在 MCP 与外部注入工具之前
-  const tools = mergeAgentTools([
+  const tools = canonicalizeAgentTools(mergeAgentTools([
     { source: 'Pi 内置编码工具', tools: codingTools },
     { source: 'Kila 内置工具', tools: builtinTools },
     { source: 'MCP 工具', tools: mcpToolBundle.tools },
     { source: '运行时注入工具', tools: extraTools },
-  ])
+  ]))
   const contextSnapshot = buildSessionContextSnapshot({
     modelId: resolvedModel,
-    // 预发快照与运行时 buildPiModel 保持同源：走模型名推断，不依赖 Provider DB / 内置目录。
-    contextWindow: inferContextWindow(resolvedModel),
+    contextWindow: modelMetadata.contextWindowTokens,
     historyTurns,
     systemPrompt: systemPromptText,
-    dynamicContext: dynamicCtx,
+    dynamicContext: dynamicProjection.fullContext,
     historyMessages,
     currentTurnText: finalPrompt,
     toolDefinitions: tools.map((tool) => ({
@@ -475,6 +481,8 @@ export async function buildAgentRunContext(
     queryOptions: {
       sessionId,
       prompt: finalPrompt,
+      runtimeContext: dynamicProjection.runtimeSnapshot,
+      runtimeContextFingerprint: dynamicProjection.runtimeSnapshotFingerprint,
       rawPrompt: userMessage,
       model: resolvedModel,
       cwd: agentCwd,
@@ -490,6 +498,7 @@ export async function buildAgentRunContext(
       modelCapabilities: resolvedChannelModel?.capabilities,
       modelMetadata: resolvedChannelModel?.metadataOverride,
       modelProviderDbEntry: providerDbEntry,
+      modelCompat: resolvedChannelModel?.compat,
     },
   }
 }
