@@ -86,13 +86,12 @@ function getModelContextLabel(model: TokenUsageModelStat, t: TFunction): { label
   })
   return {
     label: formatTokenWindow(metadata.contextWindowTokens, t),
-    source: metadata.resolutionSources.contextWindow === 'builtin'
-      ? t('settings.tokenUsage.sourceBuiltin')
-      : metadata.resolutionSources.contextWindow === 'provider-rule'
-        ? t('settings.tokenUsage.sourceRule')
-        : metadata.resolutionSources.contextWindow === 'manual'
-          ? t('settings.tokenUsage.sourceManual')
-          : t('settings.tokenUsage.sourceDefault'),
+    // 窗口单一数据源：手动覆盖 > 模型名推断（shared resolveModelMetadata 只产生这两种来源）
+    source: metadata.resolutionSources.contextWindow === 'manual'
+      ? t('settings.tokenUsage.sourceManual')
+      : metadata.resolutionSources.contextWindow === 'inference'
+        ? t('settings.tokenUsage.sourceInference')
+        : t('settings.tokenUsage.sourceDefault'),
   }
 }
 

@@ -29,7 +29,6 @@ import type {
   AgentQueryInput,
   AgentProviderAdapter,
   AgentEffort,
-  Channel,
   ErrorCode,
   ThinkingLevel,
   ThinkingConfig,
@@ -38,11 +37,10 @@ import type {
   ModelCompatOverride,
   ProviderDbModel,
 } from '@kila/shared'
-import { extractKilaImageAttachments, inferApiTypeFromProvider, resolveModelMetadata, resolveThinkingLevel, detectBackgroundEvents, type ModelCapabilitiesOverride } from '@kila/shared'
+import { extractKilaImageAttachments, inferApiTypeFromProvider, detectBackgroundEvents, type ModelCapabilitiesOverride } from '@kila/shared'
 import { convertHistoryToPiMessages } from './pi-history-converter'
-import { deriveCompactionSettings, estimateCjkRatio, getCompactionNoopMessage, mapPiUsageToAgentEventUsage, parseManualCompactCommand, resolveEffectiveContextWindow, toPiCompactionSettings, waitForCompactionToSettle } from '../compaction-settings'
+import { deriveCompactionSettings, estimateCjkRatio, getCompactionNoopMessage, mapPiUsageToAgentEventUsage, parseManualCompactCommand, toPiCompactionSettings, waitForCompactionToSettle } from '../compaction-settings'
 import { getPiAgentDir, getPiSessionDir } from '../config-paths'
-import { resolveModelCost } from '../model-pricing'
 import {
   createKilaModelRuntime,
   updateKilaModelRuntimeApiKey,
@@ -52,6 +50,12 @@ import {
   createCacheAwareCompactionStreamFn,
   type PromptCacheRetention,
 } from './pi-cache-aware-compaction'
+import {
+  findPersistedRuntimeContextFingerprint,
+  materializeRuntimeContextPrompt,
+  safeStableStringify,
+  type RuntimeContextInjectionState,
+} from './pi-runtime-context'
 
 
 import { createLogger } from '../logger'
@@ -60,7 +64,6 @@ import { classifyProviderError } from '../provider-error-classifier'
 const log = createLogger('Pi Agent')
 
 type PiModel = Model<Api>
-type PiQueryChannel = Pick<Channel, 'provider' | 'baseUrl' | 'apiType' | 'capabilityProviderId'>
 type PiAiModule = typeof import('@earendil-works/pi-ai')
 type PiCodingAgentModule = typeof import('@earendil-works/pi-coding-agent')
 type PiRuntimeEvent = PiAgentEvent | AgentSessionEvent
@@ -114,17 +117,6 @@ const PROMPT_TOO_LONG_PATTERNS = [
   'exceeds the model',
   'request too large',
 ] as const
-
-const OPENAI_COMPATIBLE_PROVIDERS = new Set<Channel['provider']>([
-  'openai',
-  'deepseek',
-  'moonshot',
-  'zhipu',
-  'minimax',
-  'doubao',
-  'qwen',
-  'custom',
-])
 
 /**
  * Pi 版本升级时的事件覆盖闸门。
@@ -209,175 +201,12 @@ export function loadPiCodingAgent(): Promise<PiCodingAgentModule> {
   return piCodingAgentModulePromise
 }
 
-/**
- * 将 Kila Channel 的显式协议选择映射为 Pi API。
- *
- * `apiType` 是 Kila 渠道配置的协议真相源，必须优先于 provider / model ID 猜测。
- * 只有旧渠道没有 apiType 时，才保留 GPT-5/o 系列的 Responses API 历史推断，避免
- * 老配置升级后无提示地改变请求协议。
- */
-export function resolvePiApiType(channel: PiQueryChannel, modelId: string): Api {
-  const apiType = channel.apiType ?? inferApiTypeFromProvider(channel.provider)
-
-  switch (apiType) {
-    case 'anthropic':
-      return 'anthropic-messages'
-    case 'google':
-      return 'google-generative-ai'
-    case 'openai-responses':
-      return 'openai-responses'
-    case 'openai':
-    case 'ollama':
-    case 'custom':
-      // 旧配置没有 apiType 时，沿用 Kila 对新 OpenAI 推理模型的 Responses API 推断。
-      if (!channel.apiType && prefersOpenAIResponses(modelId)) return 'openai-responses'
-      return 'openai-completions'
-  }
-}
-
-function getPiProviderId(channel: PiQueryChannel, modelId: string): string {
-  const api = resolvePiApiType(channel, modelId)
-  if (api === 'anthropic-messages') return 'anthropic'
-  if (api === 'google-generative-ai') return 'google'
-  if (OPENAI_COMPATIBLE_PROVIDERS.has(channel.provider)) return 'openai'
-  return channel.provider
-}
-
-function prefersOpenAIResponses(modelId: string): boolean {
-  const lowered = modelId.toLowerCase()
-  return (
-    lowered.includes('gpt-5') ||
-    lowered.includes('o1') ||
-    lowered.includes('o3') ||
-    lowered.includes('o4')
-  )
-}
-
-/**
- * Kila 会把模型注册到自己的 providerId，导致 Pi 仅凭 provider 名称无法再命中部分
- * provider 规则。这里补齐已知网关的缓存相关 compat，并允许按模型显式覆盖；未知
- * provider 继续交给 Pi 的 URL 自动探测，避免首个请求加载整个 provider catalog。
- */
-async function resolvePiModelCompat(
-  channel: PiQueryChannel,
-  modelId: string,
-  api: Api,
-  override?: PiModel['compat'],
-): Promise<PiModel['compat'] | undefined> {
-  const provider = `${channel.capabilityProviderId ?? ''} ${channel.provider} ${channel.baseUrl}`.toLowerCase()
-  // `PiModel['compat']` is a discriminated union keyed by API.  Compat
-  // inference below is intentionally runtime-selected, so collect the
-  // provider hints in a structural record and narrow at the boundary.
-  const inherited: Record<string, unknown> = {}
-
-  if (api === 'openai-completions' && (provider.includes('openrouter') || channel.baseUrl.includes('openrouter.ai'))) {
-    inherited.thinkingFormat = 'openrouter'
-    inherited.supportsDeveloperRole = false
-    inherited.sessionAffinityFormat = 'openrouter'
-    inherited.sendSessionAffinityHeaders = true
-    if (/^(~)?anthropic\//i.test(modelId)) inherited.cacheControlFormat = 'anthropic'
-  }
-
-  if (provider.includes('cloudflare') || channel.baseUrl.includes('gateway.ai.cloudflare.com')) {
-    inherited.sendSessionAffinityHeaders = true
-    inherited.supportsLongCacheRetention = false
-  }
-
-  if (provider.includes('fireworks') || channel.baseUrl.includes('fireworks.ai')) {
-    inherited.sendSessionAffinityHeaders = true
-  }
-
-  if (api === 'openai-completions' && (provider.includes('deepseek') || channel.baseUrl.includes('deepseek.com'))) {
-    inherited.thinkingFormat = 'deepseek'
-    inherited.requiresReasoningContentOnAssistantMessages = true
-  }
-
-  if (Object.keys(inherited).length === 0 && !override) return undefined
-  return { ...inherited, ...(override ?? {}) } as PiModel['compat']
-}
-
-export function resolvePiModelMetadata(
-  channel: PiQueryChannel,
-  modelId: string,
-  metadataOverride?: ModelMetadataOverride,
-  capabilitiesOverride?: ModelCapabilitiesOverride,
-  providerDbEntry?: ProviderDbModel,
-) {
-  return resolveModelMetadata({
-    channelProvider: channel.provider,
-    channelBaseUrl: channel.baseUrl,
-    modelId,
-    modelName: modelId,
-    metadataOverride,
-    capabilitiesOverride,
-    providerDbEntry,
-  })
-}
-
-export async function buildPiModel(
-  channel: PiQueryChannel,
-  modelId: string,
-  metadataOverride?: ModelMetadataOverride,
-  capabilitiesOverride?: ModelCapabilitiesOverride,
-  hasImages?: boolean,
-  providerDbEntry?: ProviderDbModel,
-  compatOverride?: PiModel['compat'],
-): Promise<PiModel> {
-  const provider = getPiProviderId(channel, modelId)
-  const api = resolvePiApiType(channel, modelId)
-  const compat = await resolvePiModelCompat(channel, modelId, api, compatOverride)
-  const metadata = resolvePiModelMetadata(
-    channel,
-    modelId,
-    metadataOverride,
-    capabilitiesOverride,
-    providerDbEntry,
-  )
-  const cost = await resolveModelCost(channel, modelId)
-
-  // 当有图片附件时，强制包含 'image' 以绕过 Pi SDK 对 model.input 的静默过滤。
-  // 如果 API 真不支持图片，会在 adapter 层捕获错误并给出清晰提示。
-  const includeImage = metadata.abilities.vision === 'supported' || (hasImages ?? false)
-
-  // 窗口未知时保守兜底（32K），避免小窗口模型/私有聚合商按 200K 预算压缩时直接撞 overflow；
-  // 已知模型仍走 resolveModelMetadata 的统一窗口（manual > builtin/provider-rule > inference）。
-  const contextWindow = resolveEffectiveContextWindow(metadata)
-  if (contextWindow.source === 'fallback') {
-    log.warn(`[Pi Agent] 模型 ${modelId} 上下文窗口未知，按保守默认 ${contextWindow.contextWindowTokens} token 处理`)
-  }
-
-  const maxTokens = metadata.maxOutputTokens ?? 32768
-
-  return {
-    id: modelId,
-    name: modelId,
-    api,
-    provider,
-    baseUrl: channel.baseUrl,
-    reasoning: metadata.abilities.reasoning === 'supported',
-    input: includeImage ? ['text', 'image'] : ['text'],
-    cost,
-    contextWindow: contextWindow.contextWindowTokens,
-    maxTokens,
-    ...(compat ? { compat } : {}),
-  }
-}
-
-export function resolvePiThinkingLevel(
-  thinkingLevel?: ThinkingLevel,
-  thinking?: ThinkingConfig,
-  effort?: AgentEffort,
-): PiThinkingLevel {
-  const resolvedLevel = resolveThinkingLevel({
-    thinkingLevel,
-    thinking,
-    effort,
-  })
-
-  if (resolvedLevel === 'none') return 'off'
-  if (resolvedLevel === 'xhigh') return 'xhigh'
-  return resolvedLevel
-}
+// 渠道/模型 → Pi Model 的协议映射、compat 推断与 thinkingLevel 归一化统一在 pi-model-builder
+import {
+  buildPiModel,
+  resolvePiThinkingLevel,
+  type PiQueryChannel,
+} from './pi-model-builder'
 
 function createAssistantMessage(message: AgentMessage, model: PiModel): AssistantMessage {
   return {
@@ -888,89 +717,12 @@ interface MutableRef<T> {
   current: T
 }
 
-interface PiRuntime {
+interface PiRuntime extends RuntimeContextInjectionState {
   session: AgentSession
   signature: string
   modelRuntime: KilaModelRuntime
   beforeToolCallRef: MutableRef<PiAgentQueryOptions['beforeToolCall'] | undefined>
   getAgentStateRef: MutableRef<(() => PiAgentState) | undefined>
-  runtimeContextFingerprint?: string
-  runtimeContextNeedsRefresh: boolean
-}
-
-function canonicalizeRuntimeValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((item) => canonicalizeRuntimeValue(item))
-  if (!value || typeof value !== 'object') return value
-  const input = value as Record<string, unknown>
-  const output: Record<string, unknown> = {}
-  for (const key of Object.keys(input).sort()) {
-    output[key] = canonicalizeRuntimeValue(input[key])
-  }
-  return output
-}
-
-function safeStableStringify(value: unknown): string {
-  try {
-    return JSON.stringify(canonicalizeRuntimeValue(value))
-  } catch {
-    return '[unserializable]'
-  }
-}
-
-const RUNTIME_CONTEXT_MARKER = 'kila_runtime_context_snapshot'
-
-function textFromPiContent(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return ''
-  return content
-    .filter((part): part is { type: 'text'; text: string } => (
-      Boolean(part)
-      && typeof part === 'object'
-      && (part as { type?: unknown }).type === 'text'
-      && typeof (part as { text?: unknown }).text === 'string'
-    ))
-    .map((part) => part.text)
-    .join('')
-}
-
-function findPersistedRuntimeContextFingerprint(sessionManager: SessionManager): string | undefined {
-  // 只从当前 compaction-aware context 查找；getEntries() 还包含已被压缩移除的旧消息，
-  // 若从那里恢复 marker 会错误地跳过下一轮 snapshot 注入。
-  const messages = sessionManager.buildSessionContext().messages
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]
-    if (!message || !('content' in message)) continue
-    const content = (message as { content?: unknown }).content
-    const text = textFromPiContent(content)
-    const markerIndex = text.indexOf(`<${RUNTIME_CONTEXT_MARKER}`)
-    if (markerIndex < 0) continue
-    const marker = text.slice(markerIndex).match(
-      new RegExp(`<${RUNTIME_CONTEXT_MARKER}\\s+fingerprint="([^"]+)"`),
-    )
-    if (marker?.[1]) return marker[1]
-  }
-  return undefined
-}
-
-function formatRuntimeContextPrompt(snapshot: string, fingerprint: string): string {
-  return `<${RUNTIME_CONTEXT_MARKER} fingerprint="${fingerprint}">\n${snapshot}\n</${RUNTIME_CONTEXT_MARKER}>`
-}
-
-function materializeRuntimeContextPrompt(
-  runtime: PiRuntime,
-  options: PiAgentQueryOptions,
-): string {
-  const snapshot = options.runtimeContext?.trim()
-  const fingerprint = options.runtimeContextFingerprint?.trim()
-  if (!snapshot || !fingerprint) return options.prompt
-
-  const shouldInject = runtime.runtimeContextNeedsRefresh
-    || runtime.runtimeContextFingerprint !== fingerprint
-  if (!shouldInject) return options.prompt
-
-  runtime.runtimeContextFingerprint = fingerprint
-  runtime.runtimeContextNeedsRefresh = false
-  return `${formatRuntimeContextPrompt(snapshot, fingerprint)}\n\n${options.prompt}`
 }
 
 function createRuntimeSignature(options: PiAgentQueryOptions, model: PiModel): string {
@@ -1181,6 +933,8 @@ export class PiAgentAdapter implements AgentProviderAdapter {
       streamFn: session.agent.streamFunction,
       sessionId: options.sessionId,
       cacheRetention: resolvePromptCacheRetention(options),
+      // 用 Pi 公开导出的 serializeConversation（动态加载），保证与 Pi 压缩协议字节级一致
+      serializeConversation: sdk.serializeConversation,
       initialContext: {
         systemPrompt: session.agent.state.systemPrompt,
         messages: initialLlmMessages,

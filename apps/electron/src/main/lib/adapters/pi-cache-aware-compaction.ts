@@ -11,6 +11,10 @@
  * tools and selected message prefix are replayed verbatim; only Pi's existing
  * summarization instruction is appended as a new final user message.  This is
  * the same prefix-preserving shape used by deepseek-harness.
+ *
+ * 匹配失败时必须原样放行 Pi 的请求（含其自带的 cacheRetention/sessionId），
+ * 不能只覆写参数：Pi 对 standalone 摘要请求隔离缓存路由是刻意设计，
+ * 强行写入无法复用的缓存只会浪费配额并污染 session affinity。
  */
 
 import type { StreamFn } from '@earendil-works/pi-agent-core'
@@ -22,99 +26,26 @@ import type {
 
 export type PromptCacheRetention = Exclude<CacheRetention, 'none'>
 
+/**
+ * Pi 会话消息序列化器（`@earendil-works/pi-coding-agent` 公开导出的
+ * `serializeConversation`）。Pi 包是 ESM-only，主进程 CJS bundle 无法静态
+ * import，由 adapter 经 external-esm-loader 动态加载后注入，保证与 Pi
+ * 压缩协议字节级一致——升级 Pi 时不需要同步维护本地复刻版本。
+ */
+export type PiConversationSerializer = (messages: Message[]) => string
+
 interface ParsedSummarizationPrompt {
   conversation: string
   instruction: string
   message: Extract<Message, { role: 'user' }>
 }
 
-// `@earendil-works/pi-coding-agent` is ESM-only.  This file runs in the
-// CommonJS Electron main bundle, so a static import would become a top-level
-// `require()` and crash before the external ESM loader can run.  Keep the
-// small, stable serializer used by Pi's compaction protocol local instead.
-// It mirrors `packages/coding-agent/src/core/compaction/utils.ts` from the
-// pinned Pi 0.82.1 dependency.
-const TOOL_RESULT_MAX_CHARS = 2000
-
-function serializationContentText(content: unknown, separator = '\n'): string {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return ''
-  return content
-    .filter((block): block is { type: 'text', text: string } => (
-      !!block
-      && typeof block === 'object'
-      && (block as { type?: unknown }).type === 'text'
-      && typeof (block as { text?: unknown }).text === 'string'
-    ))
-    .map((block) => block.text)
-    .join(separator)
-}
-
-function truncateForSerialization(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text
-  const truncatedChars = text.length - maxChars
-  return `${text.slice(0, maxChars)}\n\n[... ${truncatedChars} more characters truncated]`
-}
-
-function serializeConversation(messages: readonly Message[]): string {
-  const parts: string[] = []
-
-  for (const message of messages) {
-    const msg = message as Message & { content?: unknown }
-    if (msg.role === 'user') {
-      const content = serializationContentText(msg.content, '')
-      if (content) parts.push(`[User]: ${content}`)
-      continue
-    }
-
-    if (msg.role === 'assistant') {
-      const thinkingParts: string[] = []
-      const toolCalls: string[] = []
-      const content = Array.isArray(msg.content) ? msg.content : []
-      for (const block of content) {
-        if (!block || typeof block !== 'object') continue
-        const typedBlock = block as {
-          type?: unknown
-          thinking?: unknown
-          name?: unknown
-          arguments?: Record<string, unknown>
-        }
-        if (typedBlock.type === 'thinking' && typeof typedBlock.thinking === 'string') {
-          thinkingParts.push(typedBlock.thinking)
-        } else if (typedBlock.type === 'toolCall' && typedBlock.arguments) {
-          const argsStr = Object.entries(typedBlock.arguments)
-            .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-            .join(', ')
-          toolCalls.push(`${String(typedBlock.name ?? '')}(${argsStr})`)
-        }
-      }
-      if (thinkingParts.length > 0) {
-        parts.push(`[Assistant thinking]: ${thinkingParts.join('\n')}`)
-      }
-      if (content.some((block) => (
-        !!block && typeof block === 'object' && (block as { type?: unknown }).type === 'text'
-      ))) {
-        parts.push(`[Assistant]: ${serializationContentText(msg.content)}`)
-      }
-      if (toolCalls.length > 0) {
-        parts.push(`[Assistant tool calls]: ${toolCalls.join('; ')}`)
-      }
-      continue
-    }
-
-    if (msg.role === 'toolResult') {
-      const content = serializationContentText(msg.content, '')
-      if (content) parts.push(`[Tool result]: ${truncateForSerialization(content, TOOL_RESULT_MAX_CHARS)}`)
-    }
-  }
-
-  return parts.join('\n\n')
-}
-
 export interface CacheAwareStreamOptions {
   streamFn: StreamFn
   sessionId: string
   cacheRetention: PromptCacheRetention
+  /** Pi 公开导出的 serializeConversation，经 external ESM loader 加载后注入。 */
+  serializeConversation: PiConversationSerializer
   /**
    * Initial active context for a restored session.  It is a correctness
    * fallback for manual compaction before the first request in this process;
@@ -172,7 +103,11 @@ interface SerializedFragment {
  * so this comparison stays byte-for-byte aligned with Pi without parsing its
  * human-readable serialization.
  */
-function findSelectedRegionEnd(messages: readonly Message[], serializedRegion: string): number | undefined {
+function findSelectedRegionEnd(
+  messages: readonly Message[],
+  serializedRegion: string,
+  serializeConversation: PiConversationSerializer,
+): number | undefined {
   const fragments: SerializedFragment[] = []
   for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
     const message = messages[messageIndex]
@@ -200,6 +135,7 @@ function findSelectedRegionEnd(messages: readonly Message[], serializedRegion: s
 export function projectCacheAwareCompactionContext(
   summarizationContext: Context,
   lastRoutedContext: Context,
+  serializeConversation: PiConversationSerializer,
 ): Context | undefined {
   const parsed = parseSummarizationPrompt(summarizationContext)
   if (!parsed) return undefined
@@ -207,6 +143,7 @@ export function projectCacheAwareCompactionContext(
   const selectedRegionEnd = findSelectedRegionEnd(
     lastRoutedContext.messages,
     parsed.conversation,
+    serializeConversation,
   )
   if (selectedRegionEnd === undefined) return undefined
 
@@ -227,25 +164,31 @@ export function projectCacheAwareCompactionContext(
 /**
  * Wrap the Pi SDK stream function at its single provider boundary.
  *
- * Normal calls establish the warm-prefix reference.  Pi summarization calls
- * are detected structurally, projected when possible, and always inherit the
- * stable Kila session id plus the configured non-`none` cache retention.
+ * Normal calls establish the warm-prefix reference untouched.  Pi summarization
+ * calls are detected structurally and projected when possible; only successful
+ * projections inherit the stable Kila session id plus the configured
+ * non-`none` cache retention.  Failed projections pass through verbatim so
+ * Pi's own `cacheRetention: "none"` isolation stays in effect.
  */
 export function createCacheAwareCompactionStreamFn(options: CacheAwareStreamOptions): StreamFn {
   let lastRoutedContext = options.initialContext
 
   return async (model, context, requestOptions) => {
     const projected = lastRoutedContext
-      ? projectCacheAwareCompactionContext(context, lastRoutedContext)
+      ? projectCacheAwareCompactionContext(context, lastRoutedContext, options.serializeConversation)
       : undefined
-    const isSummarization = parseSummarizationPrompt(context) !== undefined
 
-    if (!isSummarization) lastRoutedContext = context
+    if (projected) {
+      return options.streamFn(model, projected, {
+        ...requestOptions,
+        cacheRetention: options.cacheRetention,
+        sessionId: options.sessionId,
+      })
+    }
 
-    return options.streamFn(model, projected ?? context, {
-      ...requestOptions,
-      cacheRetention: options.cacheRetention,
-      sessionId: options.sessionId,
-    })
+    if (parseSummarizationPrompt(context) === undefined) {
+      lastRoutedContext = context
+    }
+    return options.streamFn(model, context, requestOptions)
   }
 }

@@ -14,8 +14,8 @@ import type {
   ModelMetadataOverride,
   ProviderDbModel,
 } from '@kila/shared'
+import { buildPiModel } from './adapters/pi-model-builder'
 import {
-  buildPiModel,
   loadPiAi,
   loadPiCodingAgent,
 } from './adapters/pi-agent-adapter'

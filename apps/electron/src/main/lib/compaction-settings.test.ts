@@ -15,6 +15,7 @@ import {
   mapPiUsageToAgentEventUsage,
   MIN_AUTO_COMPACTION_WINDOW_TOKENS,
   parseManualCompactCommand,
+  resolveEffectiveContextWindow,
   toPiCompactionSettings,
 } from './compaction-settings'
 
@@ -154,5 +155,21 @@ describe('mapPiUsageToAgentEventUsage', () => {
 
   it('Given 无 usage When 映射 Then 返回 undefined', () => {
     expect(mapPiUsageToAgentEventUsage(undefined)).toBeUndefined()
+  })
+})
+
+describe('resolveEffectiveContextWindow', () => {
+  it('Given 合法窗口（含推断来源的 200K）When 解析 Then 原样返回且标记 known', () => {
+    const resolved = resolveEffectiveContextWindow({
+      contextWindowTokens: 200_000,
+    })
+    expect(resolved).toEqual({ contextWindowTokens: 200_000, source: 'known' })
+  })
+
+  it('Given 非法窗口（undefined/0/负数）When 解析 Then 守卫兜底并标记 fallback', () => {
+    for (const bad of [undefined, 0, -100]) {
+      const resolved = resolveEffectiveContextWindow({ contextWindowTokens: bad })
+      expect(resolved).toEqual({ contextWindowTokens: FALLBACK_CONTEXT_WINDOW_TOKENS, source: 'fallback' })
+    }
   })
 })

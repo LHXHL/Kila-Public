@@ -1,6 +1,6 @@
 {
   "apps/electron/src/main/lib/adapters/pi-agent-adapter.ts": {
-    "lines": 1402
+    "lines": 1156
   },
   "apps/electron/src/main/lib/im-bridge/adapters/feishu-adapter.ts": {
     "lines": 888

@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { Context, Message } from '@earendil-works/pi-ai'
+import type { AssistantMessageEventStream, Context, Message, SimpleStreamOptions } from '@earendil-works/pi-ai'
 import { serializeConversation } from '@earendil-works/pi-coding-agent'
-import { projectCacheAwareCompactionContext } from './pi-cache-aware-compaction'
+import {
+  createCacheAwareCompactionStreamFn,
+  projectCacheAwareCompactionContext,
+  type PromptCacheRetention,
+} from './pi-cache-aware-compaction'
 
 function user(text: string, timestamp: number): Message {
   return {
@@ -46,6 +50,7 @@ describe('cache-aware Pi compaction projection', () => {
     const projected = projectCacheAwareCompactionContext(
       standaloneSummaryContext([selected], 'Produce the checkpoint.'),
       lastRoutedContext,
+      serializeConversation,
     )
 
     expect(projected?.systemPrompt).toBe(lastRoutedContext.systemPrompt)
@@ -66,6 +71,7 @@ describe('cache-aware Pi compaction projection', () => {
         systemPrompt: 'stable',
         messages: [user('actual request', 1)],
       },
+      serializeConversation,
     )
     expect(projected).toBeUndefined()
   })
@@ -74,7 +80,83 @@ describe('cache-aware Pi compaction projection', () => {
     const projected = projectCacheAwareCompactionContext(
       { messages: [user('ordinary prompt', 2)] },
       { messages: [user('ordinary prompt', 2)] },
+      serializeConversation,
     )
     expect(projected).toBeUndefined()
+  })
+})
+
+interface RecordedCall {
+  context: Context
+  cacheRetention?: unknown
+  sessionId?: unknown
+}
+
+/** 记录型 streamFn 桩：返回立即完成的空流（测试不消费事件内容，仅满足 StreamFn 形状）。 */
+function recordingStreamFn(calls: RecordedCall[]) {
+  return (_model: unknown, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream => {
+    calls.push({ context, cacheRetention: options?.cacheRetention, sessionId: options?.sessionId })
+    return (async function* () {})() as unknown as AssistantMessageEventStream
+  }
+}
+
+describe('cache-aware stream wrapper 缓存参数覆写时机', () => {
+  const retention: PromptCacheRetention = 'short'
+
+  test('投影成功时覆写 cacheRetention 与 sessionId 为稳定值', async () => {
+    const calls: RecordedCall[] = []
+    const warm: Context = { systemPrompt: 'stable', messages: [user('warm prefix', 1)] }
+    const wrapper = createCacheAwareCompactionStreamFn({
+      streamFn: recordingStreamFn(calls),
+      sessionId: 'kila-session',
+      cacheRetention: retention,
+      serializeConversation,
+      initialContext: warm,
+    })
+
+    await wrapper({} as never, standaloneSummaryContext([user('warm prefix', 1)]), { cacheRetention: 'none', sessionId: 'random-opaque' })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.cacheRetention).toBe('short')
+    expect(calls[0]?.sessionId).toBe('kila-session')
+    // 投影后的请求重放 warm 前缀并追加摘要指令，不再是 standalone 单消息
+    expect(calls[0]?.context.messages.length).toBeGreaterThan(1)
+  })
+
+  test('投影失败时原样放行 Pi 的 cacheRetention=none 请求', async () => {
+    const calls: RecordedCall[] = []
+    const warm: Context = { systemPrompt: 'stable', messages: [user('actual warm prefix', 1)] }
+    const wrapper = createCacheAwareCompactionStreamFn({
+      streamFn: recordingStreamFn(calls),
+      sessionId: 'kila-session',
+      cacheRetention: retention,
+      serializeConversation,
+      initialContext: warm,
+    })
+
+    // 序列化内容与 last routed 前缀不匹配 → fail closed
+    await wrapper({} as never, standaloneSummaryContext([user('unrelated', 5)]), { cacheRetention: 'none', sessionId: 'random-opaque' })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.cacheRetention).toBe('none')
+    expect(calls[0]?.sessionId).toBe('random-opaque')
+    expect(calls[0]?.context.messages).toHaveLength(1)
+  })
+
+  test('普通请求不被改写且不注入摘要指令', async () => {
+    const calls: RecordedCall[] = []
+    const wrapper = createCacheAwareCompactionStreamFn({
+      streamFn: recordingStreamFn(calls),
+      sessionId: 'kila-session',
+      cacheRetention: retention,
+      serializeConversation,
+    })
+
+    const ordinary: Context = { systemPrompt: 'stable', messages: [user('ordinary turn', 1)] }
+    await wrapper({} as never, ordinary, { cacheRetention: 'short', sessionId: 'kila-session' })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.context).toBe(ordinary)
+    expect(calls[0]?.cacheRetention).toBe('short')
   })
 })

@@ -1,10 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { resolvePiApiType, resolvePiModelMetadata } from './pi-model-builder'
 import {
   createPiEventMapper,
   mapPiErrorMessageToKilaEvent,
   mapPiEventToKilaEvents,
-  resolvePiApiType,
-  resolvePiModelMetadata,
 } from './pi-agent-adapter'
 
 describe('Pi 渠道协议映射', () => {

@@ -25,15 +25,16 @@ import type { AgentEventUsage, ResolvedModelMetadata } from '@kila/shared'
 // ============================================================================
 
 /**
- * 模型窗口未知时的保守兜底值。
+ * 模型窗口数值非法（undefined / 非正数）时的兜底值，供 deriveCompactionSettings 的
+ * invalid-window 递归兜底与 buildPiModel 的最终守卫使用。
  *
- * 旧实现兜底 200000：本地模型、私有网关、小众聚合商都认不出模型名，于是 8K 的本地模型
- * 被告知「你有 20 万窗口」，该压的时候不压，直接撞 context overflow。
- * 方向必须反过来 —— 宁可多压一次，也不能整轮请求被 provider 拒绝。
+ * 注意：不能按「窗口来源未知」降级。shared 的窗口规则表是特例清单（1M 模型 + Codex 对齐），
+ * 主流 200K 模型全部落到 DEFAULT_CONTEXT_WINDOW，若按来源降级会把它们整体误伤成小窗口。
+ * 「窗口未知的小模型」问题的正确出口是渠道手动覆盖 contextWindowTokens。
  */
 export const FALLBACK_CONTEXT_WINDOW_TOKENS = 32768
 
-/** 有效上下文窗口及其来源；`fallback` 表示模型窗口未知，用的是保守默认值。 */
+/** 有效上下文窗口及其来源；`fallback` 表示窗口数值非法，用的是守卫兜底值。 */
 export interface EffectiveContextWindow {
   contextWindowTokens: number
   source: 'known' | 'fallback'
@@ -42,14 +43,13 @@ export interface EffectiveContextWindow {
 /**
  * 从已解析的模型元数据取出可用于压缩/预算计算的有效窗口。
  *
- * `resolveModelMetadata()` 已经用 `resolutionSources.contextWindow === 'fallback'` 表达
- * 「窗口未知」，这里只是把这个事实和实际生效的数值一起返回，供上层（含渲染层提示）消费。
+ * 窗口解析单一数据源在 shared `resolveModelMetadata`（手动覆盖 > 模型名推断）；
+ * 这里只做数值合法性守卫，非法时给保守默认值，避免下游预算计算出现 NaN / 负数。
  */
 export function resolveEffectiveContextWindow(
-  metadata: Pick<ResolvedModelMetadata, 'contextWindowTokens' | 'resolutionSources'>,
+  metadata: Pick<ResolvedModelMetadata, 'contextWindowTokens'>,
 ): EffectiveContextWindow {
-  const known = metadata.resolutionSources.contextWindow !== 'fallback'
-  if (known && typeof metadata.contextWindowTokens === 'number' && metadata.contextWindowTokens > 0) {
+  if (typeof metadata.contextWindowTokens === 'number' && metadata.contextWindowTokens > 0) {
     return { contextWindowTokens: metadata.contextWindowTokens, source: 'known' }
   }
   return { contextWindowTokens: FALLBACK_CONTEXT_WINDOW_TOKENS, source: 'fallback' }
