@@ -479,8 +479,8 @@
       "sourceBuiltin": "Built-in",
       "sourceBuiltinReference": "Built-in reference",
       "sourceRule": "Rule",
-      "sourceManual": "User setting",
       "sourceInference": "Inferred",
+      "sourceManual": "User setting",
       "sourceDefault": "Default",
       "sourceUnset": "Not configured"
     },

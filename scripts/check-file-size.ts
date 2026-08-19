@@ -63,7 +63,9 @@ async function collectFileStats(): Promise<FileStat[]> {
   for (const pattern of SCAN_GLOBS) {
     const glob = new Glob(pattern)
     for await (const match of glob.scan({ cwd: ROOT, absolute: true })) {
-      const relPath = relative(ROOT, match)
+      // Windows 上 relative() 返回反斜杠路径，而 baseline 键统一用正斜杠；
+      // 不规范化会导致 Windows 本地永远匹配不上 baseline，把存量文件全部误报为新增。
+      const relPath = relative(ROOT, match).replaceAll('\\', '/')
       if (shouldSkip(relPath) || seen.has(relPath)) continue
       seen.add(relPath)
 

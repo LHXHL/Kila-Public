@@ -6,6 +6,7 @@
  * 避免流式更新时穿透 React.memo。
  */
 
+import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAtomValue } from 'jotai'
 import { Gauge } from 'lucide-react'

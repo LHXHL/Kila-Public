@@ -83,10 +83,9 @@ function migrateChannelModel(model: ChannelModel): { model: ChannelModel; change
   }
 
   const metadataOverride = normalizeModelMetadataOverride(model.metadataOverride, model.capabilities)
+  const { capabilities: _legacyCapabilities, ...modelWithoutLegacyCapabilities } = model
   const migrated: ChannelModel = {
-    id: model.id,
-    name: model.name,
-    enabled: model.enabled,
+    ...modelWithoutLegacyCapabilities,
     ...(metadataOverride ? { metadataOverride } : {}),
   }
 

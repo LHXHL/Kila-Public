@@ -105,6 +105,8 @@ function mergeIntoTotals(totals: TokenUsageTotals, record: TokenUsageRecord): vo
   totals.costUsd += record.costUsd
   const cacheTotal = totals.cacheReadTokens + totals.cacheCreationTokens
   totals.cacheHitRate = cacheTotal > 0 ? totals.cacheReadTokens / cacheTotal : 0
+  const contextTotal = totals.inputTokens + cacheTotal
+  totals.cacheCoverageRate = contextTotal > 0 ? totals.cacheReadTokens / contextTotal : 0
 }
 
 function normalizeTokenUsageKind(value: unknown): TokenUsageKind | undefined {

@@ -199,6 +199,30 @@ export interface ModelMetadataOverride {
 }
 
 /**
+ * Provider 协议兼容覆盖（缓存相关子集）。
+ *
+ * 自定义 OpenAI-compatible/Anthropic-compatible 网关通常无法仅靠 URL 自动判断
+ * cache_control、session affinity 与长缓存能力，因此允许按模型显式透传给 Pi。
+ */
+export interface ModelCompatOverride {
+  /** OpenAI-compatible 接口是否使用 Anthropic 风格 cache_control 标记。 */
+  cacheControlFormat?: 'anthropic'
+  /** 是否发送 session-affinity headers。 */
+  sendSessionAffinityHeaders?: boolean
+  /** session-affinity header 格式。 */
+  sessionAffinityFormat?: 'openai' | 'openai-nosession' | 'openrouter'
+  /** provider 是否支持长时缓存保留。 */
+  supportsLongCacheRetention?: boolean
+  /** OpenAI Responses 模型是否支持显式 prompt cache mode。 */
+  supportsExplicitPromptCacheMode?: boolean
+  /**
+   * Kila 请求使用的 prompt cache 保留档位；默认 short。
+   * long 仅在 provider 同时声明 supportsLongCacheRetention 时产生长 TTL。
+   */
+  promptCacheRetention?: 'short' | 'long'
+}
+
+/**
  * 渠道中的模型配置
  */
 export interface ChannelModel {
@@ -210,6 +234,8 @@ export interface ChannelModel {
   enabled: boolean
   /** 手动覆盖模型元数据（可选，优先于内置目录和自动检测） */
   metadataOverride?: ModelMetadataOverride
+  /** 自定义 provider 的 prompt cache / session affinity 兼容覆盖。 */
+  compat?: ModelCompatOverride
   /** @deprecated 旧能力覆盖格式。读取时会迁移为 metadataOverride.abilities。 */
   capabilities?: ModelCapabilitiesOverride
 }

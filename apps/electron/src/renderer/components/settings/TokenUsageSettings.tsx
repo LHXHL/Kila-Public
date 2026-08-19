@@ -86,6 +86,7 @@ function getModelContextLabel(model: TokenUsageModelStat, t: TFunction): { label
   })
   return {
     label: formatTokenWindow(metadata.contextWindowTokens, t),
+    // 窗口单一数据源：手动覆盖 > 模型名推断（shared resolveModelMetadata 只产生这两种来源）
     source: metadata.resolutionSources.contextWindow === 'manual'
       ? t('settings.tokenUsage.sourceManual')
       : metadata.resolutionSources.contextWindow === 'inference'
@@ -310,7 +311,7 @@ export function TokenUsageSettings(): React.ReactElement {
             <MetricCard
               label={t('settings.tokenUsage.cache')}
               value={formatInteger(getCacheTokens(stats.totals))}
-              description={`cache read + cache create · hit ${formatPercent(stats.totals.cacheHitRate)}`}
+              description={`cache read + cache create · hit ${formatPercent(stats.totals.cacheHitRate)} · coverage ${formatPercent(stats.totals.cacheCoverageRate)}`}
             />
             <MetricCard
               label={t('settings.tokenUsage.cost')}

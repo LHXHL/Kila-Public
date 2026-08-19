@@ -6,7 +6,7 @@ import type {
 } from '@kila/shared'
 import {
   estimateSessionContext,
-  inferContextWindow,
+  resolveModelMetadata,
   withLegacyAttachedFilesBlock,
 } from '@kila/shared'
 import type {
@@ -86,6 +86,7 @@ function serializeAgentMessageForEstimate(message: AgentMessage): SessionMessage
 }
 
 function resolveContextWindow(
+  channel: AgentContextChannelMeta | null | undefined,
   modelId: string | undefined,
   streamState?: AgentStreamState,
   calibration?: AgentContextCalibrationSnapshot,
@@ -94,10 +95,18 @@ function resolveContextWindow(
     return streamState.contextWindow
   }
 
-  // 静态估算与运行时 buildPiModel 同源：走模型名推断，不依赖 Provider DB / 内置目录。
-  // 手动覆盖无法在此感知（渲染层无该信息），由流式 usage_update 的真实窗口覆盖。
-  if (modelId) {
-    return inferContextWindow(modelId)
+  if (channel && modelId) {
+    // 与运行时 buildPiModel 同源走 resolveModelMetadata。注意：shared 的窗口解析
+    // 单一数据源是「手动覆盖 > 模型名推断」，Provider DB entry 不参与窗口取值，
+    // 不要在这里为窗口预取 DB（拿不到也不需要）。
+    const metadata = resolveModelMetadata({
+      channelProvider: channel.provider,
+      channelBaseUrl: channel.baseUrl,
+      modelId,
+    })
+    if (metadata.contextWindowTokens) {
+      return metadata.contextWindowTokens
+    }
   }
 
   if (calibration?.modelId === modelId) {
@@ -117,7 +126,7 @@ export function deriveAgentContextStatus(
   const isCompacting = input.streamState?.isCompacting ?? false
   const hasLiveUsage = typeof input.streamState?.inputTokens === 'number' && input.streamState.inputTokens > 0
   const includeDraft = !input.streamState?.running && !hasLiveUsage
-  const contextWindow = resolveContextWindow(modelId ?? undefined, input.streamState, input.calibration)
+  const contextWindow = resolveContextWindow(input.channel, modelId ?? undefined, input.streamState, input.calibration)
 
   if (!modelId || (!hasLiveUsage && !hasMeaningfulContextPayload(input, includeDraft))) {
     return {
@@ -167,7 +176,6 @@ export function agentContextStatusAtomFamily(sessionId: string) {
     const streamState = get(agentStreamingStatesAtom).get(sessionId)
     const calibration = get(agentContextCalibrationSnapshotsAtom).get(sessionId)
     const snapshot = get(agentContextSnapshotsAtom).get(sessionId)
-    const modelId = input?.modelId ?? streamState?.model ?? snapshot?.modelId
 
     if (!input) {
       return {

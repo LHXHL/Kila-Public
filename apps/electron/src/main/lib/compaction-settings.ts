@@ -18,19 +18,42 @@
  */
 
 import type { Usage } from '@earendil-works/pi-ai'
-import type { AgentEventUsage } from '@kila/shared'
+import type { AgentEventUsage, ResolvedModelMetadata } from '@kila/shared'
 
 // ============================================================================
 // 上下文窗口
 // ============================================================================
 
 /**
- * 模型窗口非法（非正数）时的兜底值，供 deriveCompactionSettings 的 invalid-window 递归兜底使用。
+ * 模型窗口数值非法（undefined / 非正数）时的兜底值，供 deriveCompactionSettings 的
+ * invalid-window 递归兜底与 buildPiModel 的最终守卫使用。
  *
- * 注意：正常的「未知模型」窗口已由 shared 层 `inferContextWindow` 统一给 200K（单一数据源），
- * 这里不再承担「未知模型默认窗口」职责，只在窗口数值非法时兜底。
+ * 注意：不能按「窗口来源未知」降级。shared 的窗口规则表是特例清单（1M 模型 + Codex 对齐），
+ * 主流 200K 模型全部落到 DEFAULT_CONTEXT_WINDOW，若按来源降级会把它们整体误伤成小窗口。
+ * 「窗口未知的小模型」问题的正确出口是渠道手动覆盖 contextWindowTokens。
  */
 export const FALLBACK_CONTEXT_WINDOW_TOKENS = 32768
+
+/** 有效上下文窗口及其来源；`fallback` 表示窗口数值非法，用的是守卫兜底值。 */
+export interface EffectiveContextWindow {
+  contextWindowTokens: number
+  source: 'known' | 'fallback'
+}
+
+/**
+ * 从已解析的模型元数据取出可用于压缩/预算计算的有效窗口。
+ *
+ * 窗口解析单一数据源在 shared `resolveModelMetadata`（手动覆盖 > 模型名推断）；
+ * 这里只做数值合法性守卫，非法时给保守默认值，避免下游预算计算出现 NaN / 负数。
+ */
+export function resolveEffectiveContextWindow(
+  metadata: Pick<ResolvedModelMetadata, 'contextWindowTokens'>,
+): EffectiveContextWindow {
+  if (typeof metadata.contextWindowTokens === 'number' && metadata.contextWindowTokens > 0) {
+    return { contextWindowTokens: metadata.contextWindowTokens, source: 'known' }
+  }
+  return { contextWindowTokens: FALLBACK_CONTEXT_WINDOW_TOKENS, source: 'fallback' }
+}
 
 // ============================================================================
 // 压缩参数推导
