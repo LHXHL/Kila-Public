@@ -67,6 +67,8 @@ export interface AgentToolGroup {
   /** 来源描述，例如「Pi 内置编码工具」「MCP 工具」 */
   source: string
   tools?: AnyAgentTool[]
+  /** 工具归类；缺省 builtin。MCP 组必须显式传 'mcp'，供上下文构成分解使用。 */
+  kind?: 'builtin' | 'mcp'
 }
 
 /**
@@ -131,7 +133,17 @@ export function ensureUniqueToolName(
  * 现在改为保留先注册的工具，并对每次冲突输出告警，说明谁被谁挡下。
  */
 export function mergeAgentTools(groups: AgentToolGroup[]): AnyAgentTool[] {
-  const merged = new Map<string, { tool: AnyAgentTool; source: string }>()
+  return mergeAgentToolsWithSource(groups).map((item) => item.tool)
+}
+
+/** 合并后保留工具的来源归类，供上下文构成分解（系统工具 / MCP 工具）使用。 */
+export interface MergedAgentToolWithSource {
+  tool: AnyAgentTool
+  kind: 'builtin' | 'mcp'
+}
+
+export function mergeAgentToolsWithSource(groups: AgentToolGroup[]): MergedAgentToolWithSource[] {
+  const merged = new Map<string, { tool: AnyAgentTool; source: string; kind: 'builtin' | 'mcp' }>()
 
   for (const group of groups) {
     for (const tool of group.tools ?? []) {
@@ -145,9 +157,9 @@ export function mergeAgentTools(groups: AgentToolGroup[]): AnyAgentTool[] {
         )
         continue
       }
-      merged.set(key, { tool, source: group.source })
+      merged.set(key, { tool, source: group.source, kind: group.kind ?? 'builtin' })
     }
   }
 
-  return [...merged.values()].map((item) => item.tool)
+  return [...merged.values()].map(({ tool, kind }) => ({ tool, kind }))
 }

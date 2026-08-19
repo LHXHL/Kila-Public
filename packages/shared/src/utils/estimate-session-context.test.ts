@@ -237,3 +237,62 @@ describe('estimateSessionContext', () => {
     expect(snapshot.segmentSummary.currentTurnChars).toBe('Continue the implementation.'.length)
   })
 })
+
+describe('buildSessionContextSnapshot 构成分解', () => {
+  test('Given 内置与 MCP 工具混合 When 构建快照 Then 工具 token 按来源分组到对应分段', () => {
+    const snapshot = buildSessionContextSnapshot({
+      modelId: 'test-model',
+      systemPrompt: 'You are a coding agent.',
+      dynamicContext: '<user_clock_context>now</user_clock_context>',
+      historyMessages: [createMessage({ id: 'u1', role: 'user', content: 'hello' })],
+      currentTurnText: 'world',
+      toolDefinitions: [
+        { name: 'read', description: 'Read file content', source: 'builtin' },
+        { name: 'bash', description: 'Run shell command', source: 'builtin' },
+        { name: 'db__query', description: 'Query the database', source: 'mcp' },
+      ],
+    })
+
+    const partition = snapshot.contextPartition!
+    expect(partition.systemToolsTokens).toBeGreaterThan(0)
+    expect(partition.mcpToolsTokens).toBeGreaterThan(0)
+    // MCP 描述明显更长时不应被计入系统工具
+    expect(partition.mcpToolsTokens).toBeGreaterThan(partition.systemToolsTokens / 2)
+  })
+
+  test('Given 技能列表段 When 构建快照 Then 技能单列且其余动态上下文归入 other', () => {
+    const skills = '全局 Skills:\n- write: 写作技能 (/root/.kila/global-agent/skills/write/SKILL.md)'
+    const dynamicContext = `<user_clock_context>time</user_clock_context>\n\n${skills}`
+    const snapshot = buildSessionContextSnapshot({
+      modelId: 'test-model',
+      systemPrompt: 'sys',
+      dynamicContext,
+      skillContextText: skills,
+      historyMessages: [],
+      currentTurnText: 'go',
+    })
+
+    const partition = snapshot.contextPartition!
+    expect(partition.skillsTokens).toBeGreaterThan(0)
+    expect(partition.otherTokens).toBeGreaterThan(0)
+    // other 不应吞掉技能段（差值口径允许少量估算误差，但不应归零）
+    expect(partition.otherTokens).toBeLessThan(partition.skillsTokens * 2)
+  })
+
+  test('Given 空工具与空技能 When 构建快照 Then 对应分段为零而不是 NaN', () => {
+    const snapshot = buildSessionContextSnapshot({
+      modelId: 'm',
+      systemPrompt: 'sys',
+      dynamicContext: 'ctx',
+      historyMessages: [createMessage({ id: 'u1', role: 'user', content: 'hi' })],
+      currentTurnText: '',
+    })
+
+    const partition = snapshot.contextPartition!
+    expect(partition.systemToolsTokens).toBe(0)
+    expect(partition.mcpToolsTokens).toBe(0)
+    expect(partition.skillsTokens).toBe(0)
+    expect(partition.messagesTokens).toBeGreaterThan(0)
+    expect(Number.isFinite(partition.otherTokens)).toBe(true)
+  })
+})

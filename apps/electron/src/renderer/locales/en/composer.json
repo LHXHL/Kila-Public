@@ -29,6 +29,14 @@
     "noContextData": "No context data yet",
     "compacting": "Compacting",
     "usageLive": "Actual API usage",
-    "usageEstimated": "Character estimate"
+    "usageEstimated": "Character estimate",
+    "contextPartitionMessages": "Messages",
+    "contextPartitionSystemTools": "System tools",
+    "contextPartitionMcpTools": "MCP tools",
+    "contextPartitionSkills": "Skills",
+    "contextPartitionSystemPrompt": "System prompt",
+    "contextPartitionOther": "Other",
+    "cacheHitRate": "Avg cache hit rate",
+    "contextPartitionTitle": "Context breakdown"
   }
 }

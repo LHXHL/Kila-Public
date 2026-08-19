@@ -10,7 +10,7 @@ import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAtomValue } from 'jotai'
 import { Gauge } from 'lucide-react'
-import { agentContextStatusAtomFamily } from '@/atoms/agent-context-atoms'
+import { agentContextStatusAtomFamily, type AgentContextStatus } from '@/atoms/agent-context-atoms'
 import { formatTokenCount } from '@/atoms/usage-atoms'
 import { cn } from '@/lib/utils'
 import { ToolbarHoverPopover } from './ToolbarHoverPopover'
@@ -31,6 +31,66 @@ function MiniBar({ percent }: { percent: number }) {
         )}
         style={{ width: `${Math.min(100, percent)}%` }}
       />
+    </div>
+  )
+}
+
+/** 构成分解的展示行定义：估算口径见 SessionContextPartition。 */
+const PARTITION_ROWS = [
+  { key: 'messagesTokens', labelKey: 'composer.contextPartitionMessages', dot: 'bg-primary' },
+  { key: 'systemToolsTokens', labelKey: 'composer.contextPartitionSystemTools', dot: 'bg-sky-500' },
+  { key: 'mcpToolsTokens', labelKey: 'composer.contextPartitionMcpTools', dot: 'bg-violet-500' },
+  { key: 'skillsTokens', labelKey: 'composer.contextPartitionSkills', dot: 'bg-emerald-500' },
+  { key: 'systemPromptTokens', labelKey: 'composer.contextPartitionSystemPrompt', dot: 'bg-amber-500' },
+  { key: 'otherTokens', labelKey: 'composer.contextPartitionOther', dot: 'bg-muted-foreground/50' },
+] as const
+
+type PartitionKey = typeof PARTITION_ROWS[number]['key']
+
+/**
+ * 构成分解列表：按占比降序渲染非零分段。
+ * 占比以六项之和为分母归一化（估算口径，不与 provider 计费逐项对齐）。
+ */
+function ContextPartitionList({
+  partition,
+  t,
+}: {
+  partition: NonNullable<AgentContextStatus['contextPartition']>
+  t: (key: string) => string
+}) {
+  const total = PARTITION_ROWS.reduce((sum, row) => sum + (partition[row.key] ?? 0), 0)
+  if (total <= 0) return null
+
+  const rows = PARTITION_ROWS
+    .map(row => ({ ...row, tokens: partition[row.key] ?? 0 }))
+    .filter(row => row.tokens > 0)
+    .sort((left, right) => right.tokens - left.tokens)
+
+  return (
+    <div className="space-y-1 border-t border-border/40 pt-2">
+      {rows.map(row => (
+        <div key={row.key} className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className={`size-1.5 rounded-full ${row.dot}`} />
+            {t(row.labelKey)}
+          </span>
+          <span className="tabular-nums">
+            {((row.tokens / total) * 100).toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** 平均缓存命中率行：provider 未上报 cache token 时整体不渲染。 */
+function CacheHitRateRow({ rate, t }: { rate: number; t: (key: string) => string }) {
+  return (
+    <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[11px]">
+      <span className="text-muted-foreground">{t('composer.cacheHitRate')}</span>
+      <span className={cn('font-medium tabular-nums', rate >= 0.8 ? getStatusToneClasses('success').text : 'text-foreground')}>
+        {(rate * 100).toFixed(1)}%
+      </span>
     </div>
   )
 }
@@ -109,6 +169,16 @@ export function ContextUsageIndicator({
                 <> / {formatTokenCount(contextStatus.contextWindow)}</>
               ) : null}
             </div>
+          )}
+
+          {/* 上下文构成（估算口径，来自最近一次发送快照） */}
+          {contextStatus.contextPartition && (
+            <ContextPartitionList partition={contextStatus.contextPartition} t={t} />
+          )}
+
+          {/* 平均缓存命中率（本会话累计，provider 未上报时不显示） */}
+          {contextStatus.cacheHitRate !== undefined && (
+            <CacheHitRateRow rate={contextStatus.cacheHitRate} t={t} />
           )}
 
           {/* 来源 */}

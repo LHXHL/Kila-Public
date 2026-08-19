@@ -2,6 +2,7 @@ import { atom, type Atom } from 'jotai'
 import type {
   AgentMessage,
   AgentPendingFile,
+  SessionContextPartition,
   SessionMessage,
 } from '@kila/shared'
 import {
@@ -47,6 +48,10 @@ export interface AgentContextStatus {
   modelId?: string
   source?: 'live' | 'estimate'
   canSeedCalibration: boolean
+  /** 上下文构成分解（估算口径，来自最近一次发送快照）；旧快照可能缺失。 */
+  contextPartition?: SessionContextPartition
+  /** 本会话累计平均缓存命中率 cacheRead/(cacheRead+cacheCreation)；provider 不上报 cache 时为 undefined。 */
+  cacheHitRate?: number
 }
 
 function hasMeaningfulContextPayload(input: AgentContextInput, includeDraft: boolean): boolean {
@@ -127,11 +132,13 @@ export function deriveAgentContextStatus(
   const hasLiveUsage = typeof input.streamState?.inputTokens === 'number' && input.streamState.inputTokens > 0
   const includeDraft = !input.streamState?.running && !hasLiveUsage
   const contextWindow = resolveContextWindow(input.channel, modelId ?? undefined, input.streamState, input.calibration)
+  const cacheHitRate = deriveSessionCacheHitRate(input.streamState?.cumulativeUsage)
 
   if (!modelId || (!hasLiveUsage && !hasMeaningfulContextPayload(input, includeDraft))) {
     return {
       isCompacting,
       contextWindow,
+      cacheHitRate,
       canSeedCalibration: false,
     }
   }
@@ -157,7 +164,23 @@ export function deriveAgentContextStatus(
     modelId,
     source: hasLiveUsage ? 'live' : 'estimate',
     canSeedCalibration: hasLiveUsage,
+    cacheHitRate,
   }
+}
+
+/**
+ * 本会话累计平均缓存命中率：cacheRead / (cacheRead + cacheCreation)。
+ * 两项均为 0（provider 未上报 cache）时返回 undefined，UI 不显示该行，
+ * 避免「0%」被误读为缓存完全未命中。
+ */
+export function deriveSessionCacheHitRate(
+  cumulativeUsage: AgentStreamState['cumulativeUsage'],
+): number | undefined {
+  const cacheRead = cumulativeUsage?.cacheReadTokens ?? 0
+  const cacheCreation = cumulativeUsage?.cacheCreationTokens ?? 0
+  const cacheTotal = cacheRead + cacheCreation
+  if (cacheTotal <= 0) return undefined
+  return cacheRead / cacheTotal
 }
 
 export const agentContextInputsAtom = atom<Map<string, AgentContextInput>>(new Map())
@@ -187,6 +210,8 @@ export function agentContextStatusAtomFamily(sessionId: string) {
         contextWindow: streamState?.contextWindow ?? snapshot?.contextWindow ?? calibration?.contextWindow,
         source: streamState?.inputTokens ? 'live' : snapshot ? 'estimate' : undefined,
         canSeedCalibration: false,
+        contextPartition: snapshot?.contextPartition,
+        cacheHitRate: deriveSessionCacheHitRate(streamState?.cumulativeUsage),
       }
     }
 
@@ -204,14 +229,18 @@ export function agentContextStatusAtomFamily(sessionId: string) {
         contextWindow: snapshot.contextWindow ?? calibration?.contextWindow,
         source: 'estimate',
         canSeedCalibration: false,
+        contextPartition: snapshot.contextPartition,
       }
     }
 
-    return deriveAgentContextStatus({
-      ...input,
-      streamState,
-      calibration,
-    })
+    return {
+      ...deriveAgentContextStatus({
+        ...input,
+        streamState,
+        calibration,
+      }),
+      contextPartition: snapshot?.contextPartition,
+    }
   })
   agentContextStatusAtomCache.set(sessionId, created)
   return created

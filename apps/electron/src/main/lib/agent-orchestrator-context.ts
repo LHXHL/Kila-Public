@@ -24,7 +24,7 @@ import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
 import {
   collectReservedToolNames,
   canonicalizeAgentTools,
-  mergeAgentTools,
+  mergeAgentToolsWithSource,
   normalizeToolNameKey,
   type AnyAgentTool,
 } from './agent-tool-names'
@@ -430,23 +430,26 @@ export async function buildAgentRunContext(
   )
 
   // 合并顺序即优先级：先到者保留，内置工具永远排在 MCP 与外部注入工具之前
-  const tools = canonicalizeAgentTools(mergeAgentTools([
+  const mergedTools = mergeAgentToolsWithSource([
     { source: 'Pi 内置编码工具', tools: codingTools },
     { source: 'Kila 内置工具', tools: builtinTools },
-    { source: 'MCP 工具', tools: mcpToolBundle.tools },
+    { source: 'MCP 工具', tools: mcpToolBundle.tools, kind: 'mcp' },
     { source: '运行时注入工具', tools: extraTools },
-  ]))
+  ])
+  const tools = canonicalizeAgentTools(mergedTools.map((item) => item.tool))
   const contextSnapshot = buildSessionContextSnapshot({
     modelId: resolvedModel,
     contextWindow: modelMetadata.contextWindowTokens,
     historyTurns,
     systemPrompt: systemPromptText,
     dynamicContext: dynamicProjection.fullContext,
+    skillContextText: dynamicProjection.skillsSection,
     historyMessages,
     currentTurnText: finalPrompt,
-    toolDefinitions: tools.map((tool) => ({
+    toolDefinitions: mergedTools.map(({ tool, kind }) => ({
       name: tool.name,
       description: typeof tool.description === 'string' ? tool.description : undefined,
+      source: kind,
     })),
   })
   eventBus.emit(sessionId, {

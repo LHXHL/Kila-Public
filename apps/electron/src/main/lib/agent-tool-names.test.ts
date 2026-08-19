@@ -12,6 +12,7 @@ import {
   canonicalizeAgentTools,
   ensureUniqueToolName,
   mergeAgentTools,
+  mergeAgentToolsWithSource,
   normalizeToolNameKey,
   type AnyAgentTool,
 } from './agent-tool-names'
@@ -192,5 +193,30 @@ describe('canonicalizeAgentTools 缓存前缀稳定性', () => {
       required: ['b', 'a'],
       type: 'object',
     }))
+  })
+})
+
+describe('mergeAgentToolsWithSource 来源归类', () => {
+  test('Given 内置与 MCP 分组 When 合并 Then 保留 kind 归类且冲突仍先到者保留', () => {
+    const builtin = createTool('read', '内置读取')
+    const mcp = createTool('search', 'MCP 搜索')
+    const duplicate = createTool('read', 'MCP 同名工具')
+
+    const merged = mergeAgentToolsWithSource([
+      { source: 'Pi 内置编码工具', tools: [builtin] },
+      { source: 'MCP 工具', tools: [mcp, duplicate], kind: 'mcp' },
+    ])
+
+    expect(merged.map((item) => [item.tool.name, item.kind])).toEqual([
+      ['read', 'builtin'],
+      ['search', 'mcp'],
+    ])
+  })
+
+  test('Given 未标记 kind 的分组 When 合并 Then 缺省归 builtin', () => {
+    const merged = mergeAgentToolsWithSource([
+      { source: '运行时注入工具', tools: [createTool('report', '报告')] },
+    ])
+    expect(merged[0]?.kind).toBe('builtin')
   })
 })

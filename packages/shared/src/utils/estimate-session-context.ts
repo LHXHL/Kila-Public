@@ -36,10 +36,35 @@ export interface SessionContextSnapshotSegmentSummary {
   toolDefinitionsChars: number
 }
 
+/**
+ * 上下文构成分解（token 估算口径）。
+ *
+ * provider 只返回总量 usage，不会说明哪部分 token 属于什么；这里的占比由 Kila 在
+ * 发送前对各组成部分（system prompt / 工具定义 / 技能列表 / 消息历史 / 其余动态
+ * 上下文）分别按同一套估算器得出，用于展示相对占比，不保证与 provider 计费逐项
+ * 对齐。展示端应以六项之和为分母归一化。
+ */
+export interface SessionContextPartition {
+  /** 可见消息历史 + 当前轮输入（含消息结构开销）。 */
+  messagesTokens: number
+  /** 内置编码/Kila 工具的名称 + 描述估算。 */
+  systemToolsTokens: number
+  /** MCP 工具的名称 + 描述估算。 */
+  mcpToolsTokens: number
+  /** 技能列表注入段估算。 */
+  skillsTokens: number
+  /** system prompt 本体（不含动态上下文与工具定义）。 */
+  systemPromptTokens: number
+  /** 其余动态上下文（时钟、用户画像、MCP 列表、工作目录、记忆等）。 */
+  otherTokens: number
+}
+
 export interface SessionContextSnapshot {
   fingerprint: string
   estimatedInputTokens: number
   segmentSummary: SessionContextSnapshotSegmentSummary
+  /** 构成分解（估算口径）；旧快照可能缺失。 */
+  contextPartition?: SessionContextPartition
   contextWindow?: number
   modelId: string
   createdAt: number
@@ -168,14 +193,26 @@ export function buildSessionContextSnapshot(input: {
   historyTurns?: number | 'infinite'
   systemPrompt: string
   dynamicContext: string
+  /** 技能列表注入段（dynamicContext 的子集）；传入后单列一类，其余动态上下文归 other。 */
+  skillContextText?: string
   historyMessages: SessionMessage[]
   currentTurnText: string
-  toolDefinitions?: Array<{ name?: string; description?: string }>
+  toolDefinitions?: Array<{ name?: string; description?: string; source?: 'builtin' | 'mcp' }>
 }): SessionContextSnapshot {
   const visibleMessages = filterVisibleMessages(input.historyMessages, input.historyTurns)
-  const toolDefinitionsText = (input.toolDefinitions ?? [])
-    .map((tool) => `${tool.name ?? ''}\n${tool.description ?? ''}`)
+  const toolDefinitionText = (tool: { name?: string; description?: string }) => (
+    `${tool.name ?? ''}\n${tool.description ?? ''}`
+  )
+  const toolDefinitions = input.toolDefinitions ?? []
+  const builtinToolsText = toolDefinitions
+    .filter((tool) => tool.source !== 'mcp')
+    .map(toolDefinitionText)
     .join('\n---\n')
+  const mcpToolsText = toolDefinitions
+    .filter((tool) => tool.source === 'mcp')
+    .map(toolDefinitionText)
+    .join('\n---\n')
+  const toolDefinitionsText = [builtinToolsText, mcpToolsText].filter(Boolean).join('\n---\n')
   const systemPrompt = [input.systemPrompt, input.dynamicContext, toolDefinitionsText]
     .filter(Boolean)
     .join('\n\n')
@@ -190,6 +227,13 @@ export function buildSessionContextSnapshot(input: {
     currentTurnText: input.currentTurnText,
   })
 
+  // 技能段单独估算后，剩余动态上下文按差值归入 other，避免字符级切割带来的失真
+  const skillsTokens = input.skillContextText ? estimateTextTokens(input.skillContextText) : 0
+  const dynamicTokens = estimateTextTokens(input.dynamicContext)
+  const messagesTokens = visibleMessages.reduce((sum, message) => (
+    sum + 6 + estimateTextTokens(message.content)
+  ), 0) + (input.currentTurnText ? 6 + estimateTextTokens(input.currentTurnText) : 0)
+
   return {
     fingerprint: estimate.fingerprint,
     estimatedInputTokens: estimate.estimatedTokens,
@@ -200,6 +244,14 @@ export function buildSessionContextSnapshot(input: {
       attachmentsChars: 0,
       currentTurnChars: input.currentTurnText.length,
       toolDefinitionsChars: toolDefinitionsText.length,
+    },
+    contextPartition: {
+      messagesTokens,
+      systemToolsTokens: builtinToolsText ? estimateTextTokens(builtinToolsText) : 0,
+      mcpToolsTokens: mcpToolsText ? estimateTextTokens(mcpToolsText) : 0,
+      skillsTokens,
+      systemPromptTokens: estimateTextTokens(input.systemPrompt),
+      otherTokens: Math.max(0, dynamicTokens - skillsTokens),
     },
     contextWindow: input.contextWindow,
     modelId: input.modelId,

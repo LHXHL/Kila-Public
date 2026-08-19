@@ -262,6 +262,8 @@ export interface DynamicContextProjection {
   runtimeSnapshotFingerprint: string
   /** 兼容诊断/上下文估算的完整文本。 */
   fullContext: string
+  /** 技能列表注入段（fullContext 的子集），供上下文构成分解单列「技能」一类。 */
+  skillsSection: string
 }
 
 function formatContextTime(now: Date, timeZone: string): string {
@@ -348,13 +350,15 @@ async function buildDynamicContextProjectionInternal(ctx: DynamicContext): Promi
   const skills = [...getGlobalAgentSkills()].sort((left, right) => (
     left.slug < right.slug ? -1 : left.slug > right.slug ? 1 : 0
   ))
+  const skillLines: string[] = []
   if (skills.length > 0) {
     const skillsRoot = getGlobalAgentSkillsDir()
-    projectLines.push('全局 Skills（匹配时请先用 read 工具读取对应 SKILL.md，再按其中流程执行）:')
+    skillLines.push('全局 Skills（匹配时请先用 read 工具读取对应 SKILL.md，再按其中流程执行）:')
     for (const skill of skills) {
       const desc = skill.description ? `: ${skill.description}` : ''
-      projectLines.push(`- ${skill.slug}${desc} (${skillsRoot}/${skill.slug}/SKILL.md)`)
+      skillLines.push(`- ${skill.slug}${desc} (${skillsRoot}/${skill.slug}/SKILL.md)`)
     }
+    projectLines.push(...skillLines)
   }
 
   try {
@@ -391,6 +395,7 @@ async function buildDynamicContextProjectionInternal(ctx: DynamicContext): Promi
     runtimeSnapshot,
     runtimeSnapshotFingerprint: hashContext(runtimeSnapshotBody),
     fullContext: [perMessageContext, runtimeSnapshot].filter(Boolean).join('\n\n'),
+    skillsSection: skillLines.join('\n'),
   }
 }
 

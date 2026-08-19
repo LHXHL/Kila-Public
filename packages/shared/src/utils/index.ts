@@ -55,6 +55,7 @@ export type {
   EstimateSessionContextInput,
   SessionContextCalibrationSnapshot,
   SessionContextEstimate,
+  SessionContextPartition,
   SessionContextSnapshot,
   SessionContextSnapshotSegmentSummary,
 } from './estimate-session-context'

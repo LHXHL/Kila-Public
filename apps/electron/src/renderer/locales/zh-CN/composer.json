@@ -29,6 +29,14 @@
     "noContextData": "暂无上下文数据",
     "compacting": "压缩中",
     "usageLive": "API 实际用量",
-    "usageEstimated": "字符估算"
+    "usageEstimated": "字符估算",
+    "contextPartitionMessages": "消息",
+    "contextPartitionSystemTools": "系统工具",
+    "contextPartitionMcpTools": "MCP 工具",
+    "contextPartitionSkills": "技能",
+    "contextPartitionSystemPrompt": "系统提示词",
+    "contextPartitionOther": "其他",
+    "cacheHitRate": "平均缓存命中率",
+    "contextPartitionTitle": "上下文构成"
   }
 }
