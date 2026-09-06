@@ -4,19 +4,19 @@
  * 统一管理单一 Session 的索引与消息持久化。
  */
 
+import { randomUUID } from 'node:crypto'
 import {
   closeSync,
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   readSync,
-  readdirSync,
   rmSync,
   statSync,
   unlinkSync,
 } from 'node:fs'
-import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type {
   SessionCreateInput,
@@ -26,6 +26,7 @@ import type {
   SessionMetaUpdates,
   SessionRecentMessagesResult,
 } from '@kila/shared'
+import { createDegradedConfigRegistry, degradeCorruptConfig } from './config-file-guard'
 import {
   getAgentWorkspacesDir,
   getProjectProfilesDir,
@@ -33,15 +34,13 @@ import {
   getSessionsDir,
   getSessionsIndexPath,
 } from './config-paths'
-import { cleanupSessionProject, createSessionProjectFromPath, createTempSessionProject } from './session-project-manager'
+import { createLogger } from './logger'
+import { appendTextDurably, readJsonWithBackup, writeTextAtomic, writeTextAtomicWithBackup } from './safe-json-file'
 import { cleanupSessionBoard } from './session-board-manager'
+import { cleanupSessionProject, createSessionProjectFromPath, createTempSessionProject } from './session-project-manager'
 import { markSessionSearchIndexDirty } from './session-search-dirty'
 import { getSettings, isSettingsDegraded, updateSettings } from './settings-service'
-import { appendTextDurably, readJsonWithBackup, writeTextAtomic, writeTextAtomicWithBackup } from './safe-json-file'
-import { createDegradedConfigRegistry, degradeCorruptConfig } from './config-file-guard'
 
-
-import { createLogger } from './logger'
 const log = createLogger('Session 管理')
 
 /**
@@ -104,12 +103,19 @@ function invalidateMessageCache(sessionId: string): void {
 }
 
 function normalizeSessionMeta(session: SessionMeta): SessionMeta {
+  const goalExecutionMode = (
+    session.goalExecutionMode === 'definite'
+    || session.goalExecutionMode === 'exploratory'
+    || session.goalExecutionMode === 'incremental'
+  ) ? session.goalExecutionMode : 'auto'
+
   return {
     ...session,
     title: typeof session.title === 'string' && session.title.trim()
       ? session.title
       : DEFAULT_SESSION_TITLE,
     thinkingLevel: session.thinkingLevel ?? 'none',
+    goalExecutionMode,
   }
 }
 
@@ -391,6 +397,7 @@ export function createSession(input?: SessionCreateInput, deps?: SessionManagerD
     thinkingLevel: input?.thinkingLevel ?? 'medium',
     historyTurns: input?.historyTurns,
     enabledToolIds: input?.enabledToolIds,
+    goalExecutionMode: input?.goalExecutionMode ?? 'auto',
     systemPromptId: input?.systemPromptId,
     createdAt: now,
     updatedAt: now,

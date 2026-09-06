@@ -13,89 +13,91 @@
  * 布局：SessionHeader | AgentMessages | AgentInput + SessionSidePanel
  */
 
-import * as React from 'react'
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
+import { Clock3, CornerDownLeft, Eye, EyeOff, FolderPlus, Paperclip, Settings, Sparkles, Square, X } from 'lucide-react'
+import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Clock3, CornerDownLeft, Square, Settings, Paperclip, FolderPlus, X, Sparkles, Eye, EyeOff } from 'lucide-react'
+import { AttachmentPreviewItem } from '@/components/composer/AttachmentPreviewItem'
+import { ContextUsageIndicator } from '@/components/composer/ContextUsageIndicator'
+import { GoalEvaluationSelector } from '@/components/composer/GoalEvaluationSelector'
+import { ModelSelector } from '@/components/composer/ModelSelector'
+import { SkillTriggerButton } from '@/components/composer/SkillTriggerButton'
+import { SystemPromptSelector } from '@/components/composer/SystemPromptSelector'
+import { ThinkingLevelSelector } from '@/components/composer/ThinkingLevelSelector'
+import { ToolSelectorPopover } from '@/components/composer/ToolSelectorPopover'
 import { AgentMessages } from './AgentMessages'
+import { AskUserBanner } from './AskUserBanner'
 import {
   mergeRecoveredComposerDraft,
   preparePendingFilePayloads,
 } from './agent-send-transaction'
-
 import { PermissionBanner } from './PermissionBanner'
-import { AskUserBanner } from './AskUserBanner'
 import { WidgetDraftBanner } from './WidgetDraftBanner'
-import { ContextUsageIndicator } from '@/components/composer/ContextUsageIndicator'
-import { ModelSelector } from '@/components/composer/ModelSelector'
-import { AttachmentPreviewItem } from '@/components/composer/AttachmentPreviewItem'
-import { SkillTriggerButton } from '@/components/composer/SkillTriggerButton'
-import { ThinkingLevelSelector } from '@/components/composer/ThinkingLevelSelector'
-import { SystemPromptSelector } from '@/components/composer/SystemPromptSelector'
-import { ToolSelectorPopover } from '@/components/composer/ToolSelectorPopover'
 
 const SessionSidePanel = React.lazy(() => import('@/components/session/SessionSidePanel').then((module) => ({ default: module.SessionSidePanel })))
+
+import {
+  type AgentMessage,
+  type AgentPendingFile,
+  buildSessionTurnReplayPlan,
+  type Channel,
+  createOptimisticReplayUserMessage,
+  type FileAttachment,
+  type ModelOption,
+  type SessionSendInput,
+  sessionMessageToLegacyAgentMessage,
+} from '@kila/shared'
+import {
+  type AgentQueuedSend,
+  agentAttachedDirectoriesMapAtom,
+  agentChannelIdAtom,
+  agentContextCalibrationSnapshotsAtom,
+  agentContextInputsAtom,
+  agentContextStatusAtomFamily,
+  agentMessageHydratingAtom,
+  agentMessageRefreshAtom,
+  agentModelIdAtom,
+  agentPendingFilesMapAtom,
+  agentPendingPromptAtom,
+  agentPromptSuggestionsAtom,
+  agentQueuedSendMapAtom,
+  agentSessionDraftsAtom,
+  agentSessionStreamStateAtomFamily,
+  agentStreamingStatesAtom,
+  clearWidgetDraftProposalAtom,
+  enqueueQueuedSendMap,
+  getSessionPendingFiles,
+  prependQueuedSendMap,
+  removeQueuedSendMapItem,
+  setSessionPendingFilesMap,
+  shiftQueuedSendMap,
+  widgetDraftProposalMapAtom,
+} from '@/atoms/agent-atoms'
+import { activeToolIdsAtom } from '@/atoms/agent-tool-atoms'
+import { incognitoModeAtom } from '@/atoms/agent-ui-atoms'
+import { currentSessionIdAtom, sessionsAtom } from '@/atoms/session-atoms'
+import {
+  selectedModelAtom,
+  sessionModelPreferencesAtom,
+} from '@/atoms/session-preference-atoms'
+import { splitLayoutAtom, tabsAtom } from '@/atoms/tab-atoms'
 import { RichTextInput, type RichTextInputHandle } from '@/components/ai-elements/rich-text-input'
-import { useSessionLifecycleActions } from './use-session-lifecycle-actions'
-import { Button } from '@/components/ui/button'
+import { SessionHeader } from '@/components/session/SessionHeader'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { activeToolIdsAtom } from '@/atoms/agent-tool-atoms'
-import {
-  sessionModelPreferencesAtom,
-  selectedModelAtom,
-} from '@/atoms/session-preference-atoms'
-import { incognitoModeAtom } from '@/atoms/agent-ui-atoms'
-import {
-  agentStreamingStatesAtom,
-  agentSessionStreamStateAtomFamily,
-  agentContextInputsAtom,
-  agentContextStatusAtomFamily,
-  agentContextCalibrationSnapshotsAtom,
-  agentChannelIdAtom,
-  agentModelIdAtom,
-  agentPendingPromptAtom,
-  agentPendingFilesMapAtom,
-  getSessionPendingFiles,
-  setSessionPendingFilesMap,
-  agentSessionDraftsAtom,
-  agentPromptSuggestionsAtom,
-  agentMessageHydratingAtom,
-  agentMessageRefreshAtom,
-  agentQueuedSendMapAtom,
-  enqueueQueuedSendMap,
-  prependQueuedSendMap,
-  removeQueuedSendMapItem,
-  shiftQueuedSendMap,
-  type AgentQueuedSend,
-  agentAttachedDirectoriesMapAtom,
-  clearWidgetDraftProposalAtom,
-  widgetDraftProposalMapAtom,
-} from '@/atoms/agent-atoms'
-import { tabsAtom, splitLayoutAtom } from '@/atoms/tab-atoms'
-import { sessionsAtom, currentSessionIdAtom } from '@/atoms/session-atoms'
-import { SessionHeader } from '@/components/session/SessionHeader'
 import {
   useSessionContextLengthPreference,
+  useSessionGoalExecutionModePreference,
   useSessionThinkingLevelPreference,
 } from '@/hooks/useSessionPreferences'
-import {
-  buildSessionTurnReplayPlan,
-  createOptimisticReplayUserMessage,
-  sessionMessageToLegacyAgentMessage,
-  type AgentMessage,
-  type AgentPendingFile,
-  type Channel,
-  type FileAttachment,
-  type ModelOption,
-  type SessionSendInput,
-} from '@kila/shared'
+import { cn } from '@/lib/utils'
 import { useAgentAttachments } from './use-agent-attachments'
+import { useSessionLifecycleActions } from './use-session-lifecycle-actions'
 
 const SESSION_MESSAGE_PAGE_SIZE = 100
 
@@ -204,6 +206,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   ])
   const [historyTurns] = useSessionContextLengthPreference()
   const [thinkingLevel] = useSessionThinkingLevelPreference()
+  const [goalExecutionMode, setGoalExecutionMode] = useSessionGoalExecutionModePreference()
 
   const draftsMap = useAtomValue(agentSessionDraftsAtom)
   const widgetDraftProposalMap = useAtomValue(widgetDraftProposalMapAtom)
@@ -613,6 +616,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         thinkingLevel: thinkingLevel,
         historyTurns: historyTurns,
         enabledToolIds,
+        goalExecutionMode,
         skipAutoTitle: true,
       }
       window.electronAPI.sendSessionMessage(input).catch((error) => {
@@ -632,7 +636,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     }, 150)
 
     return () => clearTimeout(timer)
-  }, [pendingPrompt, sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, historyTurns, sessionMeta?.updatedAt, thinkingLevel, streaming, setInputContent, setMessages, setPendingPrompt, setStreamingStates, store, t])
+  }, [pendingPrompt, sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, goalExecutionMode, historyTurns, sessionMeta?.updatedAt, thinkingLevel, streaming, setInputContent, setMessages, setPendingPrompt, setStreamingStates, store, t])
 
   /** ModelSelector 选择回调 */
   const handleModelSelect = React.useCallback((option: ModelOption): void => {
@@ -746,6 +750,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       thinkingLevel,
       historyTurns,
       enabledToolIds,
+      goalExecutionMode,
       ...(attachedDirs.length > 0 && { additionalDirectories: attachedDirs }),
       ...(skills.length > 0 && { mentionedSkills: skills }),
       ...(mcps.length > 0 && { mentionedMcpServers: mcps }),
@@ -756,6 +761,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     currentSelection.modelId,
     enabledToolIds,
     historyTurns,
+    goalExecutionMode,
     sessionId,
     sessionMeta?.updatedAt,
     thinkingLevel,
@@ -1570,6 +1576,12 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                       iconClassName="size-5"
                     />
                     <SystemPromptSelector
+                      buttonClassName="size-[30px] rounded-lg"
+                      iconClassName="size-5"
+                    />
+                    <GoalEvaluationSelector
+                      value={goalExecutionMode}
+                      onChange={setGoalExecutionMode}
                       buttonClassName="size-[30px] rounded-lg"
                       iconClassName="size-5"
                     />

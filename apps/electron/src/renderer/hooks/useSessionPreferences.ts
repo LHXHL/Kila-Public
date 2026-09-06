@@ -6,17 +6,17 @@
  * 通过 SessionContext 获取 sessionId，避免 props 透传。
  */
 
-import * as React from 'react'
+import type { GoalExecutionMode, ThinkingLevel } from '@kila/shared'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { useSessionId, useSessionIdOptional } from '@/contexts/session-context'
+import * as React from 'react'
+import { sessionsAtom } from '@/atoms/session-atoms'
+import type { ContextLengthValue, SelectedModel } from '@/atoms/session-preference-atoms'
 import {
   selectedModelAtom,
   sessionModelPreferencesAtom,
   sessionParallelModePreferencesAtom,
 } from '@/atoms/session-preference-atoms'
-import type { SelectedModel, ContextLengthValue } from '@/atoms/session-preference-atoms'
-import type { ThinkingLevel } from '@kila/shared'
-import { sessionsAtom } from '@/atoms/session-atoms'
+import { useSessionId, useSessionIdOptional } from '@/contexts/session-context'
 
 // ===== 通用 Map 读写辅助 =====
 
@@ -161,6 +161,36 @@ export function useSessionThinkingEnabledPreference(): [boolean, (v: boolean) =>
       setThinkingLevel(enabled ? 'medium' : 'none')
     }, [setThinkingLevel]),
   ]
+}
+
+/** 每个 session 独立且持久化的目标执行模式。 */
+export function useSessionGoalExecutionModePreference(): [GoalExecutionMode, (v: GoalExecutionMode) => void] {
+  const sessionId = useSessionId()
+  const sessions = useAtomValue(sessionsAtom)
+  const setSessions = useSetAtom(sessionsAtom)
+  const session = sessions.find((item) => item.id === sessionId) ?? null
+  const value = session?.goalExecutionMode ?? 'auto'
+
+  const setter = React.useCallback((nextValue: GoalExecutionMode) => {
+    setSessions((prev) => prev.map((item) => (
+      item.id === sessionId
+        ? { ...item, goalExecutionMode: nextValue, updatedAt: Date.now() }
+        : item
+    )))
+
+    window.electronAPI.updateSessionMeta(sessionId, {
+      goalExecutionMode: nextValue,
+    }).then((updated) => {
+      setSessions((prev) => prev.map((item) => (
+        item.id === updated.id ? updated : item
+      )))
+    }).catch((error) => {
+      console.error('[useSessionGoalExecutionModePreference] 更新目标执行模式失败:', error)
+      window.electronAPI.listSessions().then(setSessions).catch(console.error)
+    })
+  }, [sessionId, setSessions])
+
+  return [value, setter]
 }
 
 /** 每个 session独立的并排模式 */

@@ -6,37 +6,36 @@
 
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import type { AgentSendInput, KilaPermissionMode, MemoryRunTrace, PermissionRequest, AskUserRequest } from '@kila/shared'
+import type { AgentSendInput, AskUserRequest, KilaPermissionMode, MemoryRunTrace, PermissionRequest } from '@kila/shared'
 import { buildSessionContextSnapshot, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { buildPromptImages, splitAttachmentsForPiPrompt } from './adapters/pi-history-converter'
-import type { AgentEventBus } from './agent-event-bus'
-import { decryptApiKey, getChannelById } from './channel-manager'
-import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
-import { resolveShell } from './shell-resolver'
-import { buildShellPromptSection } from './shell-resolution'
-import { getSettings } from './settings-service'
-import { buildDynamicContextProjection, buildSystemPromptAppend } from './agent-prompt-builder'
-import { permissionService, type PermissionResolution } from './agent-permission-service'
 import { askUserService } from './agent-ask-user-service'
+import type { AgentEventBus } from './agent-event-bus'
 import { appendAgentMessage, getAgentMessages } from './agent-message-store'
-import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
+import { type PermissionResolution, permissionService } from './agent-permission-service'
+import { buildDynamicContextProjection, buildGoalEvaluationPrompt, buildSystemPromptAppend } from './agent-prompt-builder'
 import {
-  collectReservedToolNames,
+  type AnyAgentTool,
   canonicalizeAgentTools,
+  collectReservedToolNames,
   mergeAgentToolsWithSource,
   normalizeToolNameKey,
-  type AnyAgentTool,
 } from './agent-tool-names'
+import { decryptApiKey, getChannelById } from './channel-manager'
 import { resolveChannelModel } from './channel-model-resolution'
-import { findProviderDbModel, lookupProviderDbModel } from './provider-db-loader'
-import { createTrackedBashOperations } from './process-registry'
+import { loadExternalEsm } from './external-esm-loader'
+import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
+import { createLogger } from './logger'
 import { memoryLifecycleManager } from './memory/lifecycle-manager'
 import { composeAgentPrompt } from './memory/prompt-compose'
+import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
+import { createTrackedBashOperations } from './process-registry'
+import { findProviderDbModel, lookupProviderDbModel } from './provider-db-loader'
+import { getSettings } from './settings-service'
+import { buildShellPromptSection } from './shell-resolution'
+import { resolveShell } from './shell-resolver'
 
-
-import { createLogger } from './logger'
-import { loadExternalEsm } from './external-esm-loader'
 const log = createLogger('Agent 编排')
 
 type PiCodingAgentModule = typeof import('@earendil-works/pi-coding-agent')
@@ -236,6 +235,7 @@ export async function buildAgentRunContext(
     thinkingLevel: inputThinkingLevel,
     historyTurns,
     enabledToolIds,
+    goalExecutionMode,
     systemMessage,
     systemPromptId,
   } = input
@@ -347,7 +347,7 @@ export async function buildAgentRunContext(
   const finalPrompt = composeAgentPrompt(
     dynamicProjection.perMessageContext,
     memoryContext.text,
-    enrichedMessage,
+    `${buildGoalEvaluationPrompt(goalExecutionMode)}\n\n${enrichedMessage}`,
   )
 
   const thinkingLevel = resolveThinkingLevel({

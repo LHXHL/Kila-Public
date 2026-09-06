@@ -10,15 +10,15 @@ import type {
   SessionBranchFromMessageInput,
   SessionMeta,
 } from '@kila/shared'
+import { clearPiSessionState } from './pi-session-state'
+import { cloneSessionMessageAttachments } from './session-attachment-clone'
 import {
   createSession,
-  getSessionMeta,
   getSessionMessages,
+  getSessionMeta,
   saveSessionMessages,
   updateSessionMeta,
 } from './session-manager'
-import { cloneSessionMessageAttachments } from './session-attachment-clone'
-import { clearPiSessionState } from './pi-session-state'
 
 const DEFAULT_SESSION_TITLE = '新会话'
 
@@ -68,6 +68,7 @@ export function branchSessionFromMessage(
     thinkingLevel: sourceSession.thinkingLevel,
     historyTurns: sourceSession.historyTurns,
     enabledToolIds: sourceSession.enabledToolIds,
+    goalExecutionMode: sourceSession.goalExecutionMode,
     systemPromptId: sourceSession.systemPromptId,
     parentSessionId: sourceSession.id,
     branchPointMessageId: input.messageId,

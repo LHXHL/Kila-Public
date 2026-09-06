@@ -4,8 +4,8 @@
  * 包含 Agent runtime 集成所需的事件类型、会话管理、消息持久化和 IPC 通道常量。
  */
 
-import type { FileAttachment } from './attachment'
 import type { SessionContextSnapshot } from '../utils/estimate-session-context'
+import type { FileAttachment } from './attachment'
 
 // ===== Agent 工作区 =====
 
@@ -575,6 +575,13 @@ export interface AgentRunLimits {
   maxBudgetUsd?: number
 }
 
+/**
+ * 目标执行模式。
+ * auto 由 Agent 根据当前目标判断，其余值由用户显式指定。
+ */
+export const GOAL_EXECUTION_MODES = ['auto', 'definite', 'exploratory', 'incremental'] as const
+export type GoalExecutionMode = typeof GOAL_EXECUTION_MODES[number]
+
 export type AgentRunLimitKind = 'max_turns' | 'max_tool_calls' | 'max_duration_ms' | 'max_budget_usd'
 
 /** Agent runtime 实际命中的运行边界。 */
@@ -621,6 +628,8 @@ export interface AgentSendInput {
   historyTurns?: number | 'infinite'
   /** 本次消息允许的工具白名单 */
   enabledToolIds?: string[]
+  /** 目标评估后的执行模式 */
+  goalExecutionMode?: GoalExecutionMode
   /** 覆盖本次消息的系统提示词 */
   systemMessage?: string
   /** 会话级覆盖的自定义 prompt ID（优先于全局 activePromptId） */

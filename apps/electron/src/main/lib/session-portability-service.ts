@@ -1,5 +1,4 @@
-import { dialog, BrowserWindow } from 'electron'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import type {
   FileAttachment,
@@ -10,10 +9,11 @@ import type {
   SessionMessage,
   SessionMeta,
 } from '@kila/shared'
-import { resolveAttachmentPath } from './config-paths'
+import { BrowserWindow, dialog } from 'electron'
 import { saveAttachment } from './attachment-service'
-import { createSession, getSessionMessages, getSessionMeta, saveSessionMessages, updateSessionMeta } from './session-manager'
+import { resolveAttachmentPath } from './config-paths'
 import { listSessionPinnedWidgets, pinSessionWidget } from './session-board-manager'
+import { createSession, getSessionMessages, getSessionMeta, saveSessionMessages, updateSessionMeta } from './session-manager'
 
 interface SessionExportManifest {
   format: 'kila-session-export'
@@ -276,6 +276,7 @@ export async function importSessionBundle(input: SessionImportInput = {}): Promi
     thinkingLevel: exportedSession.thinkingLevel,
     historyTurns: exportedSession.historyTurns,
     enabledToolIds: exportedSession.enabledToolIds,
+    goalExecutionMode: exportedSession.goalExecutionMode,
   })
   updateSessionMeta(imported.id, {
     messageSource: exportedSession.messageSource,

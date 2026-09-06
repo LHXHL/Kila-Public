@@ -9,16 +9,34 @@
  * - 易变 per-message 上下文（buildDynamicContext）：只保留时钟信息，避免重复发送稳定配置
  */
 
-import type { KilaPermissionMode } from '@kila/shared'
-import { getGlobalAgentMcpConfig, getGlobalAgentSkills } from './global-agent-config-manager'
+import type { GoalExecutionMode, KilaPermissionMode } from '@kila/shared'
 import { getConfigDir, getGlobalAgentSkillsDir } from './config-paths'
+import { buildGenerativeUiPromptAppend } from './generative-ui/prompt'
+import { getGlobalAgentMcpConfig, getGlobalAgentSkills } from './global-agent-config-manager'
 import { getPersonalityState } from './personality-manager'
 import { getUserProfile } from './user-profile-service'
-import { buildGenerativeUiPromptAppend } from './generative-ui/prompt'
-import { getScheduledTaskRunContext } from './scheduled-task-context'
-import { memoryProviderManager } from './memory/provider-manager'
-import { getActiveSystemPrompt, getSystemPromptById } from './system-prompt-service'
+
+/** 为当前目标生成不改写用户正文的执行策略约束。 */
+export function buildGoalEvaluationPrompt(mode: GoalExecutionMode = 'auto'): string {
+  const sharedRule = '目标模式只约束推进方式，不得覆盖用户的明确要求、权限边界或安全规则。'
+
+  if (mode === 'definite') {
+    return `<goal_execution mode="definite">\n目标具有清晰的完成标准。直接围绕验收结果推进，补齐必要实现并完成验证；非必要时不要停留在方案讨论。${sharedRule}\n</goal_execution>`
+  }
+  if (mode === 'exploratory') {
+    return `<goal_execution mode="exploratory">\n目标是开放式探索。先调查现状、验证关键假设并比较可行路径，再给出有证据支撑的结论；不要把未经验证的方向当成确定方案。${sharedRule}\n</goal_execution>`
+  }
+  if (mode === 'incremental') {
+    return `<goal_execution mode="incremental">\n目标适合多阶段交付。拆成可验证的里程碑，按顺序完成当前阶段并检查结果，同时保持整体目标和后续阶段连贯。${sharedRule}\n</goal_execution>`
+  }
+
+  return `<goal_execution mode="auto">\n先根据当前目标静默判断最合适的执行模式：完成标准清晰时使用 definite；需要调查、比较或澄清未知项时使用 exploratory；任务跨度较大且适合分阶段交付时使用 incremental。判断后直接按该模式推进，无需仅为报告模式而打断用户。${sharedRule}\n</goal_execution>`
+}
+
 import { isCuaDriverEnabled } from './cua-driver-service'
+import { memoryProviderManager } from './memory/provider-manager'
+import { getScheduledTaskRunContext } from './scheduled-task-context'
+import { getActiveSystemPrompt, getSystemPromptById } from './system-prompt-service'
 
 // ===== 静态 System Prompt =====
 

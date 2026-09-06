@@ -62,6 +62,32 @@
       "readAttachmentsFailed": "读取原消息附件失败"
     },
 
+    "goalEvaluation": {
+      "title": "目标评估",
+      "description": "选择 Agent 如何判断并推进当前目标",
+      "auto": {
+        "label": "自动检测（推荐）",
+        "description": "系统会根据目标描述自动判断最适合的执行模式"
+      },
+      "manual": {
+        "label": "手动指定模式"
+      },
+      "modes": {
+        "definite": {
+          "label": "Definite - 明确目标",
+          "description": "有清晰的完成标准（如“实现登录功能”）"
+        },
+        "exploratory": {
+          "label": "Exploratory - 探索模式",
+          "description": "开放式探索（如“扫描漏洞”、“性能优化”）"
+        },
+        "incremental": {
+          "label": "Incremental - 增量模式",
+          "description": "多阶段渐进（如“开发完整系统”）"
+        }
+      }
+    },
+
     "message": {
       "listLabel": "消息列表",
       "loadingTranscript": "正在加载会话记录…",

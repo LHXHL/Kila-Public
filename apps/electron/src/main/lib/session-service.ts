@@ -4,12 +4,10 @@
  * 单一 Session 只走 Agent runtime。
  */
 
-import type { WebContents } from 'electron'
-import { AGENT_IPC_CHANNELS, SESSION_IPC_CHANNELS, buildSessionTurnReplayPlan } from '@kila/shared'
 import type {
-  AgentSendInput,
   AgentEvent,
   AgentEventUsage,
+  AgentSendInput,
   SessionBranchComparison,
   SessionBranchFromMessageInput,
   SessionEditTurnInput,
@@ -23,19 +21,19 @@ import type {
   SessionTitleUpdatedPayload,
   SessionUpdatedPayload,
 } from '@kila/shared'
-import { createSession, getSessionMeta, getSessionMessages, saveSessionMessages, updateSessionMeta } from './session-manager'
-import { ensureSessionProjectReady, lockSessionProject } from './session-project-manager'
+import { AGENT_IPC_CHANNELS, buildSessionTurnReplayPlan, SESSION_IPC_CHANNELS } from '@kila/shared'
+import type { WebContents } from 'electron'
+import { switchesActiveRuntimeSelection } from './agent-runtime-selection'
 import { getChannelById } from './channel-manager'
-import { getTokenUsageStats, recordTokenUsageFromCompleteEvent } from './token-usage-service'
+import { createLogger } from './logger'
 import { memoryLifecycleManager } from './memory/lifecycle-manager'
+import { clearPiSessionState } from './pi-session-state'
+import { cloneSessionMessageAttachments } from './session-attachment-clone'
+import { createSession, getSessionMessages, getSessionMeta, saveSessionMessages, updateSessionMeta } from './session-manager'
+import { ensureSessionProjectReady, lockSessionProject } from './session-project-manager'
 import { emitSessionRuntimeRunStart, emitSessionRuntimeStream } from './session-runtime-observers'
 import { getSettings } from './settings-service'
-import { cloneSessionMessageAttachments } from './session-attachment-clone'
-import { clearPiSessionState } from './pi-session-state'
-import { switchesActiveRuntimeSelection } from './agent-runtime-selection'
-
-
-import { createLogger } from './logger'
+import { getTokenUsageStats, recordTokenUsageFromCompleteEvent } from './token-usage-service'
 
 const log = createLogger('SessionService')
 
@@ -229,6 +227,7 @@ async function defaultRunAgentRuntime({ session, input, webContents }: RuntimeHa
     autoGenerateTitle: false,
     historyTurns: input.historyTurns ?? session.historyTurns,
     enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
+    goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
     systemMessage: input.systemMessage,
     systemPromptId: session.systemPromptId,
     ...(extendedInput.extraTools ? { extraTools: extendedInput.extraTools } as unknown as AgentSendInput : {}),
@@ -514,6 +513,7 @@ export class SessionService {
       thinkingLevel: session.thinkingLevel,
       historyTurns: session.historyTurns,
       enabledToolIds: session.enabledToolIds,
+      goalExecutionMode: session.goalExecutionMode,
       additionalDirectories: session.attachedDirectories,
       skipAutoTitle: true,
     }, webContents)
@@ -554,6 +554,7 @@ export class SessionService {
       thinkingLevel: session.thinkingLevel,
       historyTurns: session.historyTurns,
       enabledToolIds: session.enabledToolIds,
+      goalExecutionMode: session.goalExecutionMode,
       additionalDirectories: session.attachedDirectories,
     }, webContents)
   }
@@ -611,6 +612,7 @@ export class SessionService {
     const nextModelId = hasStaleModelSelectionInput ? undefined : input.modelId
     const nextThinkingLevel = input.thinkingLevel
     const nextHistoryTurns = input.historyTurns
+    const nextGoalExecutionMode = input.goalExecutionMode
 
     const runtimeActive = this.deps.isAgentRuntimeActive
       ? await this.deps.isAgentRuntimeActive(session.id)
@@ -629,6 +631,7 @@ export class SessionService {
     assignIfChanged('thinkingLevel', nextThinkingLevel)
     assignIfChanged('historyTurns', nextHistoryTurns)
     assignIfChanged('enabledToolIds', input.enabledToolIds)
+    assignIfChanged('goalExecutionMode', nextGoalExecutionMode)
     assignIfChanged('attachedDirectories', input.additionalDirectories)
     assignIfChanged('messageSource', input.messageSource)
     assignIfChanged('messageSourceLabel', input.messageSourceLabel)
@@ -654,6 +657,7 @@ export class SessionService {
       thinkingLevel: input.thinkingLevel ?? resolvedSession.thinkingLevel,
       historyTurns: input.historyTurns ?? resolvedSession.historyTurns,
       enabledToolIds: input.enabledToolIds ?? resolvedSession.enabledToolIds,
+      goalExecutionMode: input.goalExecutionMode ?? resolvedSession.goalExecutionMode,
       additionalDirectories: input.additionalDirectories ?? resolvedSession.attachedDirectories,
     }
 
@@ -792,6 +796,7 @@ export function createDefaultSessionService(webContents?: WebContents): SessionS
         autoGenerateTitle: false,
         historyTurns: input.historyTurns ?? session.historyTurns,
         enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
+        goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
         systemMessage: input.systemMessage,
         systemPromptId: session.systemPromptId,
       })
@@ -819,6 +824,7 @@ export function createDefaultSessionService(webContents?: WebContents): SessionS
         autoGenerateTitle: false,
         historyTurns: input.historyTurns ?? session.historyTurns,
         enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
+        goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
         systemMessage: input.systemMessage,
         systemPromptId: session.systemPromptId,
       })
@@ -906,7 +912,7 @@ export async function rewindSession(input: SessionRewindInput): Promise<SessionM
 }
 
 // Session 分叉与分支比较已拆分至 session-branch.ts，此处再导出保持既有导入不变。
-export { branchSessionFromMessage, compareSessionBranch, type BranchSessionDeps } from './session-branch'
+export { type BranchSessionDeps, branchSessionFromMessage, compareSessionBranch } from './session-branch'
 
 
 export async function generateSessionTitleForSession(
