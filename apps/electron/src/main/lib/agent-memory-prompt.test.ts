@@ -3,6 +3,7 @@ import {
   buildDynamicContextProjection,
   buildGoalEvaluationPrompt,
   buildSystemPromptAppend,
+  evaluateGoalExecution,
 } from './agent-prompt-builder'
 import { composeAgentPrompt } from './memory/prompt-compose'
 
@@ -61,5 +62,23 @@ describe('Agent memory prompt assembly', () => {
     expect(prompt).toContain('mode="definite"')
     expect(prompt).toContain('验收结果')
     expect(prompt).not.toContain('mode="exploratory"')
+  })
+
+  test('自动目标评估会把明确交付目标归类为 definite', () => {
+    expect(evaluateGoalExecution('请实现登录功能并运行测试')).toMatchObject({
+      selectedMode: 'definite',
+    })
+  })
+
+  test('自动目标评估会把调查类目标归类为 exploratory', () => {
+    expect(evaluateGoalExecution('分析当前性能瓶颈并比较可行的优化方案')).toMatchObject({
+      selectedMode: 'exploratory',
+    })
+  })
+
+  test('自动目标评估会把跨阶段目标归类为 incremental', () => {
+    expect(evaluateGoalExecution('分阶段完成整个系统迁移，先制定里程碑再逐步交付')).toMatchObject({
+      selectedMode: 'incremental',
+    })
   })
 })

@@ -16,21 +16,90 @@ import { getGlobalAgentMcpConfig, getGlobalAgentSkills } from './global-agent-co
 import { getPersonalityState } from './personality-manager'
 import { getUserProfile } from './user-profile-service'
 
+export interface GoalEvaluation {
+  requestedMode: GoalExecutionMode
+  selectedMode: Exclude<GoalExecutionMode, 'auto'>
+  reason: string
+}
+
+/**
+ * 对自动模式做一次轻量、本地的目标分类。
+ * 这不是模型推理替代品，而是确保执行策略在进入 runtime 前已经确定，
+ * 并让 UI 选择的模式真正影响本轮执行，而不只是显示在设置里。
+ */
+export function evaluateGoalExecution(
+  userMessage: string,
+  requestedMode: GoalExecutionMode = 'auto',
+): GoalEvaluation {
+  if (requestedMode !== 'auto') {
+    return {
+      requestedMode,
+      selectedMode: requestedMode,
+      reason: '用户手动指定执行模式。',
+    }
+  }
+
+  const text = userMessage.trim().toLowerCase()
+  const exploratorySignals = [
+    '调研', '探索', '研究', '调查', '分析', '比较', '排查', '扫描', '为什么', '可行方案',
+    '性能优化', '漏洞', 'benchmark', 'investigate', 'explore', 'compare', 'analy', 'audit',
+  ]
+  const incrementalSignals = [
+    '分阶段', '逐步', '里程碑', '完整系统', '整个平台', '全流程', '从零', '迁移', '重构',
+    '多个模块', '批量', '长期', 'incremental', 'milestone', 'migration', 'refactor',
+  ]
+  const definiteSignals = [
+    '实现', '修复', '添加', '增加', '删除', '更新', '改成', '解决', '编译', '运行', '部署',
+    '配置', '创建', 'implement', 'fix', 'add', 'update', 'build', 'run', 'deploy',
+  ]
+
+  const hasSignal = (signals: string[]): boolean => signals.some((signal) => text.includes(signal))
+  if (hasSignal(exploratorySignals)) {
+    return {
+      requestedMode,
+      selectedMode: 'exploratory',
+      reason: '目标包含调查、分析、比较或验证未知项的信号。',
+    }
+  }
+  if (hasSignal(incrementalSignals) || (text.length >= 180 && hasSignal(definiteSignals))) {
+    return {
+      requestedMode,
+      selectedMode: 'incremental',
+      reason: '目标跨度较大或包含分阶段、迁移、重构等多步交付信号。',
+    }
+  }
+  return {
+    requestedMode,
+    selectedMode: 'definite',
+    reason: hasSignal(definiteSignals)
+      ? '目标包含明确的实现、修复或交付动作。'
+      : '目标没有明显探索或分阶段信号，按直接交付处理。',
+  }
+}
+
 /** 为当前目标生成不改写用户正文的执行策略约束。 */
-export function buildGoalEvaluationPrompt(mode: GoalExecutionMode = 'auto'): string {
+export function buildGoalEvaluationPrompt(
+  mode: GoalExecutionMode = 'auto',
+  evaluation?: GoalEvaluation,
+): string {
   const sharedRule = '目标模式只约束推进方式，不得覆盖用户的明确要求、权限边界或安全规则。'
 
+  const selectedMode = evaluation?.selectedMode ?? (mode === 'auto' ? undefined : mode)
+  const evaluationLine = evaluation
+    ? `本轮目标评估结果：${evaluation.selectedMode}。${evaluation.reason}`
+    : undefined
+
   if (mode === 'definite') {
-    return `<goal_execution mode="definite">\n目标具有清晰的完成标准。直接围绕验收结果推进，补齐必要实现并完成验证；非必要时不要停留在方案讨论。${sharedRule}\n</goal_execution>`
+    return `<goal_execution mode="definite">\n${evaluationLine ?? ''}\n目标具有清晰的完成标准。直接围绕验收结果推进，补齐必要实现并完成验证；非必要时不要停留在方案讨论。${sharedRule}\n</goal_execution>`
   }
   if (mode === 'exploratory') {
-    return `<goal_execution mode="exploratory">\n目标是开放式探索。先调查现状、验证关键假设并比较可行路径，再给出有证据支撑的结论；不要把未经验证的方向当成确定方案。${sharedRule}\n</goal_execution>`
+    return `<goal_execution mode="exploratory">\n${evaluationLine ?? ''}\n目标是开放式探索。先调查现状、验证关键假设并比较可行路径，再给出有证据支撑的结论；不要把未经验证的方向当成确定方案。${sharedRule}\n</goal_execution>`
   }
   if (mode === 'incremental') {
-    return `<goal_execution mode="incremental">\n目标适合多阶段交付。拆成可验证的里程碑，按顺序完成当前阶段并检查结果，同时保持整体目标和后续阶段连贯。${sharedRule}\n</goal_execution>`
+    return `<goal_execution mode="incremental">\n${evaluationLine ?? ''}\n目标适合多阶段交付。拆成可验证的里程碑，按顺序完成当前阶段并检查结果，同时保持整体目标和后续阶段连贯。${sharedRule}\n</goal_execution>`
   }
 
-  return `<goal_execution mode="auto">\n先根据当前目标静默判断最合适的执行模式：完成标准清晰时使用 definite；需要调查、比较或澄清未知项时使用 exploratory；任务跨度较大且适合分阶段交付时使用 incremental。判断后直接按该模式推进，无需仅为报告模式而打断用户。${sharedRule}\n</goal_execution>`
+  return `<goal_execution mode="auto" selected="${selectedMode ?? 'definite'}">\n${evaluationLine ?? ''}\n先根据当前目标静默判断最合适的执行模式：完成标准清晰时使用 definite；需要调查、比较或澄清未知项时使用 exploratory；任务跨度较大且适合分阶段交付时使用 incremental。判断后直接按该模式推进，无需仅为报告模式而打断用户。${sharedRule}\n</goal_execution>`
 }
 
 import { isCuaDriverEnabled } from './cua-driver-service'

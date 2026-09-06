@@ -14,7 +14,12 @@ import { askUserService } from './agent-ask-user-service'
 import type { AgentEventBus } from './agent-event-bus'
 import { appendAgentMessage, getAgentMessages } from './agent-message-store'
 import { type PermissionResolution, permissionService } from './agent-permission-service'
-import { buildDynamicContextProjection, buildGoalEvaluationPrompt, buildSystemPromptAppend } from './agent-prompt-builder'
+import {
+  buildDynamicContextProjection,
+  buildGoalEvaluationPrompt,
+  buildSystemPromptAppend,
+  evaluateGoalExecution,
+} from './agent-prompt-builder'
 import {
   type AnyAgentTool,
   canonicalizeAgentTools,
@@ -342,12 +347,16 @@ export async function buildAgentRunContext(
     incognito: input.incognito,
   })
 
+  // 在 prompt 组装前完成一次本地目标评估，让 auto 模式产生可验证的实际策略。
+  const goalEvaluation = evaluateGoalExecution(userMessage, goalExecutionMode)
+  log.info(`[Agent 编排] 目标评估: ${goalEvaluation.selectedMode}（${goalEvaluation.reason}）`)
+
   // 稳定 runtime context 由 Pi adapter 作为一次性 snapshot 注入；每轮 prompt 只保留
   // 时钟等易变信息，避免把 MCP/Skills/工作目录重复发送并破坏 append-only 前缀。
   const finalPrompt = composeAgentPrompt(
     dynamicProjection.perMessageContext,
     memoryContext.text,
-    `${buildGoalEvaluationPrompt(goalExecutionMode)}\n\n${enrichedMessage}`,
+    `${buildGoalEvaluationPrompt(goalExecutionMode, goalEvaluation)}\n\n${enrichedMessage}`,
   )
 
   const thinkingLevel = resolveThinkingLevel({
