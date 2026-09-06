@@ -228,6 +228,7 @@ async function defaultRunAgentRuntime({ session, input, webContents }: RuntimeHa
     historyTurns: input.historyTurns ?? session.historyTurns,
     enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
     goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
+    goalEvaluationPrompt: input.goalEvaluationPrompt ?? session.goalEvaluationPrompt,
     systemMessage: input.systemMessage,
     systemPromptId: session.systemPromptId,
     ...(extendedInput.extraTools ? { extraTools: extendedInput.extraTools } as unknown as AgentSendInput : {}),
@@ -514,6 +515,7 @@ export class SessionService {
       historyTurns: session.historyTurns,
       enabledToolIds: session.enabledToolIds,
       goalExecutionMode: session.goalExecutionMode,
+      goalEvaluationPrompt: session.goalEvaluationPrompt,
       additionalDirectories: session.attachedDirectories,
       skipAutoTitle: true,
     }, webContents)
@@ -555,6 +557,7 @@ export class SessionService {
       historyTurns: session.historyTurns,
       enabledToolIds: session.enabledToolIds,
       goalExecutionMode: session.goalExecutionMode,
+      goalEvaluationPrompt: session.goalEvaluationPrompt,
       additionalDirectories: session.attachedDirectories,
     }, webContents)
   }
@@ -613,6 +616,7 @@ export class SessionService {
     const nextThinkingLevel = input.thinkingLevel
     const nextHistoryTurns = input.historyTurns
     const nextGoalExecutionMode = input.goalExecutionMode
+    const nextGoalEvaluationPrompt = input.goalEvaluationPrompt
 
     const runtimeActive = this.deps.isAgentRuntimeActive
       ? await this.deps.isAgentRuntimeActive(session.id)
@@ -632,6 +636,7 @@ export class SessionService {
     assignIfChanged('historyTurns', nextHistoryTurns)
     assignIfChanged('enabledToolIds', input.enabledToolIds)
     assignIfChanged('goalExecutionMode', nextGoalExecutionMode)
+    assignIfChanged('goalEvaluationPrompt', nextGoalEvaluationPrompt)
     assignIfChanged('attachedDirectories', input.additionalDirectories)
     assignIfChanged('messageSource', input.messageSource)
     assignIfChanged('messageSourceLabel', input.messageSourceLabel)
@@ -658,6 +663,7 @@ export class SessionService {
       historyTurns: input.historyTurns ?? resolvedSession.historyTurns,
       enabledToolIds: input.enabledToolIds ?? resolvedSession.enabledToolIds,
       goalExecutionMode: input.goalExecutionMode ?? resolvedSession.goalExecutionMode,
+      goalEvaluationPrompt: input.goalEvaluationPrompt ?? resolvedSession.goalEvaluationPrompt,
       additionalDirectories: input.additionalDirectories ?? resolvedSession.attachedDirectories,
     }
 
@@ -797,6 +803,7 @@ export function createDefaultSessionService(webContents?: WebContents): SessionS
         historyTurns: input.historyTurns ?? session.historyTurns,
         enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
         goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
+        goalEvaluationPrompt: input.goalEvaluationPrompt ?? session.goalEvaluationPrompt,
         systemMessage: input.systemMessage,
         systemPromptId: session.systemPromptId,
       })
@@ -825,6 +832,7 @@ export function createDefaultSessionService(webContents?: WebContents): SessionS
         historyTurns: input.historyTurns ?? session.historyTurns,
         enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
         goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
+        goalEvaluationPrompt: input.goalEvaluationPrompt ?? session.goalEvaluationPrompt,
         systemMessage: input.systemMessage,
         systemPromptId: session.systemPromptId,
       })

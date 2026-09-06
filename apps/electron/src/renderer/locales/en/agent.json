@@ -85,6 +85,12 @@
           "label": "Incremental",
           "description": "Progressive delivery across multiple stages"
         }
+      },
+      "custom": {
+        "title": "Custom evaluation prompt",
+        "placeholder": "For example: list acceptance criteria first, then verify each one and report risks…",
+        "hint": "Saved with this session and used as execution guidance",
+        "clear": "Clear custom prompt"
       }
     },
 

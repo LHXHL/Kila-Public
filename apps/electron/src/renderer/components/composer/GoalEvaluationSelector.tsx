@@ -1,14 +1,17 @@
 import type { GoalExecutionMode } from '@kila/shared'
-import { ChevronDown, Circle, CircleCheck, SlidersHorizontal, Sparkles, Target } from 'lucide-react'
+import { Check, ChevronDown, Circle, CircleCheck, SlidersHorizontal, Sparkles, Target, X } from 'lucide-react'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { ToolbarHoverPopover } from './ToolbarHoverPopover'
 
 interface GoalEvaluationSelectorProps {
   value: GoalExecutionMode
   onChange: (value: GoalExecutionMode) => void
+  customPrompt?: string
+  onCustomPromptChange?: (value: string) => void
   buttonClassName?: string
   iconClassName?: string
   disabled?: boolean
@@ -23,12 +26,19 @@ const MANUAL_MODES: Exclude<GoalExecutionMode, 'auto'>[] = [
 export function GoalEvaluationSelector({
   value,
   onChange,
+  customPrompt = '',
+  onCustomPromptChange,
   buttonClassName,
   iconClassName,
   disabled = false,
 }: GoalEvaluationSelectorProps): React.ReactElement {
   const { t } = useTranslation()
   const [manualExpanded, setManualExpanded] = React.useState(value !== 'auto')
+  const [draftPrompt, setDraftPrompt] = React.useState(customPrompt)
+
+  React.useEffect(() => {
+    setDraftPrompt(customPrompt)
+  }, [customPrompt])
 
   React.useEffect(() => {
     if (value !== 'auto') setManualExpanded(true)
@@ -38,6 +48,12 @@ export function GoalEvaluationSelector({
     onChange(mode)
     close()
   }, [onChange])
+
+  const commitPrompt = React.useCallback(() => {
+    onCustomPromptChange?.(draftPrompt)
+  }, [draftPrompt, onCustomPromptChange])
+
+  const hasCustomPrompt = Boolean(customPrompt.trim())
 
   return (
     <ToolbarHoverPopover
@@ -54,7 +70,7 @@ export function GoalEvaluationSelector({
           disabled={disabled}
           className={cn(
             buttonClassName ?? 'size-[30px] rounded-lg',
-            value !== 'auto'
+            (value !== 'auto' || hasCustomPrompt)
               ? 'bg-brand-soft text-brand-soft-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
             open && value === 'auto' && 'bg-muted/50',
@@ -116,6 +132,44 @@ export function GoalEvaluationSelector({
                 </div>
               )}
             </div>
+
+            {onCustomPromptChange && (
+              <div className="mt-3 border-t border-border/60 pt-3">
+                <div className="mb-1.5 px-1 text-xs font-medium text-foreground">
+                  {t('agent.goalEvaluation.custom.title')}
+                </div>
+                <Textarea
+                  value={draftPrompt}
+                  onChange={(event) => setDraftPrompt(event.target.value)}
+                  onBlur={commitPrompt}
+                  placeholder={t('agent.goalEvaluation.custom.placeholder')}
+                  aria-label={t('agent.goalEvaluation.custom.title')}
+                  className="min-h-20 resize-y text-xs leading-5"
+                  maxLength={4000}
+                />
+                <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-[11px] text-muted-foreground">
+                  <span>{t('agent.goalEvaluation.custom.hint')}</span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {draftPrompt.trim() && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 rounded-md"
+                        aria-label={t('agent.goalEvaluation.custom.clear')}
+                        onClick={() => {
+                          setDraftPrompt('')
+                          onCustomPromptChange('')
+                        }}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    )}
+                    <Check className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -92,6 +92,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   useSessionContextLengthPreference,
+  useSessionGoalEvaluationPromptPreference,
   useSessionGoalExecutionModePreference,
   useSessionThinkingLevelPreference,
 } from '@/hooks/useSessionPreferences'
@@ -207,6 +208,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const [historyTurns] = useSessionContextLengthPreference()
   const [thinkingLevel] = useSessionThinkingLevelPreference()
   const [goalExecutionMode, setGoalExecutionMode] = useSessionGoalExecutionModePreference()
+  const [goalEvaluationPrompt, setGoalEvaluationPrompt] = useSessionGoalEvaluationPromptPreference()
 
   const draftsMap = useAtomValue(agentSessionDraftsAtom)
   const widgetDraftProposalMap = useAtomValue(widgetDraftProposalMapAtom)
@@ -617,6 +619,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
         historyTurns: historyTurns,
         enabledToolIds,
         goalExecutionMode,
+        goalEvaluationPrompt,
         skipAutoTitle: true,
       }
       window.electronAPI.sendSessionMessage(input).catch((error) => {
@@ -636,7 +639,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     }, 150)
 
     return () => clearTimeout(timer)
-  }, [pendingPrompt, sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, goalExecutionMode, historyTurns, sessionMeta?.updatedAt, thinkingLevel, streaming, setInputContent, setMessages, setPendingPrompt, setStreamingStates, store, t])
+  }, [pendingPrompt, sessionId, currentSelection.channelId, currentSelection.modelId, enabledToolIds, goalExecutionMode, goalEvaluationPrompt, historyTurns, sessionMeta?.updatedAt, thinkingLevel, streaming, setInputContent, setMessages, setPendingPrompt, setStreamingStates, store, t])
 
   /** ModelSelector 选择回调 */
   const handleModelSelect = React.useCallback((option: ModelOption): void => {
@@ -751,6 +754,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       historyTurns,
       enabledToolIds,
       goalExecutionMode,
+      goalEvaluationPrompt,
       ...(attachedDirs.length > 0 && { additionalDirectories: attachedDirs }),
       ...(skills.length > 0 && { mentionedSkills: skills }),
       ...(mcps.length > 0 && { mentionedMcpServers: mcps }),
@@ -762,6 +766,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     enabledToolIds,
     historyTurns,
     goalExecutionMode,
+    goalEvaluationPrompt,
     sessionId,
     sessionMeta?.updatedAt,
     thinkingLevel,
@@ -1582,6 +1587,8 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
                     <GoalEvaluationSelector
                       value={goalExecutionMode}
                       onChange={setGoalExecutionMode}
+                      customPrompt={goalEvaluationPrompt}
+                      onCustomPromptChange={setGoalEvaluationPrompt}
                       buttonClassName="size-[30px] rounded-lg"
                       iconClassName="size-5"
                     />

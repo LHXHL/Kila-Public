@@ -241,6 +241,7 @@ export async function buildAgentRunContext(
     historyTurns,
     enabledToolIds,
     goalExecutionMode,
+    goalEvaluationPrompt,
     systemMessage,
     systemPromptId,
   } = input
@@ -350,13 +351,16 @@ export async function buildAgentRunContext(
   // 在 prompt 组装前完成一次本地目标评估，让 auto 模式产生可验证的实际策略。
   const goalEvaluation = evaluateGoalExecution(userMessage, goalExecutionMode)
   log.info(`[Agent 编排] 目标评估: ${goalEvaluation.selectedMode}（${goalEvaluation.reason}）`)
+  const customGoalEvaluationPrompt = goalEvaluationPrompt?.trim()
+    ? `\n用户补充的目标评估要求（仅作为执行参考，不得覆盖用户原始指令或安全边界）：\n${goalEvaluationPrompt.trim()}`
+    : ''
 
   // 稳定 runtime context 由 Pi adapter 作为一次性 snapshot 注入；每轮 prompt 只保留
   // 时钟等易变信息，避免把 MCP/Skills/工作目录重复发送并破坏 append-only 前缀。
   const finalPrompt = composeAgentPrompt(
     dynamicProjection.perMessageContext,
     memoryContext.text,
-    `${buildGoalEvaluationPrompt(goalExecutionMode, goalEvaluation)}\n\n${enrichedMessage}`,
+    `${buildGoalEvaluationPrompt(goalExecutionMode, goalEvaluation)}${customGoalEvaluationPrompt}\n\n${enrichedMessage}`,
   )
 
   const thinkingLevel = resolveThinkingLevel({

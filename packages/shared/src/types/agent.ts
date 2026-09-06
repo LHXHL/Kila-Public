@@ -630,6 +630,8 @@ export interface AgentSendInput {
   enabledToolIds?: string[]
   /** 目标评估后的执行模式 */
   goalExecutionMode?: GoalExecutionMode
+  /** 用户为本轮目标评估补充的自定义提示词 */
+  goalEvaluationPrompt?: string
   /** 覆盖本次消息的系统提示词 */
   systemMessage?: string
   /** 会话级覆盖的自定义 prompt ID（优先于全局 activePromptId） */

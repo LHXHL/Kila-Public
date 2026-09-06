@@ -193,6 +193,37 @@ export function useSessionGoalExecutionModePreference(): [GoalExecutionMode, (v:
   return [value, setter]
 }
 
+/** 每个 session 独立且持久化的自定义目标评估提示词。 */
+export function useSessionGoalEvaluationPromptPreference(): [string, (v: string) => void] {
+  const sessionId = useSessionId()
+  const sessions = useAtomValue(sessionsAtom)
+  const setSessions = useSetAtom(sessionsAtom)
+  const session = sessions.find((item) => item.id === sessionId) ?? null
+  const value = session?.goalEvaluationPrompt ?? ''
+
+  const setter = React.useCallback((nextValue: string) => {
+    const normalized = nextValue.trim()
+    setSessions((prev) => prev.map((item) => (
+      item.id === sessionId
+        ? { ...item, goalEvaluationPrompt: normalized || undefined, updatedAt: Date.now() }
+        : item
+    )))
+
+    window.electronAPI.updateSessionMeta(sessionId, {
+      goalEvaluationPrompt: normalized || undefined,
+    }).then((updated) => {
+      setSessions((prev) => prev.map((item) => (
+        item.id === updated.id ? updated : item
+      )))
+    }).catch((error) => {
+      console.error('[useSessionGoalEvaluationPromptPreference] 更新目标评估提示词失败:', error)
+      window.electronAPI.listSessions().then(setSessions).catch(console.error)
+    })
+  }, [sessionId, setSessions])
+
+  return [value, setter]
+}
+
 /** 每个 session独立的并排模式 */
 export function useSessionParallelModePreference(): [boolean, (v: boolean) => void] {
   const sessionId = useSessionId()

@@ -85,6 +85,12 @@
           "label": "Incremental - 增量模式",
           "description": "多阶段渐进（如“开发完整系统”）"
         }
+      },
+      "custom": {
+        "title": "自定义评估提示词",
+        "placeholder": "例如：先列出验收标准，完成后逐项检查并报告风险……",
+        "hint": "会随当前 Session 保存，并作为本轮执行参考",
+        "clear": "清空自定义提示词"
       }
     },
 
