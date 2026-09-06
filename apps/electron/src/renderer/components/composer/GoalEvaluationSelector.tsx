@@ -59,7 +59,7 @@ export function GoalEvaluationSelector({
     <ToolbarHoverPopover
       disabled={disabled}
       align="start"
-      contentClassName="w-[min(22rem,calc(100vw-1.5rem))] p-0"
+      contentClassName="max-h-[min(70vh,38rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto p-0"
       trigger={({ open, triggerProps }) => (
         <Button
           {...triggerProps}
