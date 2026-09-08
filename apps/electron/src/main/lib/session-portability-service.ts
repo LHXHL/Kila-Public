@@ -277,6 +277,7 @@ export async function importSessionBundle(input: SessionImportInput = {}): Promi
     historyTurns: exportedSession.historyTurns,
     enabledToolIds: exportedSession.enabledToolIds,
     goalExecutionMode: exportedSession.goalExecutionMode,
+    goalEvaluationPrompt: exportedSession.goalEvaluationPrompt,
   })
   updateSessionMeta(imported.id, {
     messageSource: exportedSession.messageSource,

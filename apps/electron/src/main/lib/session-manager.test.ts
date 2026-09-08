@@ -18,6 +18,7 @@ import {
   getSessionMessagesPage,
   listSessions,
   saveSessionMessages,
+  updateSessionMeta,
 } from './session-manager'
 
 interface TestContext {
@@ -85,6 +86,8 @@ describe('session manager persistence', () => {
       thinkingLevel: 'high',
       historyTurns: 12,
       enabledToolIds: ['read', 'write'],
+      goalExecutionMode: 'incremental',
+      goalEvaluationPrompt: '每阶段完成后验证验收标准',
       systemPromptId: 'prompt-a',
     }, context.deps)
 
@@ -111,8 +114,23 @@ describe('session manager persistence', () => {
       thinkingLevel: 'high',
       historyTurns: 12,
       enabledToolIds: ['read', 'write'],
+      goalExecutionMode: 'incremental',
+      goalEvaluationPrompt: '每阶段完成后验证验收标准',
       systemPromptId: 'prompt-a',
     })
+  })
+
+  test('Given 已保存自定义目标提示词，When 提交空字符串清空，Then 磁盘和读取结果都不再包含旧提示词', () => {
+    const context = createTestContext()
+    const created = createSession({ projectPath: context.projectPath }, context.deps)
+    updateSessionMeta(created.id, { goalEvaluationPrompt: '旧提示词' }, context.deps)
+
+    const updated = updateSessionMeta(created.id, { goalEvaluationPrompt: '' }, context.deps)
+
+    expect(updated.goalEvaluationPrompt).toBe('')
+    expect(listSessions(context.deps)[0]?.goalEvaluationPrompt).toBe('')
+    const persisted = JSON.parse(readFileSync(context.indexPath, 'utf-8'))
+    expect(persisted.sessions[0].goalEvaluationPrompt).toBe('')
   })
 
   test('Given 主索引损坏且备份有效，When 读取列表，Then 从备份恢复主索引', () => {

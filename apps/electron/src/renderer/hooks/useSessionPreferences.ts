@@ -205,12 +205,12 @@ export function useSessionGoalEvaluationPromptPreference(): [string, (v: string)
     const normalized = nextValue.trim()
     setSessions((prev) => prev.map((item) => (
       item.id === sessionId
-        ? { ...item, goalEvaluationPrompt: normalized || undefined, updatedAt: Date.now() }
+        ? { ...item, goalEvaluationPrompt: normalized, updatedAt: Date.now() }
         : item
     )))
 
     window.electronAPI.updateSessionMeta(sessionId, {
-      goalEvaluationPrompt: normalized || undefined,
+      goalEvaluationPrompt: normalized,
     }).then((updated) => {
       setSessions((prev) => prev.map((item) => (
         item.id === updated.id ? updated : item

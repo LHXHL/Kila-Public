@@ -35,7 +35,7 @@
     },
     "apps/electron": {
       "name": "@kila/electron",
-      "version": "1.1.41",
+      "version": "1.1.43",
       "dependencies": {
         "electron-updater": "^6.7.3",
         "officeparser": "4.2.0",
@@ -140,7 +140,7 @@
     },
     "packages/shared": {
       "name": "@kila/shared",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "devDependencies": {
         "typescript": "^5.0.0",
       },

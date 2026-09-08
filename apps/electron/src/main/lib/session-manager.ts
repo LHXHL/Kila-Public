@@ -398,6 +398,7 @@ export function createSession(input?: SessionCreateInput, deps?: SessionManagerD
     historyTurns: input?.historyTurns,
     enabledToolIds: input?.enabledToolIds,
     goalExecutionMode: input?.goalExecutionMode ?? 'auto',
+    goalEvaluationPrompt: input?.goalEvaluationPrompt,
     systemPromptId: input?.systemPromptId,
     createdAt: now,
     updatedAt: now,

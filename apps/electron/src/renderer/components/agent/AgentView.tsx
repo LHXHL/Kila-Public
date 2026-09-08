@@ -14,12 +14,13 @@
  */
 
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai'
-import { Clock3, CornerDownLeft, Eye, EyeOff, FolderPlus, Paperclip, Settings, Sparkles, Square, X } from 'lucide-react'
+import { Clock3, CornerDownLeft, FolderPlus, Paperclip, Settings, Sparkles, Square, X } from 'lucide-react'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { AttachmentPreviewItem } from '@/components/composer/AttachmentPreviewItem'
 import { ContextUsageIndicator } from '@/components/composer/ContextUsageIndicator'
+import { IncognitoToggle } from '@/components/composer/IncognitoToggle'
 import { GoalEvaluationSelector } from '@/components/composer/GoalEvaluationSelector'
 import { ModelSelector } from '@/components/composer/ModelSelector'
 import { SkillTriggerButton } from '@/components/composer/SkillTriggerButton'
@@ -111,35 +112,6 @@ interface EditingTurnState {
   messageId: string
   originalDraft: string
   originalPending: PendingComposerSnapshot
-}
-
-/** 隐身模式切换按钮 — 紧贴发送按钮左侧 */
-function IncognitoToggle(): React.ReactElement {
-  const { t } = useTranslation()
-  const [incognitoMode, setIncognitoMode] = useAtom(incognitoModeAtom)
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'size-[30px] rounded-lg transition-colors',
-            incognitoMode
-              ? 'text-primary bg-primary/10 hover:bg-primary/15'
-              : 'text-foreground/30 hover:text-foreground/60'
-          )}
-          onClick={() => setIncognitoMode((prev) => !prev)}
-        >
-          {incognitoMode ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        <p>{incognitoMode ? t('agent.composer.incognitoOn') : t('agent.composer.incognitoOff')}</p>
-      </TooltipContent>
-    </Tooltip>
-  )
 }
 
 export function AgentView({ sessionId }: { sessionId: string }): React.ReactElement {

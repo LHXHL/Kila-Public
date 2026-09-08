@@ -69,6 +69,7 @@ export function branchSessionFromMessage(
     historyTurns: sourceSession.historyTurns,
     enabledToolIds: sourceSession.enabledToolIds,
     goalExecutionMode: sourceSession.goalExecutionMode,
+    goalEvaluationPrompt: sourceSession.goalEvaluationPrompt,
     systemPromptId: sourceSession.systemPromptId,
     parentSessionId: sourceSession.id,
     branchPointMessageId: input.messageId,
