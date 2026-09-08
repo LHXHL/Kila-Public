@@ -4,12 +4,10 @@
  * 单一 Session 只走 Agent runtime。
  */
 
-import type { WebContents } from 'electron'
-import { AGENT_IPC_CHANNELS, SESSION_IPC_CHANNELS, buildSessionTurnReplayPlan } from '@kila/shared'
 import type {
-  AgentSendInput,
   AgentEvent,
   AgentEventUsage,
+  AgentSendInput,
   SessionBranchComparison,
   SessionBranchFromMessageInput,
   SessionEditTurnInput,
@@ -23,19 +21,22 @@ import type {
   SessionTitleUpdatedPayload,
   SessionUpdatedPayload,
 } from '@kila/shared'
-import { createSession, getSessionMeta, getSessionMessages, saveSessionMessages, updateSessionMeta } from './session-manager'
-import { ensureSessionProjectReady, lockSessionProject } from './session-project-manager'
-import { getChannelById } from './channel-manager'
-import { getTokenUsageStats, recordTokenUsageFromCompleteEvent } from './token-usage-service'
-import { memoryLifecycleManager } from './memory/lifecycle-manager'
-import { emitSessionRuntimeRunStart, emitSessionRuntimeStream } from './session-runtime-observers'
-import { getSettings } from './settings-service'
-import { cloneSessionMessageAttachments } from './session-attachment-clone'
-import { clearPiSessionState } from './pi-session-state'
+import { AGENT_IPC_CHANNELS, buildSessionTurnReplayPlan, SESSION_IPC_CHANNELS } from '@kila/shared'
+import type { WebContents } from 'electron'
 import { switchesActiveRuntimeSelection } from './agent-runtime-selection'
-
-
+import { getChannelById } from './channel-manager'
 import { createLogger } from './logger'
+import { memoryLifecycleManager } from './memory/lifecycle-manager'
+import { clearPiSessionState } from './pi-session-state'
+import { cloneSessionMessageAttachments } from './session-attachment-clone'
+import { createSession, getSessionMessages, getSessionMeta, saveSessionMessages, updateSessionMeta } from './session-manager'
+import { ensureSessionProjectReady, lockSessionProject } from './session-project-manager'
+import { createSessionRuntimeBridge, sendUnifiedSessionError } from './session-runtime-bridge'
+import { emitSessionRuntimeRunStart } from './session-runtime-observers'
+import { getSettings } from './settings-service'
+import { getTokenUsageStats, recordTokenUsageFromCompleteEvent } from './token-usage-service'
+
+export { createSessionRuntimeBridge } from './session-runtime-bridge'
 
 const log = createLogger('SessionService')
 
@@ -122,74 +123,6 @@ function findFirstTitleCandidate(messages: SessionMessage[]): SessionMessage | n
   return null
 }
 
-function sendUnifiedSessionError(
-  webContents: WebContents,
-  sessionId: string,
-  error: string,
-): void {
-  webContents.send(SESSION_IPC_CHANNELS.STREAM_ERROR, {
-    sessionId,
-    error,
-  })
-}
-
-export function createSessionRuntimeBridge(webContents: WebContents): WebContents {
-  return {
-    send: (channel: string, payload: unknown) => {
-      if (webContents.isDestroyed()) return
-
-      webContents.send(channel, payload)
-      emitSessionRuntimeStream(channel, payload)
-
-      switch (channel) {
-        case AGENT_IPC_CHANNELS.STREAM_EVENT: {
-          const event = payload as { sessionId: string; event: unknown }
-          webContents.send(SESSION_IPC_CHANNELS.STREAM_EVENT, {
-            type: 'agent_event',
-            sessionId: event.sessionId,
-            event: event.event,
-          })
-          return
-        }
-        case AGENT_IPC_CHANNELS.STREAM_COMPLETE: {
-          const event = payload as { sessionId: string; outcome?: 'success' | 'stopped' | 'error' }
-          webContents.send(SESSION_IPC_CHANNELS.STREAM_COMPLETE, {
-            sessionId: event.sessionId,
-            outcome: event.outcome,
-          })
-          webContents.send(SESSION_IPC_CHANNELS.UPDATED, {
-            sessionId: event.sessionId,
-            reason: 'updated',
-          })
-          return
-        }
-        case AGENT_IPC_CHANNELS.STREAM_ERROR: {
-          const event = payload as { sessionId: string; error: string }
-          sendUnifiedSessionError(webContents, event.sessionId, event.error)
-          webContents.send(SESSION_IPC_CHANNELS.UPDATED, {
-            sessionId: event.sessionId,
-            reason: 'updated',
-          })
-          return
-        }
-        case AGENT_IPC_CHANNELS.TITLE_UPDATED: {
-          const event = payload as { sessionId: string; title: string }
-          webContents.send(SESSION_IPC_CHANNELS.TITLE_UPDATED, {
-            sessionId: event.sessionId,
-            title: event.title,
-          })
-          webContents.send(SESSION_IPC_CHANNELS.UPDATED, {
-            sessionId: event.sessionId,
-            reason: 'updated',
-          })
-          return
-        }
-      }
-    },
-    isDestroyed: () => webContents.isDestroyed(),
-  } as WebContents
-}
-
 async function defaultRunAgentRuntime({ session, input, webContents }: RuntimeHandlerArgs): Promise<void> {
   const channelId = input.channelId ?? session.channelId
   const modelId = input.modelId ?? session.modelId
@@ -229,6 +162,8 @@ async function defaultRunAgentRuntime({ session, input, webContents }: RuntimeHa
     autoGenerateTitle: false,
     historyTurns: input.historyTurns ?? session.historyTurns,
     enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
+    goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
+    goalEvaluationPrompt: input.goalEvaluationPrompt ?? session.goalEvaluationPrompt,
     systemMessage: input.systemMessage,
     systemPromptId: session.systemPromptId,
     ...(extendedInput.extraTools ? { extraTools: extendedInput.extraTools } as unknown as AgentSendInput : {}),
@@ -514,6 +449,8 @@ export class SessionService {
       thinkingLevel: session.thinkingLevel,
       historyTurns: session.historyTurns,
       enabledToolIds: session.enabledToolIds,
+      goalExecutionMode: session.goalExecutionMode,
+      goalEvaluationPrompt: session.goalEvaluationPrompt,
       additionalDirectories: session.attachedDirectories,
       skipAutoTitle: true,
     }, webContents)
@@ -554,6 +491,8 @@ export class SessionService {
       thinkingLevel: session.thinkingLevel,
       historyTurns: session.historyTurns,
       enabledToolIds: session.enabledToolIds,
+      goalExecutionMode: session.goalExecutionMode,
+      goalEvaluationPrompt: session.goalEvaluationPrompt,
       additionalDirectories: session.attachedDirectories,
     }, webContents)
   }
@@ -611,6 +550,8 @@ export class SessionService {
     const nextModelId = hasStaleModelSelectionInput ? undefined : input.modelId
     const nextThinkingLevel = input.thinkingLevel
     const nextHistoryTurns = input.historyTurns
+    const nextGoalExecutionMode = input.goalExecutionMode
+    const nextGoalEvaluationPrompt = input.goalEvaluationPrompt
 
     const runtimeActive = this.deps.isAgentRuntimeActive
       ? await this.deps.isAgentRuntimeActive(session.id)
@@ -629,6 +570,8 @@ export class SessionService {
     assignIfChanged('thinkingLevel', nextThinkingLevel)
     assignIfChanged('historyTurns', nextHistoryTurns)
     assignIfChanged('enabledToolIds', input.enabledToolIds)
+    assignIfChanged('goalExecutionMode', nextGoalExecutionMode)
+    assignIfChanged('goalEvaluationPrompt', nextGoalEvaluationPrompt)
     assignIfChanged('attachedDirectories', input.additionalDirectories)
     assignIfChanged('messageSource', input.messageSource)
     assignIfChanged('messageSourceLabel', input.messageSourceLabel)
@@ -654,6 +597,8 @@ export class SessionService {
       thinkingLevel: input.thinkingLevel ?? resolvedSession.thinkingLevel,
       historyTurns: input.historyTurns ?? resolvedSession.historyTurns,
       enabledToolIds: input.enabledToolIds ?? resolvedSession.enabledToolIds,
+      goalExecutionMode: input.goalExecutionMode ?? resolvedSession.goalExecutionMode,
+      goalEvaluationPrompt: input.goalEvaluationPrompt ?? resolvedSession.goalEvaluationPrompt,
       additionalDirectories: input.additionalDirectories ?? resolvedSession.attachedDirectories,
     }
 
@@ -792,6 +737,8 @@ export function createDefaultSessionService(webContents?: WebContents): SessionS
         autoGenerateTitle: false,
         historyTurns: input.historyTurns ?? session.historyTurns,
         enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
+        goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
+        goalEvaluationPrompt: input.goalEvaluationPrompt ?? session.goalEvaluationPrompt,
         systemMessage: input.systemMessage,
         systemPromptId: session.systemPromptId,
       })
@@ -819,6 +766,8 @@ export function createDefaultSessionService(webContents?: WebContents): SessionS
         autoGenerateTitle: false,
         historyTurns: input.historyTurns ?? session.historyTurns,
         enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
+        goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
+        goalEvaluationPrompt: input.goalEvaluationPrompt ?? session.goalEvaluationPrompt,
         systemMessage: input.systemMessage,
         systemPromptId: session.systemPromptId,
       })
@@ -906,7 +855,7 @@ export async function rewindSession(input: SessionRewindInput): Promise<SessionM
 }
 
 // Session 分叉与分支比较已拆分至 session-branch.ts，此处再导出保持既有导入不变。
-export { branchSessionFromMessage, compareSessionBranch, type BranchSessionDeps } from './session-branch'
+export { type BranchSessionDeps, branchSessionFromMessage, compareSessionBranch } from './session-branch'
 
 
 export async function generateSessionTitleForSession(

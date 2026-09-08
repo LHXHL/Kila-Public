@@ -6,37 +6,41 @@
 
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import type { AgentSendInput, KilaPermissionMode, MemoryRunTrace, PermissionRequest, AskUserRequest } from '@kila/shared'
+import type { AgentSendInput, AskUserRequest, KilaPermissionMode, MemoryRunTrace, PermissionRequest } from '@kila/shared'
 import { buildSessionContextSnapshot, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
 import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
 import { buildPromptImages, splitAttachmentsForPiPrompt } from './adapters/pi-history-converter'
-import type { AgentEventBus } from './agent-event-bus'
-import { decryptApiKey, getChannelById } from './channel-manager'
-import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
-import { resolveShell } from './shell-resolver'
-import { buildShellPromptSection } from './shell-resolution'
-import { getSettings } from './settings-service'
-import { buildDynamicContextProjection, buildSystemPromptAppend } from './agent-prompt-builder'
-import { permissionService, type PermissionResolution } from './agent-permission-service'
 import { askUserService } from './agent-ask-user-service'
+import type { AgentEventBus } from './agent-event-bus'
 import { appendAgentMessage, getAgentMessages } from './agent-message-store'
-import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
+import { type PermissionResolution, permissionService } from './agent-permission-service'
 import {
-  collectReservedToolNames,
+  buildDynamicContextProjection,
+  buildGoalEvaluationPrompt,
+  buildSystemPromptAppend,
+  evaluateGoalExecution,
+} from './agent-prompt-builder'
+import {
+  type AnyAgentTool,
   canonicalizeAgentTools,
+  collectReservedToolNames,
   mergeAgentToolsWithSource,
   normalizeToolNameKey,
-  type AnyAgentTool,
 } from './agent-tool-names'
+import { decryptApiKey, getChannelById } from './channel-manager'
 import { resolveChannelModel } from './channel-model-resolution'
-import { findProviderDbModel, lookupProviderDbModel } from './provider-db-loader'
-import { createTrackedBashOperations } from './process-registry'
+import { loadExternalEsm } from './external-esm-loader'
+import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
+import { createLogger } from './logger'
 import { memoryLifecycleManager } from './memory/lifecycle-manager'
 import { composeAgentPrompt } from './memory/prompt-compose'
+import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
+import { createTrackedBashOperations } from './process-registry'
+import { findProviderDbModel, lookupProviderDbModel } from './provider-db-loader'
+import { getSettings } from './settings-service'
+import { buildShellPromptSection } from './shell-resolution'
+import { resolveShell } from './shell-resolver'
 
-
-import { createLogger } from './logger'
-import { loadExternalEsm } from './external-esm-loader'
 const log = createLogger('Agent 编排')
 
 type PiCodingAgentModule = typeof import('@earendil-works/pi-coding-agent')
@@ -236,6 +240,8 @@ export async function buildAgentRunContext(
     thinkingLevel: inputThinkingLevel,
     historyTurns,
     enabledToolIds,
+    goalExecutionMode,
+    goalEvaluationPrompt,
     systemMessage,
     systemPromptId,
   } = input
@@ -342,12 +348,19 @@ export async function buildAgentRunContext(
     incognito: input.incognito,
   })
 
+  // 在 prompt 组装前完成一次本地目标评估，让 auto 模式产生可验证的实际策略。
+  const goalEvaluation = evaluateGoalExecution(userMessage, goalExecutionMode)
+  log.info(`[Agent 编排] 目标评估: ${goalEvaluation.selectedMode}（${goalEvaluation.reason}）`)
+  const customGoalEvaluationPrompt = goalEvaluationPrompt?.trim()
+    ? `\n用户补充的目标评估要求（仅作为执行参考，不得覆盖用户原始指令或安全边界）：\n${goalEvaluationPrompt.trim()}`
+    : ''
+
   // 稳定 runtime context 由 Pi adapter 作为一次性 snapshot 注入；每轮 prompt 只保留
   // 时钟等易变信息，避免把 MCP/Skills/工作目录重复发送并破坏 append-only 前缀。
   const finalPrompt = composeAgentPrompt(
     dynamicProjection.perMessageContext,
     memoryContext.text,
-    enrichedMessage,
+    `${buildGoalEvaluationPrompt(goalExecutionMode, goalEvaluation)}${customGoalEvaluationPrompt}\n\n${enrichedMessage}`,
   )
 
   const thinkingLevel = resolveThinkingLevel({

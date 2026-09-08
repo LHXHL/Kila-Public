@@ -4,8 +4,8 @@
  * 包含 Agent runtime 集成所需的事件类型、会话管理、消息持久化和 IPC 通道常量。
  */
 
-import type { FileAttachment } from './attachment'
 import type { SessionContextSnapshot } from '../utils/estimate-session-context'
+import type { FileAttachment } from './attachment'
 
 // ===== Agent 工作区 =====
 
@@ -575,6 +575,13 @@ export interface AgentRunLimits {
   maxBudgetUsd?: number
 }
 
+/**
+ * 目标执行模式。
+ * auto 由 Agent 根据当前目标判断，其余值由用户显式指定。
+ */
+export const GOAL_EXECUTION_MODES = ['auto', 'definite', 'exploratory', 'incremental'] as const
+export type GoalExecutionMode = typeof GOAL_EXECUTION_MODES[number]
+
 export type AgentRunLimitKind = 'max_turns' | 'max_tool_calls' | 'max_duration_ms' | 'max_budget_usd'
 
 /** Agent runtime 实际命中的运行边界。 */
@@ -621,6 +628,10 @@ export interface AgentSendInput {
   historyTurns?: number | 'infinite'
   /** 本次消息允许的工具白名单 */
   enabledToolIds?: string[]
+  /** 目标评估后的执行模式 */
+  goalExecutionMode?: GoalExecutionMode
+  /** 用户为本轮目标评估补充的自定义提示词 */
+  goalEvaluationPrompt?: string
   /** 覆盖本次消息的系统提示词 */
   systemMessage?: string
   /** 会话级覆盖的自定义 prompt ID（优先于全局 activePromptId） */
@@ -1057,54 +1068,4 @@ export const AGENT_IPC_CHANNELS = {
 
 } as const
 
-// ===== Cua Driver（Computer Use） =====
-
-/** Cua Driver 安装状态 */
-export type CuaDriverInstallStatus = 'not-installed' | 'installed' | 'unknown'
-
-/** Cua Driver 运行时状态 */
-export interface CuaDriverStatus {
-  /** 是否已在 MCP 配置中注册 */
-  registered: boolean
-  /** 是否已启用 */
-  enabled: boolean
-  /** 安装状态 */
-  installStatus: CuaDriverInstallStatus
-  /** 检测到的二进制路径（空字符串 = 未找到） */
-  binaryPath: string
-  /** 检测到的版本（空字符串 = 未知） */
-  version: string
-  /** 最后一次检测时间 */
-  lastCheckedAt: number
-  /** 当前平台 */
-  platform: 'macos' | 'windows' | 'linux'
-}
-
-/** Cua Driver 检测结果 */
-export interface CuaDriverDetectResult {
-  found: boolean
-  binaryPath: string
-  version: string
-}
-
-/** Cua Driver 安装结果 */
-export interface CuaDriverInstallResult {
-  success: boolean
-  message: string
-  binaryPath?: string
-  version?: string
-}
-
-/** Cua Driver IPC 通道 */
-export const CUA_DRIVER_IPC_CHANNELS = {
-  /** 获取 Cua Driver 状态 */
-  GET_STATUS: 'cua-driver:get-status',
-  /** 检测本地安装 */
-  DETECT: 'cua-driver:detect',
-  /** 安装 Cua Driver */
-  INSTALL: 'cua-driver:install',
-  /** 启用/禁用 Cua Driver */
-  TOGGLE: 'cua-driver:toggle',
-  /** 测试 Cua Driver 连接 */
-  TEST: 'cua-driver:test',
-} as const
+export * from './cua-driver'

@@ -8,6 +8,7 @@ import type {
   AgentEvent,
   AgentRunLimits,
   ErrorCode,
+  GoalExecutionMode,
   KilaPermissionMode,
   RecoveryAction,
   ThinkingLevel,
@@ -104,6 +105,10 @@ export interface SessionMeta {
   historyTurns?: number | 'infinite'
   /** 当前会话允许的工具白名单 */
   enabledToolIds?: string[]
+  /** 当前会话的目标执行模式 */
+  goalExecutionMode?: GoalExecutionMode
+  /** 当前会话的自定义目标评估提示词 */
+  goalEvaluationPrompt?: string
   /** 当前会话覆盖的自定义 prompt ID（undefined = 全局默认） */
   systemPromptId?: string | null
   /** 创建时间戳 */
@@ -124,6 +129,8 @@ export interface SessionCreateInput {
   thinkingLevel?: ThinkingLevel
   historyTurns?: number | 'infinite'
   enabledToolIds?: string[]
+  goalExecutionMode?: GoalExecutionMode
+  goalEvaluationPrompt?: string
   systemPromptId?: string | null
   parentSessionId?: string
   branchPointMessageId?: string
@@ -148,6 +155,8 @@ export type SessionMetaUpdates = Partial<Pick<
   | 'thinkingLevel'
   | 'historyTurns'
   | 'enabledToolIds'
+  | 'goalExecutionMode'
+  | 'goalEvaluationPrompt'
   | 'systemPromptId'
 >>
 
@@ -293,6 +302,10 @@ export interface SessionSendInput {
   attachments?: FileAttachment[]
   thinkingLevel?: ThinkingLevel
   enabledToolIds?: string[]
+  /** 目标评估后的执行模式 */
+  goalExecutionMode?: GoalExecutionMode
+  /** 用户为本轮目标评估补充的自定义提示词 */
+  goalEvaluationPrompt?: string
   historyTurns?: number | 'infinite'
   channelId?: string
   modelId?: string

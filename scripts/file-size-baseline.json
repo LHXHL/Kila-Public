@@ -12,7 +12,7 @@
     "lines": 1098
   },
   "apps/electron/src/main/lib/session-service.ts": {
-    "lines": 919
+    "lines": 868
   },
   "apps/electron/src/preload/index.ts": {
     "lines": 1628
@@ -21,7 +21,7 @@
     "lines": 1019
   },
   "apps/electron/src/renderer/components/agent/AgentView.tsx": {
-    "lines": 1650
+    "lines": 1641
   },
   "apps/electron/src/renderer/components/agent/ToolActivityItem.tsx": {
     "lines": 865
@@ -33,6 +33,6 @@
     "lines": 963
   },
   "packages/shared/src/types/agent.ts": {
-    "lines": 1111
+    "lines": 1072
   }
 }

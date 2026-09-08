@@ -62,6 +62,38 @@
       "readAttachmentsFailed": "Failed to read the original message attachments"
     },
 
+    "goalEvaluation": {
+      "title": "Goal evaluation",
+      "description": "Choose how the agent evaluates and advances the current goal",
+      "auto": {
+        "label": "Auto-detect (recommended)",
+        "description": "Select the best execution mode from the goal description"
+      },
+      "manual": {
+        "label": "Choose a mode"
+      },
+      "modes": {
+        "definite": {
+          "label": "Definite goal",
+          "description": "A clear completion criterion, such as implementing sign-in"
+        },
+        "exploratory": {
+          "label": "Exploratory",
+          "description": "Open-ended investigation, such as a security scan or optimization"
+        },
+        "incremental": {
+          "label": "Incremental",
+          "description": "Progressive delivery across multiple stages"
+        }
+      },
+      "custom": {
+        "title": "Custom evaluation prompt",
+        "placeholder": "For example: list acceptance criteria first, then verify each one and report risks…",
+        "hint": "Saved with this session and used as execution guidance",
+        "clear": "Clear custom prompt"
+      }
+    },
+
     "message": {
       "listLabel": "Messages",
       "loadingTranscript": "Loading session transcript…",
