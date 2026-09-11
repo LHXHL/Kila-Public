@@ -30,10 +30,30 @@ describe('Pi model compat 推断', () => {
     expect(compat).toMatchObject({ cacheControlFormat: 'anthropic' })
   })
 
-  test('Given 未知网关 When 推断 Then 返回 undefined 交给 Pi 自动探测', () => {
+  test('Given 未知网关 When 推断 Then 保守注入 supportsDeveloperRole=false（回归：TokenRouter 流式拒绝 developer role）', () => {
+    // https://api.tokenrouter.com/v1 + reasoning 模型：pi-ai 自动探测会发出 developer role，
+    // 其网关流式校验拒绝该 role 返 400，必须保守发 system
     const compat = inferPiModelCompat(
       { provider: 'my-gateway', baseUrl: 'https://gw.example.com/v1' },
       'some-model',
+      'openai-completions',
+    )
+    expect(compat).toMatchObject({ supportsDeveloperRole: false })
+  })
+
+  test('Given TokenRouter 网关 + reasoning 模型 When 推断 Then 不发 developer role', () => {
+    const compat = inferPiModelCompat(
+      { provider: 'openai', baseUrl: 'https://api.tokenrouter.com/v1' },
+      'z-ai/glm-5.3-free',
+      'openai-completions',
+    )
+    expect(compat).toMatchObject({ supportsDeveloperRole: false })
+  })
+
+  test('Given OpenAI 官方端点 When 推断 Then 返回 undefined 交给 Pi 自动探测', () => {
+    const compat = inferPiModelCompat(
+      { provider: 'openai', baseUrl: 'https://api.openai.com/v1' },
+      'gpt-5.5',
       'openai-completions',
     )
     expect(compat).toBeUndefined()
@@ -50,10 +70,10 @@ describe('Pi model compat 推断', () => {
     expect(merged).toMatchObject({ supportsLongCacheRetention: false, sendSessionAffinityHeaders: true })
   })
 
-  test('Given 无推断命中且无覆盖 When 合并 Then 返回 undefined', () => {
+  test('Given 官方 OpenAI 端点无覆盖 When 合并 Then 返回 undefined', () => {
     const merged = resolvePiModelCompat(
-      { provider: 'my-gateway', baseUrl: 'https://gw.example.com/v1' },
-      'some-model',
+      { provider: 'openai', baseUrl: 'https://api.openai.com/v1' },
+      'gpt-5.5',
       'openai-completions',
     )
     expect(merged).toBeUndefined()
