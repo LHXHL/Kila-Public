@@ -655,9 +655,7 @@ export interface AgentSendInput {
   /** 关联定时任务 ID */
   relatedTaskId?: string
 }
-
 // ===== 后台任务管理 =====
-
 /**
  * 获取任务输出请求
  */

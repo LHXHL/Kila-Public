@@ -59,6 +59,21 @@ describe('Pi model compat 推断', () => {
     expect(compat).toBeUndefined()
   })
 
+  test('Given URL 路径或第三方域名包含 openai.com When 推断 Then 不误判为官方端点', () => {
+    const pathCompat = inferPiModelCompat(
+      { provider: 'custom', baseUrl: 'https://gateway.example/v1/openai.com' },
+      'some-model',
+      'openai-completions',
+    )
+    const hostnameCompat = inferPiModelCompat(
+      { provider: 'custom', baseUrl: 'https://openai.com.gateway.example/v1' },
+      'some-model',
+      'openai-completions',
+    )
+    expect(pathCompat).toMatchObject({ supportsDeveloperRole: false })
+    expect(hostnameCompat).toMatchObject({ supportsDeveloperRole: false })
+  })
+
   test('Given 渠道 compat 覆盖 When 合并 Then promptCacheRetention 不混入 Pi compat', () => {
     const merged = resolvePiModelCompat(
       openrouterChannel,

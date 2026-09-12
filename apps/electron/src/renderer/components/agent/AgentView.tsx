@@ -30,7 +30,10 @@ import { ToolSelectorPopover } from '@/components/composer/ToolSelectorPopover'
 import { AgentMessages } from './AgentMessages'
 import { AskUserBanner } from './AskUserBanner'
 import {
+  type EditingTurnState,
   mergeRecoveredComposerDraft,
+  parseGoalCommand,
+  type PendingComposerSnapshot,
   preparePendingFilePayloads,
 } from './agent-send-transaction'
 import { PermissionBanner } from './PermissionBanner'
@@ -102,24 +105,6 @@ import { useAgentAttachments } from './use-agent-attachments'
 import { useSessionLifecycleActions } from './use-session-lifecycle-actions'
 
 const SESSION_MESSAGE_PAGE_SIZE = 100
-
-interface PendingComposerSnapshot {
-  files: AgentPendingFile[]
-  data: Map<string, string>
-}
-
-interface EditingTurnState {
-  messageId: string
-  originalDraft: string
-  originalPending: PendingComposerSnapshot
-}
-
-/** 解析仅在消息开头生效的 /goal 命令，避免改写正文中的普通文本。 */
-export function parseGoalCommand(message: string): { prompt: string; goalLoop: boolean } {
-  const match = message.match(/^\/goal(?:\s+([\s\S]*))?$/i)
-  if (!match) return { prompt: message, goalLoop: false }
-  return { prompt: match[1]?.trim() ?? '', goalLoop: true }
-}
 
 export function AgentView({ sessionId }: { sessionId: string }): React.ReactElement {
   const { t } = useTranslation()

@@ -336,7 +336,7 @@ describe('压缩后自动续跑', () => {
 })
 
 describe('/goal 持续执行', () => {
-  test('未出现完成标记时继续查询，出现完成标记后收敛', async () => {
+  test('Given 尚未完成后出现完成标记 When 持续执行 Then 成功收敛并移除控制标记', async () => {
     const context = createContext()
     const { adapter, prompts } = createPromptAwareAdapter([
       () => [
@@ -357,7 +357,24 @@ describe('/goal 持续执行', () => {
       .toBe('先完成第一步。已验证全部结果')
   })
 
-  test('模型始终不标记完成时最多自动执行 8 轮', async () => {
+  test('Given 模型报告阻塞 When 持续执行 Then 立即停止且不再调用模型', async () => {
+    const context = createContext()
+    const { adapter, prompts } = createPromptAwareAdapter([
+      () => [
+        { type: 'text_delta', text: '需要用户提供发布凭证。<!-- KILA_GOAL_BLOCKED -->' },
+        { type: 'complete', stopReason: 'stop' },
+      ],
+    ])
+
+    const result = await runWithAdapter(adapter, { ...context.input, goalLoop: true })
+
+    expect(prompts).toHaveLength(1)
+    expect(result.outcomes).toEqual(['stopped'])
+    expect(getAgentMessages(context.sessionId).find((message) => message.role === 'assistant')?.content)
+      .toBe('需要用户提供发布凭证。')
+  })
+
+  test('Given 模型始终不标记完成 When 达到自动续跑上限 Then 按未完成停止', async () => {
     const context = createContext()
     const { adapter, prompts } = createPromptAwareAdapter([
       () => [{ type: 'text_delta', text: '仍在处理' }, { type: 'complete', stopReason: 'stop' }],
@@ -366,6 +383,9 @@ describe('/goal 持续执行', () => {
     const result = await runWithAdapter(adapter, { ...context.input, goalLoop: true })
 
     expect(prompts).toHaveLength(9)
-    expect(result.outcomes).toEqual(['success'])
+    expect(result.outcomes).toEqual(['stopped'])
+    expect(getAgentMessages(context.sessionId).some((message) => (
+      message.role === 'status' && message.content.includes('目标尚未确认完成')
+    ))).toBe(true)
   })
 })

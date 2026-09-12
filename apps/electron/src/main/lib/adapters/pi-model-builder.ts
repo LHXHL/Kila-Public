@@ -190,6 +190,15 @@ function describeProviderSurface(channel: PiQueryChannel): string {
   return `${channel.capabilityProviderId ?? ''} ${channel.provider} ${channel.baseUrl}`.toLowerCase()
 }
 
+function isOfficialOpenAIBaseUrl(baseUrl: string): boolean {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase()
+    return hostname === 'openai.com' || hostname.endsWith('.openai.com')
+  } catch {
+    return false
+  }
+}
+
 interface GatewayHints {
   isOpenRouter: boolean
   isCloudflare: boolean
@@ -208,8 +217,8 @@ function detectGateways(channel: PiQueryChannel, api: Api): GatewayHints {
     isFireworks: provider.includes('fireworks') || baseUrl.includes('fireworks.ai'),
     // deepseek 的 thinkingFormat 仅对 chat completions 有意义
     isDeepSeek: api === 'openai-completions' && (provider.includes('deepseek') || baseUrl.includes('deepseek.com')),
-    // Azure（openai.azure.com）不匹配 openai.com 子串，同样走保守分支 —— 无害，Azure 亦接受 system
-    isOfficialOpenAI: baseUrl.includes('openai.com'),
+    // Azure（openai.azure.com）不属于 openai.com 官方域，同样走保守分支 —— 无害，Azure 亦接受 system
+    isOfficialOpenAI: isOfficialOpenAIBaseUrl(baseUrl),
   }
 }
 

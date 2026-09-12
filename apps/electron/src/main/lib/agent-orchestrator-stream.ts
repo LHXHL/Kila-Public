@@ -87,9 +87,15 @@ function formatCompactionStatus(_event: CompactCompleteEvent): string {
 const COMPACTION_AUTO_CONTINUE_PROMPT =
   '上一条回复因上下文限制被截断，上下文已完成压缩。请基于压缩摘要中的进度，直接继续完成尚未完成的任务，不要重复已输出的内容。'
 
-// HTML comment keeps the control marker out of the rendered Markdown transcript.
+// HTML 注释可让控制标记不出现在 Markdown 渲染结果中。
 const GOAL_COMPLETE_MARKER = '<!-- KILA_GOAL_COMPLETE -->'
+const GOAL_BLOCKED_MARKER = '<!-- KILA_GOAL_BLOCKED -->'
+const GOAL_CONTROL_MARKER_PATTERN = /<!-- KILA_GOAL_(?:COMPLETE|BLOCKED) -->/g
 const MAX_GOAL_LOOP_ITERATIONS = 8
+
+function stripGoalControlMarkers(text: string): string {
+  return text.replaceAll(GOAL_CONTROL_MARKER_PATTERN, '')
+}
 
 function persistAssistantMessage(
   sessionId: string,
@@ -287,10 +293,10 @@ export async function runAgentStream({
    */
   const persistTurnArtifacts = (): number => {
     if (input.goalLoop) {
-      attemptBuffer.text = attemptBuffer.text.replaceAll(GOAL_COMPLETE_MARKER, '').trimEnd()
+      attemptBuffer.text = stripGoalControlMarkers(attemptBuffer.text).trimEnd()
       attemptBuffer.events = attemptBuffer.events.map((event) => (
         event.type === 'text_delta'
-          ? { ...event, text: event.text.replaceAll(GOAL_COMPLETE_MARKER, '') }
+          ? { ...event, text: stripGoalControlMarkers(event.text) }
           : event
       ))
     }
@@ -527,11 +533,15 @@ export async function runAgentStream({
         continue
       }
 
-      // /goal 使用同一 Pi runtime 继续提交自检 prompt，直到模型明确标记完成。
+      const goalCompleted = attemptBuffer.text.includes(GOAL_COMPLETE_MARKER)
+      const goalBlocked = attemptBuffer.text.includes(GOAL_BLOCKED_MARKER)
+
+      // /goal 使用同一 Pi runtime 继续提交自检 prompt，直到模型明确标记完成或阻塞。
       // 设置上限，避免模型无法判断完成条件时无限调用模型。
       if (
         input.goalLoop
-        && !attemptBuffer.text.includes(GOAL_COMPLETE_MARKER)
+        && !goalCompleted
+        && !goalBlocked
         && goalLoopIterations < MAX_GOAL_LOOP_ITERATIONS
         && canContinue(sessionId)
       ) {
@@ -541,7 +551,7 @@ export async function runAgentStream({
         lastPersistedRetryAttempt = undefined
         activeQueryOptions = {
           ...queryOptions,
-          prompt: '请继续执行当前目标。先检查刚才的实际结果与验收标准，补齐所有尚未完成或未验证的工作；如果已经全部完成，请在回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_COMPLETE -->。遇到缺少信息、需要用户授权或不可恢复错误时停止并说明原因。',
+          prompt: '请继续执行当前目标。先检查刚才的实际结果与验收标准，补齐所有尚未完成或未验证的工作；如果已经全部完成，请在回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_COMPLETE -->。如果缺少关键信息、需要用户授权或遇到不可恢复错误，请说明阻塞原因，并在回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_BLOCKED -->。',
           rawPrompt: '请继续执行当前目标并完成自检。',
           promptImages: undefined,
         }
@@ -549,11 +559,26 @@ export async function runAgentStream({
         continue
       }
 
-      if (input.goalLoop && !attemptBuffer.text.includes(GOAL_COMPLETE_MARKER)) {
-        log.warn(`[Agent流] /goal 达到最大自动执行轮数 (${MAX_GOAL_LOOP_ITERATIONS}): ${sessionId}`)
+      let finalOutcome: AgentRunOutcome = 'success'
+      let goalStopStatus: string | undefined
+      if (input.goalLoop && goalBlocked) {
+        finalOutcome = 'stopped'
+        log.info('[Agent流] /goal 因阻塞停止:', sessionId)
+      } else if (input.goalLoop && !goalCompleted) {
+        finalOutcome = 'stopped'
+        goalStopStatus = `已达到 ${MAX_GOAL_LOOP_ITERATIONS} 次自动续跑上限，目标尚未确认完成。`
+        log.warn(`[Agent流] /goal 达到最大自动续跑次数 (${MAX_GOAL_LOOP_ITERATIONS}): ${sessionId}`)
       }
 
       const compactionCount = persistTurnArtifacts()
+      if (goalStopStatus) {
+        appendAgentMessage(sessionId, {
+          id: randomUUID(),
+          role: 'status',
+          content: goalStopStatus,
+          createdAt: Date.now(),
+        })
+      }
       if (compactionCount > 0) {
         if (shouldPersistRunMemory(input.incognito)) {
           await memoryLifecycleManager.onAfterCompaction({
@@ -564,7 +589,7 @@ export async function runAgentStream({
         }
       }
       touchAgentSession(sessionId)
-      onComplete(completeWithPostRun())
+      onComplete(completeWithPostRun(), finalOutcome)
       return
     } catch (error) {
       if (!canContinue(sessionId)) {

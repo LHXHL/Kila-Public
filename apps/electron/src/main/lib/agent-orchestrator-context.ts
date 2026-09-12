@@ -360,7 +360,7 @@ export async function buildAgentRunContext(
   const finalPrompt = composeAgentPrompt(
     dynamicProjection.perMessageContext,
     memoryContext.text,
-    `${buildGoalEvaluationPrompt(goalExecutionMode, goalEvaluation)}${customGoalEvaluationPrompt}${input.goalLoop ? `\n\n<goal_loop>\n持续执行直到用户目标真正完成。每轮结束前检查验收标准、工具结果和剩余工作；若仍有任何未完成事项，继续处理，不要仅输出计划或等待用户催促。只有全部完成并验证后，才在最终回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_COMPLETE -->。如果缺少关键信息、需要用户授权或遇到不可恢复错误，明确说明阻塞原因并停止。\n</goal_loop>` : ''}\n\n${enrichedMessage}`,
+    `${buildGoalEvaluationPrompt(goalExecutionMode, goalEvaluation)}${customGoalEvaluationPrompt}${input.goalLoop ? `\n\n<goal_loop>\n持续执行直到用户目标真正完成。每轮结束前检查验收标准、工具结果和剩余工作；若仍有任何未完成事项，继续处理，不要仅输出计划或等待用户催促。只有全部完成并验证后，才在最终回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_COMPLETE -->。如果缺少关键信息、需要用户授权或遇到不可恢复错误，明确说明阻塞原因，并在回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_BLOCKED -->。\n</goal_loop>` : ''}\n\n${enrichedMessage}`,
   )
 
   const thinkingLevel = resolveThinkingLevel({
