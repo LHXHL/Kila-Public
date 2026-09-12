@@ -59,7 +59,8 @@
       "editResendFailed": "编辑重发失败",
       "autoSendFailed": "自动发送配置消息失败",
       "draftRestored": "消息已恢复到输入框，请重试",
-      "readAttachmentsFailed": "读取原消息附件失败"
+      "readAttachmentsFailed": "读取原消息附件失败",
+      "goalEmpty": "请输入要持续完成的目标"
     },
 
     "goalEvaluation": {
@@ -295,7 +296,8 @@
     "mention": {
       "emptySkill": "无匹配命令或 Skill",
       "emptyMcp": "无匹配 MCP 服务",
-      "compactDescription": "压缩会话历史以节省 token"
+      "compactDescription": "压缩会话历史以节省 token",
+      "goalDescription": "持续执行目标，自动检查并补齐未完成事项"
     },
 
     "welcome": {

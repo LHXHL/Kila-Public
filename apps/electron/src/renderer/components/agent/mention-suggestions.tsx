@@ -161,8 +161,8 @@ export interface SkillMentionItem {
 
 interface SlashCommandItem {
   kind: 'command'
-  id: 'compact'
-  name: '/compact'
+  id: 'compact' | 'goal'
+  name: '/compact' | '/goal'
   description: string
 }
 
@@ -176,6 +176,12 @@ function getSlashCommands(): SlashCommandItem[] {
       id: 'compact',
       name: '/compact',
       description: i18n.t('agent.mention.compactDescription'),
+    },
+    {
+      kind: 'command',
+      id: 'goal',
+      name: '/goal',
+      description: i18n.t('agent.mention.goalDescription'),
     },
   ]
 }

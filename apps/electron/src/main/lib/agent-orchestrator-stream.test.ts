@@ -334,3 +334,38 @@ describe('压缩后自动续跑', () => {
     expect(result.outcomes).toEqual(['success'])
   })
 })
+
+describe('/goal 持续执行', () => {
+  test('未出现完成标记时继续查询，出现完成标记后收敛', async () => {
+    const context = createContext()
+    const { adapter, prompts } = createPromptAwareAdapter([
+      () => [
+        { type: 'text_delta', text: '先完成第一步。' },
+        { type: 'complete', stopReason: 'stop' },
+      ],
+      () => [
+        { type: 'text_delta', text: '已验证全部结果 <!-- KILA_GOAL_COMPLETE -->' },
+        { type: 'complete', stopReason: 'stop' },
+      ],
+    ])
+
+    const result = await runWithAdapter(adapter, { ...context.input, goalLoop: true })
+
+    expect(prompts).toHaveLength(2)
+    expect(result.outcomes).toEqual(['success'])
+    expect(getAgentMessages(context.sessionId).find((message) => message.role === 'assistant')?.content)
+      .toBe('先完成第一步。已验证全部结果')
+  })
+
+  test('模型始终不标记完成时最多自动执行 8 轮', async () => {
+    const context = createContext()
+    const { adapter, prompts } = createPromptAwareAdapter([
+      () => [{ type: 'text_delta', text: '仍在处理' }, { type: 'complete', stopReason: 'stop' }],
+    ])
+
+    const result = await runWithAdapter(adapter, { ...context.input, goalLoop: true })
+
+    expect(prompts).toHaveLength(9)
+    expect(result.outcomes).toEqual(['success'])
+  })
+})

@@ -59,7 +59,8 @@
       "editResendFailed": "Failed to resend the edited message",
       "autoSendFailed": "Failed to auto-send the setup message",
       "draftRestored": "The message is back in the composer. Please try again.",
-      "readAttachmentsFailed": "Failed to read the original message attachments"
+      "readAttachmentsFailed": "Failed to read the original message attachments",
+      "goalEmpty": "Enter a goal to keep executing until it is complete"
     },
 
     "goalEvaluation": {
@@ -311,7 +312,8 @@
     "mention": {
       "emptySkill": "No matching command or Skill",
       "emptyMcp": "No matching MCP server",
-      "compactDescription": "Compact the session history to save tokens"
+      "compactDescription": "Compact the session history to save tokens",
+      "goalDescription": "Keep executing until the goal is complete, with automatic checks"
     },
 
     "welcome": {

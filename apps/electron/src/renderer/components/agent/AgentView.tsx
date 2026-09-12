@@ -114,6 +114,13 @@ interface EditingTurnState {
   originalPending: PendingComposerSnapshot
 }
 
+/** 解析仅在消息开头生效的 /goal 命令，避免改写正文中的普通文本。 */
+export function parseGoalCommand(message: string): { prompt: string; goalLoop: boolean } {
+  const match = message.match(/^\/goal(?:\s+([\s\S]*))?$/i)
+  if (!match) return { prompt: message, goalLoop: false }
+  return { prompt: match[1]?.trim() ?? '', goalLoop: true }
+}
+
 export function AgentView({ sessionId }: { sessionId: string }): React.ReactElement {
   const { t } = useTranslation()
   const [messages, setMessages] = React.useState<AgentMessage[]>([])
@@ -711,6 +718,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const buildSessionSendInput = React.useCallback((
     finalMessage: string,
     attachments: FileAttachment[] = [],
+    options?: { goalLoop?: boolean },
   ): SessionSendInput => {
     const skills = [...finalMessage.matchAll(/\/skill:(\S+)/g)].map((m) => m[1]).filter(Boolean) as string[]
     const mcps = [...finalMessage.matchAll(/#mcp:(\S+)/g)].map((m) => m[1]).filter(Boolean) as string[]
@@ -727,6 +735,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       enabledToolIds,
       goalExecutionMode,
       goalEvaluationPrompt,
+      goalLoop: options?.goalLoop,
       ...(attachedDirs.length > 0 && { additionalDirectories: attachedDirs }),
       ...(skills.length > 0 && { mentionedSkills: skills }),
       ...(mcps.length > 0 && { mentionedMcpServers: mcps }),
@@ -858,7 +867,12 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     if ((!finalMessage.trim() && attachments.length === 0) || !currentSelection.channelId) return false
 
     const messageIncognito = options?.incognito
-    const input = buildSessionSendInput(finalMessage, attachments)
+    const parsedGoal = parseGoalCommand(finalMessage)
+    if (parsedGoal.goalLoop && !parsedGoal.prompt && attachments.length === 0) {
+      toast.error(t('agent.composer.goalEmpty'))
+      return false
+    }
+    const input = buildSessionSendInput(parsedGoal.prompt, attachments, { goalLoop: parsedGoal.goalLoop })
     if (messageIncognito) {
       input.incognito = true
     }
@@ -881,6 +895,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     setInputContent,
     startSessionSend,
     streaming,
+    t,
   ])
 
   const queuedSendFlushVersionRef = React.useRef(0)
