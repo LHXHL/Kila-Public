@@ -306,6 +306,8 @@ export interface SessionSendInput {
   goalExecutionMode?: GoalExecutionMode
   /** 用户为本轮目标评估补充的自定义提示词 */
   goalEvaluationPrompt?: string
+  /** /goal 命令：完成后自动自检并继续执行未完成部分。 */
+  goalLoop?: boolean
   historyTurns?: number | 'infinite'
   channelId?: string
   modelId?: string

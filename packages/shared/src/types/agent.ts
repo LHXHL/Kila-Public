@@ -632,6 +632,8 @@ export interface AgentSendInput {
   goalExecutionMode?: GoalExecutionMode
   /** 用户为本轮目标评估补充的自定义提示词 */
   goalEvaluationPrompt?: string
+  /** /goal 命令：完成后自动自检并继续执行未完成部分。 */
+  goalLoop?: boolean
   /** 覆盖本次消息的系统提示词 */
   systemMessage?: string
   /** 会话级覆盖的自定义 prompt ID（优先于全局 activePromptId） */
@@ -653,9 +655,7 @@ export interface AgentSendInput {
   /** 关联定时任务 ID */
   relatedTaskId?: string
 }
-
 // ===== 后台任务管理 =====
-
 /**
  * 获取任务输出请求
  */

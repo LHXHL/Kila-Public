@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AgentPendingFile } from '@kila/shared'
 import {
   mergeRecoveredComposerDraft,
+  parseGoalCommand,
   preparePendingFilePayloads,
 } from './agent-send-transaction'
 
@@ -52,5 +53,19 @@ describe('发送失败草稿恢复', () => {
 
   test('Given 当前草稿已是失败消息 When 发送失败 Then 不重复恢复', () => {
     expect(mergeRecoveredComposerDraft('原消息', '原消息')).toBe('原消息')
+  })
+})
+
+describe('/goal 命令解析', () => {
+  test('Given 消息以 /goal 开头 When 解析 Then 提取目标并开启持续执行', () => {
+    expect(parseGoalCommand('/goal  完成发布并验证  ')).toEqual({
+      prompt: '完成发布并验证',
+      goalLoop: true,
+    })
+  })
+
+  test('Given /goal 出现在普通正文中 When 解析 Then 不改写用户消息', () => {
+    const message = '请解释 /goal 命令'
+    expect(parseGoalCommand(message)).toEqual({ prompt: message, goalLoop: false })
   })
 })

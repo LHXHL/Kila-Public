@@ -30,7 +30,10 @@ import { ToolSelectorPopover } from '@/components/composer/ToolSelectorPopover'
 import { AgentMessages } from './AgentMessages'
 import { AskUserBanner } from './AskUserBanner'
 import {
+  type EditingTurnState,
   mergeRecoveredComposerDraft,
+  parseGoalCommand,
+  type PendingComposerSnapshot,
   preparePendingFilePayloads,
 } from './agent-send-transaction'
 import { PermissionBanner } from './PermissionBanner'
@@ -102,17 +105,6 @@ import { useAgentAttachments } from './use-agent-attachments'
 import { useSessionLifecycleActions } from './use-session-lifecycle-actions'
 
 const SESSION_MESSAGE_PAGE_SIZE = 100
-
-interface PendingComposerSnapshot {
-  files: AgentPendingFile[]
-  data: Map<string, string>
-}
-
-interface EditingTurnState {
-  messageId: string
-  originalDraft: string
-  originalPending: PendingComposerSnapshot
-}
 
 export function AgentView({ sessionId }: { sessionId: string }): React.ReactElement {
   const { t } = useTranslation()
@@ -711,6 +703,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const buildSessionSendInput = React.useCallback((
     finalMessage: string,
     attachments: FileAttachment[] = [],
+    options?: { goalLoop?: boolean },
   ): SessionSendInput => {
     const skills = [...finalMessage.matchAll(/\/skill:(\S+)/g)].map((m) => m[1]).filter(Boolean) as string[]
     const mcps = [...finalMessage.matchAll(/#mcp:(\S+)/g)].map((m) => m[1]).filter(Boolean) as string[]
@@ -727,6 +720,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       enabledToolIds,
       goalExecutionMode,
       goalEvaluationPrompt,
+      goalLoop: options?.goalLoop,
       ...(attachedDirs.length > 0 && { additionalDirectories: attachedDirs }),
       ...(skills.length > 0 && { mentionedSkills: skills }),
       ...(mcps.length > 0 && { mentionedMcpServers: mcps }),
@@ -858,7 +852,12 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     if ((!finalMessage.trim() && attachments.length === 0) || !currentSelection.channelId) return false
 
     const messageIncognito = options?.incognito
-    const input = buildSessionSendInput(finalMessage, attachments)
+    const parsedGoal = parseGoalCommand(finalMessage)
+    if (parsedGoal.goalLoop && !parsedGoal.prompt && attachments.length === 0) {
+      toast.error(t('agent.composer.goalEmpty'))
+      return false
+    }
+    const input = buildSessionSendInput(parsedGoal.prompt, attachments, { goalLoop: parsedGoal.goalLoop })
     if (messageIncognito) {
       input.incognito = true
     }
@@ -881,6 +880,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     setInputContent,
     startSessionSend,
     streaming,
+    t,
   ])
 
   const queuedSendFlushVersionRef = React.useRef(0)

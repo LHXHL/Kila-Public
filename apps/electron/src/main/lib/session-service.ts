@@ -164,11 +164,11 @@ async function defaultRunAgentRuntime({ session, input, webContents }: RuntimeHa
     enabledToolIds: input.enabledToolIds ?? session.enabledToolIds,
     goalExecutionMode: input.goalExecutionMode ?? session.goalExecutionMode,
     goalEvaluationPrompt: input.goalEvaluationPrompt ?? session.goalEvaluationPrompt,
+    goalLoop: input.goalLoop,
     systemMessage: input.systemMessage,
     systemPromptId: session.systemPromptId,
     ...(extendedInput.extraTools ? { extraTools: extendedInput.extraTools } as unknown as AgentSendInput : {}),
   }
-
   const agentRuntime = await loadAgentRuntime()
   await emitSessionRuntimeRunStart(session, input)
   const bridgedWebContents = createSessionRuntimeBridge(webContents)

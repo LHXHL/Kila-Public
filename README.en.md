@@ -57,6 +57,8 @@ After the first launch:
 3. Configure the model, MCP, Skills, and permissions as needed
 4. Start working
 
+Use `/goal <goal>` in the composer to let the Agent check progress and continue automatically. It stops when the goal is complete, user action is required, or the eight-continuation limit is reached.
+
 ## Common Commands
 
 ```bash

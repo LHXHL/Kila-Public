@@ -10,6 +10,24 @@ export interface PendingFilePreparationResult {
   missingFileNames: string[]
 }
 
+export interface PendingComposerSnapshot {
+  files: AgentPendingFile[]
+  data: Map<string, string>
+}
+
+export interface EditingTurnState {
+  messageId: string
+  originalDraft: string
+  originalPending: PendingComposerSnapshot
+}
+
+/** 解析仅在消息开头生效的 /goal 命令，避免改写正文中的普通文本。 */
+export function parseGoalCommand(message: string): { prompt: string; goalLoop: boolean } {
+  const match = message.match(/^\/goal(?:\s+([\s\S]*))?$/i)
+  if (!match) return { prompt: message, goalLoop: false }
+  return { prompt: match[1]?.trim() ?? '', goalLoop: true }
+}
+
 /**
  * 为附件保存事务准备 payload。缺少原始数据时显式返回文件名，禁止用空字符串静默降级。
  */

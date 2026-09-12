@@ -190,11 +190,22 @@ function describeProviderSurface(channel: PiQueryChannel): string {
   return `${channel.capabilityProviderId ?? ''} ${channel.provider} ${channel.baseUrl}`.toLowerCase()
 }
 
+function isOfficialOpenAIBaseUrl(baseUrl: string): boolean {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase()
+    return hostname === 'openai.com' || hostname.endsWith('.openai.com')
+  } catch {
+    return false
+  }
+}
+
 interface GatewayHints {
   isOpenRouter: boolean
   isCloudflare: boolean
   isFireworks: boolean
   isDeepSeek: boolean
+  /** 是否为 OpenAI 官方端点（api.openai.com 等官方域）。 */
+  isOfficialOpenAI: boolean
 }
 
 function detectGateways(channel: PiQueryChannel, api: Api): GatewayHints {
@@ -206,11 +217,17 @@ function detectGateways(channel: PiQueryChannel, api: Api): GatewayHints {
     isFireworks: provider.includes('fireworks') || baseUrl.includes('fireworks.ai'),
     // deepseek 的 thinkingFormat 仅对 chat completions 有意义
     isDeepSeek: api === 'openai-completions' && (provider.includes('deepseek') || baseUrl.includes('deepseek.com')),
+    // Azure（openai.azure.com）不属于 openai.com 官方域，同样走保守分支 —— 无害，Azure 亦接受 system
+    isOfficialOpenAI: isOfficialOpenAIBaseUrl(baseUrl),
   }
 }
 
 function inferOpenAICompletionsCompat(hints: GatewayHints, modelId: string): OpenAICompletionsCompat | undefined {
   const compat: OpenAICompletionsCompat = {}
+  // 非官方 OpenAI 端点一律保守使用 system role：
+  // system 在官方 OpenAI 上同样被等价接受，而部分第三方网关（如 TokenRouter）
+  // 的流式校验会拒绝 developer role —— reasoning 模型必现 400。
+  if (!hints.isOfficialOpenAI) compat.supportsDeveloperRole = false
   if (hints.isOpenRouter) {
     compat.thinkingFormat = 'openrouter'
     compat.supportsDeveloperRole = false
@@ -233,6 +250,8 @@ function inferOpenAICompletionsCompat(hints: GatewayHints, modelId: string): Ope
 
 function inferOpenAIResponsesCompat(hints: GatewayHints): OpenAIResponsesCompat | undefined {
   const compat: OpenAIResponsesCompat = {}
+  // 与 completions 路径保持一致：非官方端点不发 developer role（openai-responses-shared 同样按该字段择 role）
+  if (!hints.isOfficialOpenAI) compat.supportsDeveloperRole = false
   if (hints.isCloudflare) compat.supportsLongCacheRetention = false
   return Object.keys(compat).length > 0 ? compat : undefined
 }
