@@ -42,3 +42,5 @@ vendor
 
 main.cjs
 bun.lockb
+.alma-snapshots
+apps/electron/runtime-pressure.jsonl

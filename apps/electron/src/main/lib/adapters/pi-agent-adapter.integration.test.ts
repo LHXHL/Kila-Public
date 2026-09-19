@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentTool } from '@earendil-works/pi-agent-core'
 import type { AgentEvent } from '@kila/shared'
-import type { PiAgentQueryOptions } from './pi-agent-adapter'
+import type { PiAgentQueryOptions } from '../../../utility/pi-agent-adapter'
 
 interface RecordedRequest {
   authorization: string | null
@@ -77,7 +77,7 @@ describe('PiAgentAdapter integration', () => {
     const workspaceDir = mkdtempSync(join(tmpdir(), 'kila-pi-pre-abort-workspace-'))
     const originalConfigDir = process.env.KILA_CONFIG_DIR
     const originalFetch = globalThis.fetch
-    let adapter: import('./pi-agent-adapter').PiAgentAdapter | undefined
+    let adapter: import('../../../utility/pi-agent-adapter').PiAgentAdapter | undefined
     let requestCount = 0
 
     process.env.KILA_CONFIG_DIR = configDir
@@ -87,7 +87,7 @@ describe('PiAgentAdapter integration', () => {
     }) as unknown as typeof fetch
 
     try {
-      const { PiAgentAdapter } = await import('./pi-agent-adapter')
+      const { PiAgentAdapter } = await import('../../../utility/pi-agent-adapter')
       adapter = new PiAgentAdapter()
       const controller = new AbortController()
       controller.abort()
@@ -126,8 +126,8 @@ describe('PiAgentAdapter integration', () => {
     const workspaceDir = mkdtempSync(join(tmpdir(), 'kila-pi-integration-workspace-'))
     const originalConfigDir = process.env.KILA_CONFIG_DIR
     const requests: RecordedRequest[] = []
-    let adapter: import('./pi-agent-adapter').PiAgentAdapter | undefined
-    let restartedAdapter: import('./pi-agent-adapter').PiAgentAdapter | undefined
+    let adapter: import('../../../utility/pi-agent-adapter').PiAgentAdapter | undefined
+    let restartedAdapter: import('../../../utility/pi-agent-adapter').PiAgentAdapter | undefined
 
     process.env.KILA_CONFIG_DIR = configDir
     // Pi 默认会读取 agentDir 与 cwd 祖先目录中的 AGENTS.md / CLAUDE.md。
@@ -209,7 +209,7 @@ describe('PiAgentAdapter integration', () => {
     }) as unknown as typeof fetch
 
     try {
-      const { PiAgentAdapter } = await import('./pi-agent-adapter')
+      const { PiAgentAdapter } = await import('../../../utility/pi-agent-adapter')
       adapter = new PiAgentAdapter()
       const sessionId = 'pi-integration-session'
       const channel = {
@@ -355,7 +355,7 @@ describe('PiAgentAdapter integration', () => {
     const configDir = mkdtempSync(join(tmpdir(), 'kila-pi-permission-config-'))
     const workspaceDir = mkdtempSync(join(tmpdir(), 'kila-pi-permission-workspace-'))
     const originalConfigDir = process.env.KILA_CONFIG_DIR
-    let adapter: import('./pi-agent-adapter').PiAgentAdapter | undefined
+    let adapter: import('../../../utility/pi-agent-adapter').PiAgentAdapter | undefined
     let executeCount = 0
     let requestCount = 0
 
@@ -398,7 +398,7 @@ describe('PiAgentAdapter integration', () => {
     }) as unknown as typeof fetch
 
     try {
-      const { PiAgentAdapter } = await import('./pi-agent-adapter')
+      const { PiAgentAdapter } = await import('../../../utility/pi-agent-adapter')
       adapter = new PiAgentAdapter()
       const tool: AgentTool = {
         name: 'dangerous_tool',
@@ -458,7 +458,7 @@ describe('PiAgentAdapter integration', () => {
   })
 
   test('Given Pi 自动重试事件, When 映射到 Kila UI 事件, Then 保留重试历史和最终失败状态', async () => {
-    const { mapPiEventToKilaEvents } = await import('./pi-agent-adapter')
+    const { mapPiEventToKilaEvents } = await import('../../../utility/pi-event-mapper')
     type PiRuntimeEvent = Parameters<typeof mapPiEventToKilaEvents>[0]
 
     const started = mapPiEventToKilaEvents({
@@ -514,7 +514,7 @@ describe('PiAgentAdapter integration', () => {
     const configDir = mkdtempSync(join(tmpdir(), 'kila-pi-compact-config-'))
     const workspaceDir = mkdtempSync(join(tmpdir(), 'kila-pi-compact-workspace-'))
     const originalConfigDir = process.env.KILA_CONFIG_DIR
-    let adapter: import('./pi-agent-adapter').PiAgentAdapter | undefined
+    let adapter: import('../../../utility/pi-agent-adapter').PiAgentAdapter | undefined
     let requestCount = 0
     const requestBodies: string[] = []
 
@@ -530,7 +530,7 @@ describe('PiAgentAdapter integration', () => {
     }) as unknown as typeof fetch
 
     try {
-      const { PiAgentAdapter } = await import('./pi-agent-adapter')
+      const { PiAgentAdapter } = await import('../../../utility/pi-agent-adapter')
       adapter = new PiAgentAdapter()
       // Pi 0.80 默认保留最近 20k token；构造足够长的既有 Kila 历史，
       // 才能验证真正的压缩，而不是误把 SDK 的 "Nothing to compact" 当成功。
@@ -586,7 +586,7 @@ describe('PiAgentAdapter integration', () => {
     const configDir = mkdtempSync(join(tmpdir(), 'kila-pi-abort-config-'))
     const workspaceDir = mkdtempSync(join(tmpdir(), 'kila-pi-abort-workspace-'))
     const originalConfigDir = process.env.KILA_CONFIG_DIR
-    let adapter: import('./pi-agent-adapter').PiAgentAdapter | undefined
+    let adapter: import('../../../utility/pi-agent-adapter').PiAgentAdapter | undefined
     let requestCount = 0
     let resolveFirstRequestStarted: (() => void) | undefined
     const firstRequestStarted = new Promise<void>((resolve) => {
@@ -641,7 +641,7 @@ describe('PiAgentAdapter integration', () => {
     }) as unknown as typeof fetch
 
     try {
-      const { PiAgentAdapter } = await import('./pi-agent-adapter')
+      const { PiAgentAdapter } = await import('../../../utility/pi-agent-adapter')
       adapter = new PiAgentAdapter()
       const input: PiAgentQueryOptions = {
         sessionId: 'pi-abort-session',

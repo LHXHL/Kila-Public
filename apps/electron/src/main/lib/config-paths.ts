@@ -105,6 +105,11 @@ export function getSessionsIndexPath(): string {
   return join(getConfigDir(), 'sessions.json')
 }
 
+/** Session 删除事务的持久化 tombstone。 */
+export function getSessionDeletionTombstonesPath(): string {
+  return join(getConfigDir(), 'session-deletion-tombstones.json')
+}
+
 export function getSessionMessagesPath(id: string): string {
   return join(getSessionsDir(), `${id}.jsonl`)
 }
@@ -126,6 +131,46 @@ export function getPiSessionsDir(): string {
     log.info(`[配置] 已创建 Pi Session sidecar 目录: ${dir}`)
   }
   return dir
+}
+
+/** Runtime 与主进程之间的受控 transfer bundle 根目录。 */
+export function getRuntimeTransferDir(): string {
+  const dir = join(getConfigDir(), 'runtime-transfer')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    log.info(`[配置] 已创建 Runtime transfer 目录: ${dir}`)
+  }
+  return dir
+}
+
+export function getRuntimeTransferBundleDir(runId: string): string {
+  return join(getRuntimeTransferDir(), safePathSegment(runId))
+}
+
+export function getPiSessionsQuarantineDir(): string {
+  const dir = join(getConfigDir(), 'pi-sessions-quarantine')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    log.info(`[配置] 已创建 Pi sidecar 隔离目录: ${dir}`)
+  }
+  return dir
+}
+
+export function getPiSessionQuarantinePath(sessionId: string, suffix: string): string {
+  const dir = join(getPiSessionsQuarantineDir(), safePathSegment(sessionId), safePathSegment(suffix))
+  return dir
+}
+
+export function getPiSessionRuntimeLockPath(sessionId: string): string {
+  return join(getPiSessionDir(sessionId), 'runtime.lock')
+}
+
+export function getPiRunJournalPath(sessionId: string): string {
+  return join(getPiSessionDir(sessionId), 'kila-run-journal.json')
+}
+
+export function getAgentRunReceiptPath(sessionId: string): string {
+  return join(getPiSessionDir(sessionId), 'kila-run-receipt.json')
 }
 
 export function getAuditLogPath(): string {

@@ -4,7 +4,7 @@ import {
   createPiEventMapper,
   mapPiErrorMessageToKilaEvent,
   mapPiEventToKilaEvents,
-} from './pi-agent-adapter'
+} from '../../../utility/pi-event-mapper'
 
 describe('Pi 渠道协议映射', () => {
   test('Given 渠道显式声明 apiType, When 构建 Pi 模型, Then 以协议配置而非模型名称决定 API', () => {

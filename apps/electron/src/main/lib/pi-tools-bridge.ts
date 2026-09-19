@@ -14,6 +14,7 @@ import type { ImageContent, TextContent } from '@earendil-works/pi-ai'
 import type {
   AgentToolMeta,
   AgentToolsFileConfig,
+  CodingTool,
   WorkspaceMcpConfig,
 } from '@kila/shared'
 import { Type } from '@sinclair/typebox'
@@ -44,7 +45,8 @@ import {
   isWebSearchAvailable,
 } from './agent-tools/web-search-tool'
 import { executeHttpTool } from './agent-tools/http-tool-executor'
-
+import { KILA_CODING_TOOL } from './agent-runtime/coding-tool-marker'
+type KilaCodingAgentTool = AnyAgentTool & { [KILA_CODING_TOOL]?: CodingTool }
 
 import { createLogger } from './logger'
 const log = createLogger('Pi MCP')
@@ -78,6 +80,39 @@ interface CustomHttpToolOptions {
 interface CustomHttpToolDeps {
   executeHttpTool?: typeof executeHttpTool
   getAgentToolsConfig?: () => AgentToolsFileConfig
+}
+
+/**
+ * 把不依赖 Pi SDK 的 Kila coding tool 适配成当前本地 AgentSession 所需的形状。
+ *
+ * 这是阶段零的过渡边界：工具实现与 Pi 类型解耦，后续 ToolHost 可以复用同一
+ * executor，而 Runtime 侧只需要根据 descriptor 创建 proxy tool。
+ */
+export function createPiCodingTools(tools: CodingTool[]): AnyAgentTool[] {
+  return tools.map((tool) => ({
+    name: tool.name,
+    label: tool.label,
+    description: tool.description,
+    parameters: tool.parameters as never,
+    execute: async (toolCallId, params, signal, onUpdate) => {
+      const result = await tool.execute(
+        toolCallId,
+        params as Record<string, unknown>,
+        signal,
+        (update) => {
+          onUpdate?.({
+            content: [{ type: 'text', text: update.partialText }],
+            details: update.details ?? {},
+          })
+        },
+      )
+      return {
+        content: [{ type: 'text', text: result.text }],
+        details: result.details ?? {},
+      }
+    },
+    [KILA_CODING_TOOL]: tool,
+  }) as KilaCodingAgentTool)
 }
 
 export interface McpAgentToolOptions {

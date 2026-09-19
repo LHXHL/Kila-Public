@@ -42,6 +42,7 @@ import { createLogger } from './logger'
 const log = createLogger('渠道管理')
 
 const CONFIG_VERSION = 1
+const PLAINTEXT_API_KEY_PREFIX = 'plain:'
 
 /**
  * 渠道配置降级只读登记表。
@@ -207,7 +208,7 @@ function encryptApiKey(plainKey: string): string {
 
   if (!safeStorage.isEncryptionAvailable()) {
     log.warn('[渠道管理] safeStorage 加密不可用，将以明文存储')
-    return plainKey
+    return `${PLAINTEXT_API_KEY_PREFIX}${plainKey}`
   }
 
   const encrypted = safeStorage.encryptString(plainKey)
@@ -221,6 +222,10 @@ function encryptApiKey(plainKey: string): string {
  * @returns 明文 API Key
  */
 function decryptKey(encryptedKey: string): string {
+  if (encryptedKey.startsWith(PLAINTEXT_API_KEY_PREFIX)) {
+    return encryptedKey.slice(PLAINTEXT_API_KEY_PREFIX.length)
+  }
+
   const safeStorage = getSafeStorage()
 
   if (!safeStorage.isEncryptionAvailable()) {

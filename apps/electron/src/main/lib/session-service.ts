@@ -35,9 +35,9 @@ import { createSessionRuntimeBridge, sendUnifiedSessionError } from './session-r
 import { emitSessionRuntimeRunStart } from './session-runtime-observers'
 import { getSettings } from './settings-service'
 import { getTokenUsageStats, recordTokenUsageFromCompleteEvent } from './token-usage-service'
+import { assertSessionNotDeleting } from './session-deletion-tombstone'
 
 export { createSessionRuntimeBridge } from './session-runtime-bridge'
-
 const log = createLogger('SessionService')
 
 type AgentRuntimeModule = typeof import('./agent-service')
@@ -104,12 +104,7 @@ const SLASH_COMMAND_PREFIX = '/'
 const DEFAULT_SESSION_TITLE = '新会话'
 
 function resolveSessionTitle(title: string | undefined): string {
-  if (typeof title !== 'string') {
-    return DEFAULT_SESSION_TITLE
-  }
-
-  const trimmed = title.trim()
-  return trimmed || DEFAULT_SESSION_TITLE
+  return typeof title === 'string' ? title.trim() || DEFAULT_SESSION_TITLE : DEFAULT_SESSION_TITLE
 }
 
 function findFirstTitleCandidate(messages: SessionMessage[]): SessionMessage | null {
@@ -415,6 +410,7 @@ export class SessionService {
   }
 
   async regenerateTurn(sessionId: string, messageId: string, webContents?: WebContents): Promise<void> {
+    assertSessionNotDeleting(sessionId)
     const session = this.deps.getSessionMeta(sessionId)
     if (!session) {
       throw new Error(`Session 不存在: ${sessionId}`)
@@ -457,6 +453,7 @@ export class SessionService {
   }
 
   async editTurn(input: SessionEditTurnInput, webContents?: WebContents): Promise<void> {
+    assertSessionNotDeleting(input.sessionId)
     const session = this.deps.getSessionMeta(input.sessionId)
     if (!session) {
       throw new Error(`Session 不存在: ${input.sessionId}`)
@@ -498,6 +495,7 @@ export class SessionService {
   }
 
   async rewind(input: SessionRewindInput): Promise<SessionMessage[]> {
+    assertSessionNotDeleting(input.sessionId)
     const session = this.deps.getSessionMeta(input.sessionId)
     if (!session) throw new Error(`Session 不存在: ${input.sessionId}`)
 
@@ -521,6 +519,7 @@ export class SessionService {
   }
 
   async sendMessage(input: SessionSendInput, webContents?: WebContents): Promise<void> {
+    assertSessionNotDeleting(input.sessionId)
     const session = this.deps.getSessionMeta(input.sessionId)
     if (!session) {
       throw new Error(`Session 不存在: ${input.sessionId}`)
@@ -651,6 +650,7 @@ export class SessionService {
   }
 
   async queueFollowUp(sessionId: string, input: SessionSendInput, webContents?: WebContents): Promise<void> {
+    assertSessionNotDeleting(sessionId)
     const session = this.deps.getSessionMeta(sessionId)
     if (!session) {
       throw new Error(`Session 不存在: ${sessionId}`)

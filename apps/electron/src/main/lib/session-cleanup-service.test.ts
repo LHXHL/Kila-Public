@@ -7,8 +7,7 @@ describe('Session 删除清理事务', () => {
     const record = (name: string) => (sessionId: string) => { calls.push(`${name}:${sessionId}`) }
     const recordAsync = (name: string) => async (sessionId: string) => { calls.push(`${name}:${sessionId}`) }
     const deps: SessionCleanupDeps = {
-      stopSessionAndWait: async (sessionId, timeoutMs) => { calls.push(`stop:${sessionId}:${timeoutMs}`) },
-      resetAgentSession: recordAsync('runtime'),
+      disposeSessionRuntime: recordAsync('runtime'),
       clearPiSessionState: record('pi'),
       clearProcesses: record('process'),
       clearProjectRunChanges: record('changes'),
@@ -25,7 +24,6 @@ describe('Session 删除清理事务', () => {
     await deleteSessionWithCleanup('session-1', deps)
 
     expect(calls).toEqual([
-      'stop:session-1:5000',
       'runtime:session-1',
       'pi:session-1',
       'process:session-1',
@@ -39,5 +37,31 @@ describe('Session 删除清理事务', () => {
       'attachments:session-1',
       'session:session-1',
     ])
+  })
+
+  test('Given 清理中任一步失败, When 删除事务结算, Then 保留失败 tombstone 并继续向上抛错', async () => {
+    const calls: string[] = []
+    const deps: SessionCleanupDeps = {
+      beginSessionDeletion: (sessionId) => calls.push(`begin:${sessionId}`),
+      completeSessionDeletion: (sessionId) => calls.push(`complete:${sessionId}`),
+      markSessionDeletionFailed: (sessionId, error) => calls.push(`failed:${sessionId}:${String(error)}`),
+      disposeSessionRuntime: async () => { throw new Error('runtime exit timeout') },
+      clearPiSessionState: () => undefined,
+      clearProcesses: () => undefined,
+      clearProjectRunChanges: () => undefined,
+      beforeDeleteMemory: async () => undefined,
+      stopWebPreview: async () => undefined,
+      clearPermissionWhitelist: () => undefined,
+      clearPermissionPending: () => undefined,
+      clearAskUserPending: () => undefined,
+      unwatchProject: () => undefined,
+      deleteAttachments: () => undefined,
+      deleteSession: () => undefined,
+    }
+
+    await expect(deleteSessionWithCleanup('session-failed', deps)).rejects.toThrow('runtime exit timeout')
+    expect(calls[0]).toBe('begin:session-failed')
+    expect(calls[1]).toContain('failed:session-failed:Error: runtime exit timeout')
+    expect(calls).not.toContain('complete:session-failed')
   })
 })

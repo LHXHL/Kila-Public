@@ -16,8 +16,8 @@ import {
   type RetryAttempt,
   type TypedError,
 } from '@kila/shared'
-import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
-import { friendlyErrorMessage, isPromptTooLongError } from './adapters/pi-agent-adapter'
+import type { PiAgentQueryOptions } from './agent-query-types'
+import { friendlyErrorMessage, isPromptTooLongError } from './agent-error-utils'
 import type { AgentEventBus } from './agent-event-bus'
 import { appendAgentMessage, getAgentMessages, touchAgentSession } from './agent-message-store'
 import { getSessionMessages, saveSessionMessages } from './session-manager'
@@ -25,6 +25,7 @@ import { createLogger } from './logger'
 import { memoryLifecycleManager, shouldPersistRunMemory } from './memory/lifecycle-manager'
 import { patchLatestAssistantMemoryTrace } from './memory/write-trace'
 import { recordCompactionTokenUsage } from './token-usage-service'
+import { writeAgentRunReceipt } from './agent-run-receipt-store'
 
 const log = createLogger('Agent流')
 
@@ -48,6 +49,8 @@ export interface RunAgentStreamInput {
   adapter: AgentProviderAdapter
   eventBus: AgentEventBus
   queryOptions: PiAgentQueryOptions
+  /** 本轮用户消息 id（orchestrator 落盘时显式捕获），作为续跑迭代间 persisted 确认的安全边界。 */
+  turnUserMessageId: string
   resolvedModel: string
   memoryTrace: MemoryRunTrace
   shouldContinue?: (sessionId: string) => boolean
@@ -151,6 +154,7 @@ const UNBUFFERED_EVENT_TYPES: ReadonlySet<AgentEvent['type']> = new Set([
   'model_resolved',
   'compact_complete',
   'compact_failed',
+  'runtime_queued',
 ])
 
 function createAttemptBuffer(model: string): AttemptBuffer {
@@ -204,6 +208,7 @@ export async function runAgentStream({
   adapter,
   eventBus,
   queryOptions,
+  turnUserMessageId,
   resolvedModel,
   memoryTrace,
   shouldContinue,
@@ -217,6 +222,18 @@ export async function runAgentStream({
     messageSourceLabel,
     relatedTaskId,
   } = input
+  const initialMessageCount = getAgentMessages(sessionId).length
+  // 防御校验：显式传入的边界 id 必须确实对应本轮刚落盘的 user 消息（位置与角色双确认），
+  // 不变量被破坏时 fail-fast，绝不带着错误的安全边界进入续跑确认。
+  const turnStartMessage = getAgentMessages(sessionId).at(initialMessageCount - 1)
+  if (turnStartMessage?.id !== turnUserMessageId || turnStartMessage?.role !== 'user') {
+    throw new Error(`runtime_protocol_desync: turn 用户消息校验失败: ${turnUserMessageId}`)
+  }
+  // runId 语义：一次 adapter.query() = 一个 runtime run（一次 bundle + journal 闭环）。
+  // goal loop / 压缩续跑 / 外层重试的每次再 query 都必须轮转 runId，
+  // 否则撞 transfer bundle 唯一性与 Utility 的 completedRun 守卫。
+  // runId 显式注入 activeQueryOptions，保证 stream 与 adapter 消费的是同一个 run 身份。
+  let runId = queryOptions.runId ?? randomUUID()
 
   let activeModel = resolvedModel
   let attemptBuffer = createAttemptBuffer(activeModel)
@@ -226,11 +243,12 @@ export async function runAgentStream({
   let lastStopReason: string | undefined
   // 压缩后自动续跑只允许一次，防止「截断 → 压缩 → 续跑」退化成无限循环。
   let autoContinueUsed = false
-  let activeQueryOptions = queryOptions
+  let activeQueryOptions: PiAgentQueryOptions = { ...queryOptions, runId }
   let goalLoopIterations = 0
   // 本轮尚未落盘的压缩事件。一轮内可能压缩多次，逐条落盘避免漏计。
   const pendingCompactionEvents: CompactCompleteEvent[] = []
   let terminalError: string | null = null
+  let runtimeSettled = true
 
   const sourceMeta = { messageSource, messageSourceLabel, relatedTaskId }
   const memoryTraceEvent: AgentEvent = { type: 'memory_trace', trace: memoryTrace }
@@ -327,6 +345,84 @@ export async function runAgentStream({
     return getAgentMessages(sessionId)
   }
 
+  const completePersistedRun = async (
+    outcome: AgentRunOutcome,
+    options?: { confirmRuntime?: boolean },
+  ): Promise<void> => {
+    const messages = completeWithPostRun()
+    // 用户消息在进入 stream 前已经落盘；若本轮在 prompt 提交前就被中止，
+    // 不能把它误当成新的 Pi 安全提交点，否则 sidecar 重建会把未提交 run 当历史导入。
+    const lastMessage = messages.slice(initialMessageCount).at(-1)
+    if (lastMessage) {
+      writeAgentRunReceipt(sessionId, {
+        runId,
+        sessionId,
+        outcome,
+        lastMessageId: lastMessage.id,
+        fullyPersisted: true,
+        runtimeSettled,
+        completedAt: Date.now(),
+      })
+      if (options?.confirmRuntime !== false) {
+        try {
+          // 终态收敛始终宽松：rejected / 未 settle 的 run 在 adapter 内合法 no-op
+          await adapter.markRunPersisted?.(sessionId, runId, lastMessage.id)
+        } catch (error: unknown) {
+          // JSONL 已经完成持久化，但 Runtime 未确认 clean 边界；receipt 的 runtimeSettled
+          // 声明随之失真，补写修正，让下次启动按 dirty sidecar 规则处理。
+          runtimeSettled = false
+          writeAgentRunReceipt(sessionId, {
+            runId,
+            sessionId,
+            outcome,
+            lastMessageId: lastMessage.id,
+            fullyPersisted: true,
+            runtimeSettled: false,
+            completedAt: Date.now(),
+          })
+          log.warn('[Agent流] Runtime 持久化确认失败:', error)
+        }
+      }
+    }
+    onComplete(messages, outcome)
+  }
+
+  /**
+   * 中间 run 的持久化确认：goal loop / 压缩续跑 / 外层重试在再次 query 之前，
+   * 必须让 Runtime 完成上一个 run 的 settled→persisted→ack 闭环，
+   * 否则下一次 run.start 会撞 bundle runId 唯一性与 completedRun 守卫。
+   * strict 模式要求上一 run 确实 settle（防御“表面结束实际未 settle”的协议破坏）；
+   * 宽松模式允许 rejected / 未 settle 的 run 合法缺席（adapter 内 no-op）。
+   */
+  const confirmRuntimeRun = async (options: { strict: boolean }): Promise<boolean> => {
+    try {
+      await adapter.markRunPersisted?.(sessionId, runId, turnUserMessageId, {
+        requireSettledRun: options.strict,
+      })
+      return true
+    } catch (error: unknown) {
+      log.error('[Agent流] 中间 run 持久化确认失败，终止本轮续跑:', error)
+      runtimeSettled = false
+      return false
+    }
+  }
+
+  /** 确认失败时收敛本轮为 error；跳过终态处的二次 markRunPersisted（该 run 已确认失败）。 */
+  const convergeIntermediateConfirmFailure = async (): Promise<void> => {
+    persistTurnArtifacts()
+    appendAgentMessage(sessionId, {
+      id: randomUUID(),
+      role: 'status',
+      content: 'Agent Runtime 确认失败，本轮续跑已终止，请重试',
+      createdAt: Date.now(),
+      errorCode: 'runtime_unresponsive',
+      errorTitle: 'Agent Runtime 无响应',
+      errorCanRetry: true,
+    })
+    onError('Agent Runtime 无响应：中间 run 持久化确认失败，本轮续跑已终止')
+    await completePersistedRun('error', { confirmRuntime: false })
+  }
+
   let lastRetryableError: string | undefined
   // Pi AgentSession 已拥有 provider retry / context overflow recovery；外层再次 query
   // 会把同一条用户 prompt 重复提交并造成重复回复、重复工具调用。
@@ -367,11 +463,23 @@ export async function runAgentStream({
       if (!canContinue(sessionId)) {
         persistTurnArtifacts()
         touchAgentSession(sessionId)
-        onComplete(completeWithPostRun(), 'stopped')
+        await completePersistedRun('stopped')
         return
       }
+
+      // 上一个失败 attempt 若已 settle（如 fatal 迟到于 settled），其 run 仍占着 completedRun；
+      // 重试同样必须先确认再换 runId。宽松模式：rejected / 未 settle 的 attempt 合法缺席。
+      if (!(await confirmRuntimeRun({ strict: false }))) {
+        await convergeIntermediateConfirmFailure()
+        return
+      }
+      runId = randomUUID()
+      activeQueryOptions = { ...activeQueryOptions, runId }
     }
 
+    // runtimeSettled 只描述当前（最终）run 的 settle 状态，每次迭代开始重置，
+    // 避免早期迭代的 runtime 错误污染最终成功 turn 的 receipt。
+    runtimeSettled = true
     let shouldRetry = false
 
     try {
@@ -382,6 +490,7 @@ export async function runAgentStream({
 
         if (timelineEvent.type === 'typed_error') {
           const isRetryableError = isAutoRetryableTypedError(timelineEvent.error)
+          if (timelineEvent.error.code.startsWith('runtime_')) runtimeSettled = false
 
           if (isRetryableError && attempt <= maxOuterRetries) {
             lastRetryableError = timelineEvent.error.title
@@ -425,7 +534,7 @@ export async function runAgentStream({
             ? `${timelineEvent.error.title}: ${timelineEvent.error.message}`
             : timelineEvent.error.message
           onError(typedErrorMessage)
-          onComplete(completeWithPostRun(), 'error')
+          await completePersistedRun('error')
           return
         }
 
@@ -483,7 +592,7 @@ export async function runAgentStream({
       if (!canContinue(sessionId)) {
         persistTurnArtifacts()
         touchAgentSession(sessionId)
-        onComplete(completeWithPostRun(), 'stopped')
+        await completePersistedRun('stopped')
         return
       }
 
@@ -504,7 +613,7 @@ export async function runAgentStream({
         })
         touchAgentSession(sessionId)
         onError(terminalError)
-        onComplete(completeWithPostRun(), 'error')
+        await completePersistedRun('error')
         return
       }
 
@@ -517,12 +626,19 @@ export async function runAgentStream({
         && !autoContinueUsed
         && canContinue(sessionId)
       ) {
+        // 严格确认：能走到续跑说明上一迭代“看起来正常结束”，run 却未 settle 即协议不变量被破坏
+        if (!(await confirmRuntimeRun({ strict: true }))) {
+          await convergeIntermediateConfirmFailure()
+          return
+        }
         autoContinueUsed = true
         lastStopReason = undefined
         terminalError = null
         lastPersistedRetryAttempt = undefined
+        runId = randomUUID()
         activeQueryOptions = {
           ...queryOptions,
+          runId,
           prompt: COMPACTION_AUTO_CONTINUE_PROMPT,
           rawPrompt: COMPACTION_AUTO_CONTINUE_PROMPT,
           promptImages: undefined,
@@ -545,12 +661,19 @@ export async function runAgentStream({
         && goalLoopIterations < MAX_GOAL_LOOP_ITERATIONS
         && canContinue(sessionId)
       ) {
+        // 严格确认：同上，未 settle 的上一迭代不允许静默续跑
+        if (!(await confirmRuntimeRun({ strict: true }))) {
+          await convergeIntermediateConfirmFailure()
+          return
+        }
         goalLoopIterations += 1
         lastStopReason = undefined
         terminalError = null
         lastPersistedRetryAttempt = undefined
+        runId = randomUUID()
         activeQueryOptions = {
           ...queryOptions,
+          runId,
           prompt: '请继续执行当前目标。先检查刚才的实际结果与验收标准，补齐所有尚未完成或未验证的工作；如果已经全部完成，请在回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_COMPLETE -->。如果缺少关键信息、需要用户授权或遇到不可恢复错误，请说明阻塞原因，并在回复末尾单独输出 HTML 注释 <!-- KILA_GOAL_BLOCKED -->。',
           rawPrompt: '请继续执行当前目标并完成自检。',
           promptImages: undefined,
@@ -589,13 +712,15 @@ export async function runAgentStream({
         }
       }
       touchAgentSession(sessionId)
-      onComplete(completeWithPostRun(), finalOutcome)
+      await completePersistedRun(finalOutcome)
       return
     } catch (error) {
+      // query 抛异常时 run 的 settle 状态不可知，receipt 必须保守声明
+      runtimeSettled = false
       if (!canContinue(sessionId)) {
         persistTurnArtifacts()
         touchAgentSession(sessionId)
-        onComplete(completeWithPostRun(), 'stopped')
+        await completePersistedRun('stopped')
         return
       }
 
@@ -630,7 +755,7 @@ export async function runAgentStream({
       }
 
       onError(userFacingError)
-      onComplete(completeWithPostRun(), 'error')
+      await completePersistedRun('error')
       return
     }
   }
@@ -657,6 +782,6 @@ export async function runAgentStream({
     })
 
     onError(`重试 ${maxOuterRetries} 次后仍然失败: ${lastRetryableError}`)
-    onComplete(completeWithPostRun(), 'error')
+    await completePersistedRun('error')
   }
 }

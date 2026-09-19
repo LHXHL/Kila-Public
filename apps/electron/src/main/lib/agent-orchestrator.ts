@@ -168,15 +168,19 @@ export class AgentOrchestrator {
     this.sessionRuns.set(sessionId, runState)
 
     try {
-      appendAgentMessage(sessionId, createRuntimeUserMessage({
+      const turnUserMessage = createRuntimeUserMessage({
         userMessage,
         attachments,
         messageSource,
         messageSourceLabel,
         relatedTaskId,
-      }))
+      })
+      appendAgentMessage(sessionId, turnUserMessage)
 
-      const runContext = await buildAgentRunContext(input, channelContext.value, this.eventBus)
+      // runId 是 turn 级工具幂等作用域 id（ToolHost 复合键），iteration-1 复用；
+      // 后续续跑迭代的 runtime runId 由 stream 层轮转，两者刻意分离。
+      const runId = randomUUID()
+      const runContext = await buildAgentRunContext(input, channelContext.value, this.eventBus, { runId })
       runState.modelId = runContext.resolvedModel
 
       await runAgentStream({
@@ -184,6 +188,7 @@ export class AgentOrchestrator {
         adapter: this.adapter,
         eventBus: this.eventBus,
         queryOptions: runContext.queryOptions,
+        turnUserMessageId: turnUserMessage.id,
         resolvedModel: runContext.resolvedModel,
         memoryTrace: runContext.memoryTrace,
         shouldContinue: (id) => !this.sessionRuns.get(id)?.abortRequested,
@@ -256,6 +261,15 @@ export class AgentOrchestrator {
     await this.adapter.resetSession?.(sessionId)
   }
 
+  async disposeSessionRuntime(sessionId: string): Promise<void> {
+    await this.stopAndWait(sessionId)
+    if (this.adapter.disposeSessionRuntime) {
+      await this.adapter.disposeSessionRuntime(sessionId)
+    } else {
+      await this.adapter.resetSession?.(sessionId)
+    }
+  }
+
   async waitForIdle(sessionId: string): Promise<void> {
     const runState = this.sessionRuns.get(sessionId)
     if (!runState) return
@@ -305,7 +319,28 @@ export class AgentOrchestrator {
       runState.abortRequested = true
       runState.resolveSettled()
     }
-    this.adapter.dispose()
+    void this.adapter.dispose()
+    this.sessionRuns.clear()
+  }
+
+  /**
+   * 应用退出屏障：先请求所有运行停止，再等待 transcript/sidecar 资源释放，
+   * 最后才允许 Electron 退出，避免 Utility Process 被直接截断。
+   */
+  async shutdown(): Promise<void> {
+    const sessionIds = [...this.sessionRuns.keys()]
+    for (const sessionId of sessionIds) this.stop(sessionId)
+
+    await Promise.allSettled(sessionIds.map(async (sessionId) => {
+      try {
+        await this.stopAndWait(sessionId, 5_000)
+      } catch (error) {
+        log.warn(`[Agent 编排] 退出等待会话超时: ${sessionId}`, error)
+      }
+      await this.adapter.disposeSessionRuntime?.(sessionId)
+    }))
+
+    await this.adapter.dispose()
     this.sessionRuns.clear()
   }
 }

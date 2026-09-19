@@ -193,6 +193,12 @@ describe('Agent 流式重试与终态', () => {
     expect(error.retrying).toBeUndefined()
   })
 
+  test('Given Runtime 等待并发 slot When 收到排队事件 Then 保持运行态而不产生终态错误', () => {
+    const queued = applyAgentEvent({ ...initialState, running: false }, { type: 'runtime_queued', position: 2 })
+
+    expect(queued.running).toBe(true)
+  })
+
   test('Given compact_failed When 应用 Then 清压缩态但保持会话运行（不中断）', () => {
     // 压缩失败是瞬时/可重试错误，Pi 会自动重试摘要或继续 agent 主循环。
     // 这里必须保持 running: true，等 agent_settled 自然收敛，否则表现为「压缩中断会话」。

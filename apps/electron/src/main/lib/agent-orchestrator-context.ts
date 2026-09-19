@@ -8,8 +8,8 @@ import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import type { AgentSendInput, AskUserRequest, KilaPermissionMode, MemoryRunTrace, PermissionRequest } from '@kila/shared'
 import { buildSessionContextSnapshot, resolveModelMetadata, resolveThinkingLevel } from '@kila/shared'
-import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
-import { buildPromptImages, splitAttachmentsForPiPrompt } from './adapters/pi-history-converter'
+import type { PiAgentQueryOptions } from './agent-query-types'
+import { splitAttachmentsForPiPrompt } from './adapters/pi-history-converter'
 import { askUserService } from './agent-ask-user-service'
 import type { AgentEventBus } from './agent-event-bus'
 import { appendAgentMessage, getAgentMessages } from './agent-message-store'
@@ -25,27 +25,23 @@ import {
   canonicalizeAgentTools,
   collectReservedToolNames,
   mergeAgentToolsWithSource,
-  normalizeToolNameKey,
 } from './agent-tool-names'
+import { createKilaCodingTools } from './agent-tools/coding'
+import { createPiToolHostProxies } from './agent-runtime/pi-tool-host-bridge'
+import { ToolHost } from './agent-runtime/tool-host'
 import { decryptApiKey, getChannelById } from './channel-manager'
 import { resolveChannelModel } from './channel-model-resolution'
-import { loadExternalEsm } from './external-esm-loader'
 import { resolveGlobalSkillMentionEntry } from './global-agent-config-manager'
 import { createLogger } from './logger'
 import { memoryLifecycleManager } from './memory/lifecycle-manager'
 import { composeAgentPrompt } from './memory/prompt-compose'
-import { getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
-import { createTrackedBashOperations } from './process-registry'
+import { createPiCodingTools, getBuiltinAgentTools, getMcpAgentTools } from './pi-tools-bridge'
 import { findProviderDbModel, lookupProviderDbModel } from './provider-db-loader'
 import { getSettings } from './settings-service'
 import { buildShellPromptSection } from './shell-resolution'
 import { resolveShell } from './shell-resolver'
 
 const log = createLogger('Agent 编排')
-
-type PiCodingAgentModule = typeof import('@earendil-works/pi-coding-agent')
-
-let piCodingAgentModulePromise: Promise<PiCodingAgentModule> | undefined
 
 export interface ChannelContext {
   channel: ReturnType<typeof getChannelById> extends infer T ? Exclude<T, undefined> : never
@@ -60,11 +56,6 @@ export interface PreparedAgentRunContext {
   queryOptions: PiAgentQueryOptions
   resolvedModel: string
   memoryTrace: MemoryRunTrace
-}
-
-export function loadPiCodingAgent(): Promise<PiCodingAgentModule> {
-  piCodingAgentModulePromise ??= loadExternalEsm<PiCodingAgentModule>('@earendil-works/pi-coding-agent')
-  return piCodingAgentModulePromise
 }
 
 /**
@@ -111,43 +102,6 @@ function resolveChannelApiKey(
   }
 
   return decryptApiKey(channelId)
-}
-
-/**
- * 给 Pi 内置 bash 工具套上进程追踪
- *
- * 必须在合并之前作用于 codingTools 本身：Pi `0.82.1` 的内置工具名是小写的
- * `read` / `bash` / `edit` / `write`，这里按归一化后的名字匹配，
- * 避免大小写差异让后台任务面板与进程管理静默失效。
- */
-function withTrackedBashTool(
-  tools: AnyAgentTool[],
-  options: {
-    sessionId: string
-    cwd: string
-    createBashTool: PiCodingAgentModule['createBashTool']
-  },
-): AnyAgentTool[] {
-  return tools.map((tool) => {
-    if (normalizeToolNameKey(tool.name) !== 'bash') return tool
-    return {
-      ...tool,
-      execute: (toolCallId, params, signal, onUpdate) => {
-        const trackedBashTool = options.createBashTool(options.cwd, {
-          operations: createTrackedBashOperations({
-            sessionId: options.sessionId,
-            toolCallId,
-          }),
-        })
-        return trackedBashTool.execute(
-          toolCallId,
-          params as { command: string; timeout?: number },
-          signal,
-          onUpdate,
-        )
-      },
-    }
-  })
 }
 
 export function resolveAgentChannelContext(
@@ -225,6 +179,7 @@ export async function buildAgentRunContext(
   input: AgentSendInput,
   channelContext: ChannelContext,
   eventBus: AgentEventBus,
+  options: { runId?: string } = {},
 ): Promise<PreparedAgentRunContext> {
   const {
     sessionId,
@@ -394,12 +349,11 @@ export async function buildAgentRunContext(
   // 仅保留 MCP / 内置 / memory 等不依赖 shell 的工具
   let codingTools: AnyAgentTool[] = []
   if (isShellRuntimeAvailable()) {
-    const { createBashTool, createCodingTools } = await loadPiCodingAgent()
-    codingTools = withTrackedBashTool(createCodingTools(agentCwd), {
+    codingTools = createPiCodingTools(createKilaCodingTools({
       sessionId,
       cwd: agentCwd,
-      createBashTool,
-    })
+      allowedRoots: input.additionalDirectories,
+    }))
   }
   const builtinTools = await getBuiltinAgentTools({
     sessionId,
@@ -444,12 +398,19 @@ export async function buildAgentRunContext(
 
   // 合并顺序即优先级：先到者保留，内置工具永远排在 MCP 与外部注入工具之前
   const mergedTools = mergeAgentToolsWithSource([
-    { source: 'Pi 内置编码工具', tools: codingTools },
+    { source: 'Kila coding tools', tools: codingTools },
     { source: 'Kila 内置工具', tools: builtinTools },
     { source: 'MCP 工具', tools: mcpToolBundle.tools, kind: 'mcp' },
     { source: '运行时注入工具', tools: extraTools },
   ])
-  const tools = canonicalizeAgentTools(mergedTools.map((item) => item.tool))
+  const toolHost = new ToolHost()
+  const tools = canonicalizeAgentTools(createPiToolHostProxies(toolHost, mergedTools, {
+    appBootId: 'main-process',
+    bootId: 'in-process',
+    sessionId,
+    generation: 0,
+    runId: options.runId ?? randomUUID(),
+  }))
   const contextSnapshot = buildSessionContextSnapshot({
     modelId: resolvedModel,
     contextWindow: modelMetadata.contextWindowTokens,
@@ -488,7 +449,7 @@ export async function buildAgentRunContext(
     if (permission.behavior === 'deny') {
       return { block: true, reason: permission.message }
     }
-    return undefined
+    return permission.updatedInput ? { updatedInput: permission.updatedInput } : undefined
   }
 
   return {
@@ -510,11 +471,14 @@ export async function buildAgentRunContext(
       beforeToolCall,
       thinkingLevel,
       maxRetryDelayMs: 30000,
-      promptImages: modelSupportsVision ? await buildPromptImages(piPromptAttachments.imageAttachments) : [],
+      // 图片由 Remote adapter 写入受控 transfer bundle；跨进程 bootstrap 只携带引用。
+      promptImages: [],
+      promptImageAttachments: modelSupportsVision ? piPromptAttachments.imageAttachments : [],
       modelCapabilities: resolvedChannelModel?.capabilities,
       modelMetadata: resolvedChannelModel?.metadataOverride,
       modelProviderDbEntry: providerDbEntry,
       modelCompat: resolvedChannelModel?.compat,
+      runId: options.runId,
     },
   }
 }

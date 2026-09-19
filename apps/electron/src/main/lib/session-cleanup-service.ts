@@ -1,6 +1,10 @@
+import { listPendingSessionDeletions } from './session-deletion-tombstone'
+import { createLogger } from './logger'
+
+const log = createLogger('Session 删除事务')
+
 export interface SessionCleanupDeps {
-  stopSessionAndWait: (sessionId: string, timeoutMs?: number) => Promise<void>
-  resetAgentSession: (sessionId: string) => Promise<void>
+  disposeSessionRuntime: (sessionId: string) => Promise<void>
   clearPiSessionState: (sessionId: string) => void
   clearProcesses: (sessionId: string) => void
   clearProjectRunChanges: (sessionId: string) => void
@@ -12,6 +16,9 @@ export interface SessionCleanupDeps {
   unwatchProject: (sessionId: string) => void
   deleteAttachments: (sessionId: string) => void
   deleteSession: (sessionId: string) => void
+  beginSessionDeletion?: (sessionId: string) => void
+  completeSessionDeletion?: (sessionId: string) => void
+  markSessionDeletionFailed?: (sessionId: string, error: unknown) => void
 }
 
 let defaultDepsPromise: Promise<SessionCleanupDeps> | undefined
@@ -27,9 +34,9 @@ function loadDefaultSessionCleanupDeps(): Promise<SessionCleanupDeps> {
     import('./process-registry'),
     import('./project-run-changes'),
     import('./session-manager'),
-    import('./session-service'),
     import('./session-web-preview-manager'),
     import('./workspace-watcher'),
+    import('./session-deletion-tombstone'),
   ]).then(([
     agentRuntime,
     askUser,
@@ -40,12 +47,11 @@ function loadDefaultSessionCleanupDeps(): Promise<SessionCleanupDeps> {
     processes,
     projectChanges,
     sessions,
-    sessionRuntime,
     webPreview,
     watcher,
+    tombstones,
   ]) => ({
-    stopSessionAndWait: sessionRuntime.stopSessionAndWait,
-    resetAgentSession: agentRuntime.resetAgentSession,
+    disposeSessionRuntime: agentRuntime.disposeSessionRuntime,
     clearPiSessionState: piState.clearPiSessionState,
     clearProcesses: (sessionId) => processes.processRegistry.clearBySession(sessionId),
     clearProjectRunChanges: projectChanges.clearProjectRunChanges,
@@ -57,6 +63,9 @@ function loadDefaultSessionCleanupDeps(): Promise<SessionCleanupDeps> {
     unwatchProject: watcher.unwatchSessionProject,
     deleteAttachments: attachments.deleteConversationAttachments,
     deleteSession: sessions.deleteSession,
+    beginSessionDeletion: tombstones.beginSessionDeletion,
+    completeSessionDeletion: tombstones.completeSessionDeletion,
+    markSessionDeletionFailed: tombstones.markSessionDeletionFailed,
   }))
   return defaultDepsPromise
 }
@@ -67,17 +76,35 @@ export async function deleteSessionWithCleanup(
   deps?: SessionCleanupDeps,
 ): Promise<void> {
   const resolvedDeps = deps ?? await loadDefaultSessionCleanupDeps()
-  await resolvedDeps.stopSessionAndWait(sessionId, 5000)
-  await resolvedDeps.resetAgentSession(sessionId)
-  resolvedDeps.clearPiSessionState(sessionId)
-  resolvedDeps.clearProcesses(sessionId)
-  resolvedDeps.clearProjectRunChanges(sessionId)
-  await resolvedDeps.beforeDeleteMemory(sessionId)
-  await resolvedDeps.stopWebPreview(sessionId)
-  resolvedDeps.clearPermissionWhitelist(sessionId)
-  resolvedDeps.clearPermissionPending(sessionId)
-  resolvedDeps.clearAskUserPending(sessionId)
-  resolvedDeps.unwatchProject(sessionId)
-  resolvedDeps.deleteAttachments(sessionId)
-  resolvedDeps.deleteSession(sessionId)
+  resolvedDeps.beginSessionDeletion?.(sessionId)
+  try {
+    await resolvedDeps.disposeSessionRuntime(sessionId)
+    resolvedDeps.clearPiSessionState(sessionId)
+    resolvedDeps.clearProcesses(sessionId)
+    resolvedDeps.clearProjectRunChanges(sessionId)
+    await resolvedDeps.beforeDeleteMemory(sessionId)
+    await resolvedDeps.stopWebPreview(sessionId)
+    resolvedDeps.clearPermissionWhitelist(sessionId)
+    resolvedDeps.clearPermissionPending(sessionId)
+    resolvedDeps.clearAskUserPending(sessionId)
+    resolvedDeps.unwatchProject(sessionId)
+    resolvedDeps.deleteAttachments(sessionId)
+    resolvedDeps.deleteSession(sessionId)
+    resolvedDeps.completeSessionDeletion?.(sessionId)
+  } catch (error) {
+    resolvedDeps.markSessionDeletionFailed?.(sessionId, error)
+    throw error
+  }
+}
+
+/** 应用启动时继续未完成的删除事务；失败项保留 tombstone，不恢复为普通 Session。 */
+export async function resumePendingSessionDeletions(): Promise<void> {
+  const pending = listPendingSessionDeletions()
+  for (const tombstone of pending) {
+    try {
+      await deleteSessionWithCleanup(tombstone.sessionId)
+    } catch (error) {
+      log.error(`[Session 删除事务] 启动恢复失败: ${tombstone.sessionId}`, error)
+    }
+  }
 }

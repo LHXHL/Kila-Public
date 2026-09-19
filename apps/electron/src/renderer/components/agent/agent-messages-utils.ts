@@ -48,6 +48,11 @@ export function shouldShowMessageSourceBadge(message: AgentMessage): boolean {
     || message.messageSource === 'im-bridge'
 }
 
+/** 错误消息是否应显示重试入口；旧消息缺少字段时保持兼容。 */
+export function isAgentMessageRetryable(message: AgentMessage): boolean {
+  return message.errorCanRetry !== false
+}
+
 // ===== 附件解析 =====
 
 export interface AttachedFileRef {

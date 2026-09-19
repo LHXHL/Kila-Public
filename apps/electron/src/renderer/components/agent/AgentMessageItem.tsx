@@ -43,6 +43,7 @@ import {
   shouldShowMessageSourceBadge,
   extractAttachedFiles,
   getAssistantPlainText,
+  isAgentMessageRetryable,
   isImageFile,
   type AttachedFileRef,
 } from './agent-messages-utils'
@@ -569,7 +570,7 @@ export const AgentMessageItem = React.memo(function AgentMessageItem({
                 {t('agent.message.compactContext')}
               </Button>
             )}
-            {onRetry && (
+            {onRetry && isAgentMessageRetryable(message) && (
               <Button size="sm" variant={message.errorCode === 'prompt_too_long' ? 'outline' : 'default'} onClick={onRetry}>
                 <RotateCw className="size-3.5 mr-1.5" />
                 {t('common.retry')}

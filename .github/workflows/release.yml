@@ -47,11 +47,12 @@ jobs:
       - name: Build CLI resource
         run: bun run --cwd apps/cli build
 
-      - name: Build (main + preload + renderer)
+      - name: Build (main + preload + pi-runtime + renderer)
         working-directory: apps/electron
         run: |
           bun run build:main
           bun run build:preload
+          bun run build:pi-runtime
           bun run build:renderer
           bun run build:resources
           bun run scripts/copy-external-deps.ts
@@ -69,6 +70,21 @@ jobs:
         run: |
           if [ "${CSC_IDENTITY_AUTO_DISCOVERY}" = "false" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
           bunx electron-builder --mac --arm64 --publish never
+
+      - name: Packaged Runtime smoke (macOS arm64)
+        working-directory: apps/electron
+        env:
+          MAC_SIGNING_ENABLED: ${{ secrets.MAC_CERT_P12 != '' }}
+        shell: bash
+        run: |
+          APP_PATH="$(find out -type f -path '*/Kila.app/Contents/MacOS/Kila' -print -quit)"
+          test -n "${APP_PATH}" || { echo "未找到 macOS .app 可执行文件"; exit 1; }
+          if [ "${MAC_SIGNING_ENABLED}" = "true" ]; then
+            codesign --verify --deep --strict "$(dirname "${APP_PATH}")/../.."
+          else
+            echo "未配置 macOS 签名证书，跳过 codesign 校验"
+          fi
+          bun run smoke:packaged -- --app "${APP_PATH}"
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
@@ -103,11 +119,12 @@ jobs:
       - name: Build CLI resource
         run: bun run --cwd apps/cli build
 
-      - name: Build (main + preload + renderer)
+      - name: Build (main + preload + pi-runtime + renderer)
         working-directory: apps/electron
         run: |
           bun run build:main
           bun run build:preload
+          bun run build:pi-runtime
           bun run build:renderer
           bun run build:resources
           bun run scripts/copy-external-deps.ts
@@ -125,6 +142,21 @@ jobs:
         run: |
           if [ "${CSC_IDENTITY_AUTO_DISCOVERY}" = "false" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
           bunx electron-builder --mac --x64 --publish never
+
+      - name: Packaged Runtime smoke (macOS x64)
+        working-directory: apps/electron
+        env:
+          MAC_SIGNING_ENABLED: ${{ secrets.MAC_CERT_P12 != '' }}
+        shell: bash
+        run: |
+          APP_PATH="$(find out -type f -path '*/Kila.app/Contents/MacOS/Kila' -print -quit)"
+          test -n "${APP_PATH}" || { echo "未找到 macOS .app 可执行文件"; exit 1; }
+          if [ "${MAC_SIGNING_ENABLED}" = "true" ]; then
+            codesign --verify --deep --strict "$(dirname "${APP_PATH}")/../.."
+          else
+            echo "未配置 macOS 签名证书，跳过 codesign 校验"
+          fi
+          bun run smoke:packaged -- --app "${APP_PATH}"
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
@@ -161,11 +193,12 @@ jobs:
       - name: Build CLI resource
         run: bun run --cwd apps/cli build
 
-      - name: Build (main + preload + renderer)
+      - name: Build (main + preload + pi-runtime + renderer)
         working-directory: apps/electron
         run: |
           bun run build:main
           bun run build:preload
+          bun run build:pi-runtime
           bun run build:renderer
           bun run build:resources
           bun run scripts/copy-external-deps.ts
@@ -181,6 +214,21 @@ jobs:
           if [ "${CSC_IDENTITY_AUTO_DISCOVERY}" = "false" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
           bunx electron-builder --win --publish never
 
+      - name: Packaged Runtime smoke (Windows 中文空格路径)
+        working-directory: apps/electron
+        shell: pwsh
+        run: |
+          $source = Get-ChildItem -Path out -Recurse -Filter Kila.exe |
+            Where-Object { $_.FullName -match 'win-unpacked' } |
+            Select-Object -First 1
+          if (-not $source) { throw '未找到 Windows unpacked 可执行文件' }
+          $targetRoot = Join-Path $env:RUNNER_TEMP 'Kila Smoke 中文 Path'
+          $targetApp = Join-Path $targetRoot 'win-unpacked'
+          Remove-Item -LiteralPath $targetRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $targetApp -Force | Out-Null
+          Copy-Item -Path (Join-Path $source.Directory.FullName '*') -Destination $targetApp -Recurse -Force
+          bun run smoke:packaged -- --app (Join-Path $targetApp 'Kila.exe')
+
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
@@ -189,10 +237,88 @@ jobs:
           retention-days: 7
 
   # ============================================
+  # Linux (x64)
+  # ============================================
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download Bun vendor (linux-x64)
+        working-directory: apps/electron
+        run: bun run scripts/download-bun.ts --platform linux-x64
+
+      - name: Build CLI resource
+        run: bun run --cwd apps/cli build
+
+      - name: Build (main + preload + pi-runtime + renderer)
+        working-directory: apps/electron
+        run: |
+          bun run build:main
+          bun run build:preload
+          bun run build:pi-runtime
+          bun run build:renderer
+          bun run build:resources
+          bun run scripts/copy-external-deps.ts
+
+      - name: Package (Linux x64 AppImage and deb)
+        working-directory: apps/electron
+        run: bunx electron-builder --linux --x64 --publish never
+
+      - name: AppImage 产物合同
+        working-directory: apps/electron
+        shell: bash
+        run: |
+          APPIMAGE="$(find out -maxdepth 1 -name '*.AppImage' -print -quit)"
+          test -n "${APPIMAGE}" || { echo "未找到 AppImage"; exit 1; }
+          APPIMAGE_PATH="${PWD}/${APPIMAGE}"
+          EXTRACT_ROOT="$(mktemp -d)"
+          (cd "${EXTRACT_ROOT}" && "${APPIMAGE_PATH}" --appimage-extract >/dev/null)
+          test -f "${EXTRACT_ROOT}/squashfs-root/resources/app.asar"
+          node_modules/.bin/asar list "${EXTRACT_ROOT}/squashfs-root/resources/app.asar" | grep -q '^/dist/pi-runtime.cjs$'
+
+      - name: Packaged Runtime smoke (Linux unpacked)
+        working-directory: apps/electron
+        shell: bash
+        run: |
+          APP_PATH="$(find out -type f -path '*/linux-unpacked/kila' -print -quit)"
+          test -n "${APP_PATH}" || { echo "未找到 Linux unpacked 可执行文件"; exit 1; }
+          xvfb-run -a bun run smoke:packaged -- --app "${APP_PATH}"
+
+      - name: Packaged Runtime smoke (Linux deb)
+        working-directory: apps/electron
+        shell: bash
+        run: |
+          DEB="$(find out -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "${DEB}" || { echo "未找到 deb 包"; exit 1; }
+          sudo apt-get install -y "${DEB}"
+          APP_PATH="$(command -v kila || find /opt /usr/lib -type f -name kila -print -quit)"
+          test -n "${APP_PATH}" || { echo "deb 安装后未找到 kila 可执行文件"; exit 1; }
+          xvfb-run -a bun run smoke:packaged -- --app "${APP_PATH}"
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-packages
+          path: |
+            apps/electron/out/*.AppImage
+            apps/electron/out/*.deb
+          retention-days: 7
+
+  # ============================================
   # 汇总发布到 GitHub Release
   # ============================================
   release:
-    needs: [build-macos-arm64, build-macos-x64, build-windows]
+    needs: [build-macos-arm64, build-macos-x64, build-windows, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:

@@ -168,7 +168,7 @@ function main(): void {
   console.log(`  ${color.bold}详细日志${color.reset}: ${opts.verbose ? '开启' : '关闭'}`)
   printSeparator()
 
-  const totalSteps = opts.platform === 'win' ? 9 : 8
+  const totalSteps = opts.platform === 'win' ? 10 : 9
   let step = 0
 
   // ── 步骤 1: 构建 CLI 资源 ──
@@ -189,7 +189,16 @@ function main(): void {
   printStepResult(results[results.length - 1])
   if (!results[results.length - 1].success) return printSummary(results)
 
-  // ── 步骤 3: 构建 Preload ──
+  // ── 步骤 3: 构建 Pi Runtime Utility ──
+  step++
+  printStepStart(step, totalSteps, '构建 Pi Runtime Utility (esbuild)')
+  results.push(
+    runStep('构建 Pi Runtime Utility', 'bun', ['run', 'build:pi-runtime'], { verbose: opts.verbose })
+  )
+  printStepResult(results[results.length - 1])
+  if (!results[results.length - 1].success) return printSummary(results)
+
+  // ── 步骤 4: 构建 Preload ──
   step++
   printStepStart(step, totalSteps, '构建 Preload (esbuild)')
   results.push(
@@ -198,7 +207,7 @@ function main(): void {
   printStepResult(results[results.length - 1])
   if (!results[results.length - 1].success) return printSummary(results)
 
-  // ── 步骤 4: 构建渲染进程 ──
+  // ── 步骤 5: 构建渲染进程 ──
   step++
   printStepStart(step, totalSteps, '构建渲染进程 (Vite)')
   results.push(
@@ -207,7 +216,7 @@ function main(): void {
   printStepResult(results[results.length - 1])
   if (!results[results.length - 1].success) return printSummary(results)
 
-  // ── 步骤 5: 复制资源文件 ──
+  // ── 步骤 6: 复制资源文件 ──
   step++
   printStepStart(step, totalSteps, '复制资源文件')
   results.push(
@@ -215,7 +224,7 @@ function main(): void {
   )
   printStepResult(results[results.length - 1])
 
-  // ── 步骤 6: 复制 external 依赖 ──
+  // ── 步骤 7: 复制 external 依赖 ──
   step++
   printStepStart(step, totalSteps, '复制 external 依赖')
   results.push(
@@ -223,7 +232,7 @@ function main(): void {
   )
   printStepResult(results[results.length - 1])
 
-  // ── 步骤 7: 检查 Vendor 文件 ──
+  // ── 步骤 8: 检查 Vendor 文件 ──
   step++
   printStepStart(step, totalSteps, '检查 Vendor 依赖')
   const vendorPath = join(import.meta.dir, '..', 'vendor', 'bun')
@@ -251,7 +260,7 @@ function main(): void {
     printStepResult(results[results.length - 1])
   }
 
-  // ── 步骤 8: electron-builder 打包 ──
+  // ── 步骤 9: electron-builder 打包 ──
   step++
   printStepStart(step, totalSteps, 'Electron Builder 打包')
 

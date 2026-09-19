@@ -1,0 +1,17 @@
+/** Agent 与 Runtime 共用的错误代码。 */
+export type ErrorCode =
+  | 'invalid_api_key' | 'permission_denied' | 'region_restricted' | 'request_blocked'
+  | 'protocol_mismatch' | 'invalid_credentials' | 'response_too_large' | 'expired_oauth_token'
+  | 'token_expired' | 'rate_limited' | 'service_error' | 'service_unavailable' | 'network_error'
+  | 'mcp_auth_required' | 'mcp_unreachable' | 'billing_error' | 'model_no_tool_support'
+  | 'invalid_model' | 'data_policy_error' | 'invalid_request' | 'image_too_large'
+  | 'image_not_supported' | 'prompt_too_long'
+  | 'runtime_start_failed' | 'runtime_handshake_failed' | 'runtime_protocol_mismatch'
+  | 'runtime_protocol_desync' | 'runtime_protocol_payload_too_large' | 'runtime_crashed'
+  | 'runtime_unresponsive' | 'runtime_resource_exhausted' | 'runtime_capacity_queued'
+  | 'runtime_sidecar_locked' | 'runtime_sidecar_dirty' | 'runtime_sidecar_corrupt'
+  | 'runtime_transfer_missing' | 'runtime_transfer_invalid_path' | 'runtime_transfer_hash_mismatch'
+  | 'runtime_transfer_too_large' | 'runtime_transfer_expired' | 'runtime_transfer_invalid_manifest'
+  | 'runtime_config_changed_while_active' | 'runtime_stale_config_revision'
+  | 'runtime_config_revision_conflict' | 'tool_update_consumer_stalled'
+  | 'provider_error' | 'unknown_error'

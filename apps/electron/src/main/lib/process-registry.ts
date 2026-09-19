@@ -1,10 +1,13 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import type { CodingToolExecutionContext } from '@kila/shared'
+import { buildProcessRecordKey } from './process-registry-key'
 import { resolveShell } from './shell-resolver'
 
 type ProcessStatus = 'running' | 'completed' | 'failed' | 'stopped'
 
 interface ProcessRecord {
+  recordKey: string
   processId: string
   taskId: string
   sessionId: string
@@ -37,6 +40,7 @@ export interface TaskOutputSnapshot {
 interface TrackedBashOptions {
   sessionId: string
   toolCallId: string
+  identity?: CodingToolExecutionContext
 }
 
 interface BashExecOptions {
@@ -100,7 +104,7 @@ class ProcessRegistry {
     for (const record of completed) {
       const endedAt = record.endedAt ?? record.startedAt
       if (now - endedAt > COMPLETED_RECORD_TTL_MS) {
-        this.records.delete(record.taskId)
+        this.records.delete(record.recordKey)
       }
     }
 
@@ -108,7 +112,7 @@ class ProcessRegistry {
       .filter((record) => record.status !== 'running')
       .sort((a, b) => (a.endedAt ?? a.startedAt) - (b.endedAt ?? b.startedAt))
     for (const record of retainedCompleted.slice(0, Math.max(0, retainedCompleted.length - MAX_COMPLETED_RECORDS))) {
-      this.records.delete(record.taskId)
+      this.records.delete(record.recordKey)
     }
   }
 
@@ -118,9 +122,12 @@ class ProcessRegistry {
     command: string
     cwd: string
     child: ChildProcess
+    identity?: CodingToolExecutionContext
   }): ProcessRecord {
+    const recordKey = buildProcessRecordKey(input)
     const { completion, resolveCompletion } = createCompletion()
     const record: ProcessRecord = {
+      recordKey,
       processId: input.toolCallId,
       taskId: input.toolCallId,
       sessionId: input.sessionId,
@@ -136,18 +143,18 @@ class ProcessRegistry {
       resolveCompletion,
     }
     this.pruneCompleted()
-    this.records.set(input.toolCallId, record)
+    this.records.set(recordKey, record)
     return record
   }
 
-  append(taskId: string, data: Buffer | string): void {
-    const record = this.records.get(taskId)
+  append(recordKey: string, data: Buffer | string): void {
+    const record = this.records.get(recordKey)
     if (!record) return
     appendOutput(record, data)
   }
 
-  finish(taskId: string, status: Exclude<ProcessStatus, 'running'>, options: { exitCode?: number | null; error?: string } = {}): void {
-    const record = this.records.get(taskId)
+  finish(recordKey: string, status: Exclude<ProcessStatus, 'running'>, options: { exitCode?: number | null; error?: string } = {}): void {
+    const record = this.records.get(recordKey)
     if (!record || record.status !== 'running') return
     record.status = status
     record.exitCode = options.exitCode
@@ -158,9 +165,9 @@ class ProcessRegistry {
     this.pruneCompleted(record.endedAt)
   }
 
-  async getOutput(taskId: string, options: { block?: boolean } = {}): Promise<TaskOutputSnapshot> {
+  async getOutput(taskId: string, options: { block?: boolean; sessionId?: string } = {}): Promise<TaskOutputSnapshot> {
     this.pruneCompleted()
-    const record = this.records.get(taskId)
+    const record = this.findLatest(taskId, options.sessionId)
     if (!record) {
       return { output: '', isComplete: true, status: 'completed' }
     }
@@ -180,14 +187,21 @@ class ProcessRegistry {
   }
 
   stop(taskId: string): boolean {
-    const record = this.records.get(taskId)
+    return this.stopRecord(this.findLatest(taskId))
+  }
+
+  stopForSession(sessionId: string, taskId: string): boolean {
+    return this.stopRecord(this.findLatest(taskId, sessionId))
+  }
+
+  private stopRecord(record: ProcessRecord | undefined): boolean {
     if (!record || record.status !== 'running') return false
     if (record.pid) {
       killProcessTree(record.pid)
     } else {
       record.child?.kill('SIGTERM')
     }
-    this.finish(taskId, 'stopped', { exitCode: null, error: 'stopped' })
+    this.finish(record.recordKey, 'stopped', { exitCode: null, error: 'stopped' })
     return true
   }
 
@@ -209,18 +223,24 @@ class ProcessRegistry {
   }
 
   stopBySession(sessionId: string): number {
-    const runningIds = [...this.records.values()]
+    const runningKeys = [...this.records.values()]
       .filter((record) => record.sessionId === sessionId && record.status === 'running')
-      .map((record) => record.taskId)
-    for (const taskId of runningIds) this.stop(taskId)
-    return runningIds.length
+      .map((record) => record.recordKey)
+    for (const recordKey of runningKeys) this.stopRecord(this.records.get(recordKey))
+    return runningKeys.length
   }
 
   clearBySession(sessionId: string): void {
     this.stopBySession(sessionId)
-    for (const [taskId, record] of this.records) {
-      if (record.sessionId === sessionId) this.records.delete(taskId)
+    for (const [recordKey, record] of this.records) {
+      if (record.sessionId === sessionId) this.records.delete(recordKey)
     }
+  }
+
+  private findLatest(taskId: string, sessionId?: string): ProcessRecord | undefined {
+    return [...this.records.values()]
+      .filter((record) => record.taskId === taskId && (!sessionId || record.sessionId === sessionId))
+      .sort((left, right) => right.startedAt - left.startedAt)[0]
   }
 }
 
@@ -263,6 +283,7 @@ export function createTrackedBashOperations(options: TrackedBashOptions): {
         command,
         cwd,
         child,
+        identity: options.identity,
       })
 
       let timedOut = false
@@ -275,7 +296,7 @@ export function createTrackedBashOperations(options: TrackedBashOptions): {
       }
 
       const handleData = (data: Buffer): void => {
-        processRegistry.append(record.taskId, data)
+        processRegistry.append(record.recordKey, data)
         onData(data)
       }
       child.stdout?.on('data', handleData)
@@ -296,7 +317,7 @@ export function createTrackedBashOperations(options: TrackedBashOptions): {
 
       child.once('error', (error) => {
         cleanup()
-        processRegistry.finish(record.taskId, 'failed', { exitCode: null, error: error.message })
+        processRegistry.finish(record.recordKey, 'failed', { exitCode: null, error: error.message })
         reject(error)
       })
 
@@ -307,16 +328,16 @@ export function createTrackedBashOperations(options: TrackedBashOptions): {
           return
         }
         if (signal?.aborted) {
-          processRegistry.finish(record.taskId, 'stopped', { exitCode: null, error: 'aborted' })
+          processRegistry.finish(record.recordKey, 'stopped', { exitCode: null, error: 'aborted' })
           reject(new Error('aborted'))
           return
         }
         if (timedOut) {
-          processRegistry.finish(record.taskId, 'stopped', { exitCode: null, error: `timeout:${timeout}` })
+          processRegistry.finish(record.recordKey, 'stopped', { exitCode: null, error: `timeout:${timeout}` })
           reject(new Error(`timeout:${timeout}`))
           return
         }
-        processRegistry.finish(record.taskId, code === 0 ? 'completed' : 'failed', { exitCode: code })
+        processRegistry.finish(record.recordKey, code === 0 ? 'completed' : 'failed', { exitCode: code })
         resolve({ exitCode: code })
       })
     }),

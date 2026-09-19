@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compactAgentEventsForPersistence, type AgentEvent, type SessionMessage, type SessionMeta } from '@kila/shared'
-import { createPiEventMapper } from './adapters/pi-agent-adapter'
+import { createPiEventMapper } from '../../utility/pi-event-mapper'
 import { getSearchIndexPath } from './config-paths'
 import {
   disposeSessionSearchIndex,

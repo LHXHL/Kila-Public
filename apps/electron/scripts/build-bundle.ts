@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 
-import { copyFileSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { build, context, type BuildOptions, type OutputFile, type Plugin } from 'esbuild'
 
-type BundleTarget = 'main' | 'preload'
+type BundleTarget = 'main' | 'preload' | 'pi-runtime'
 
 const projectDir = resolve(import.meta.dir, '..')
 
@@ -31,17 +31,28 @@ const bundleConfigs: Record<BundleTarget, { entry: string, outfile: string, exte
     outfile: resolve(projectDir, 'dist/preload.cjs'),
     external: ['electron'],
   },
+  'pi-runtime': {
+    entry: resolve(projectDir, 'src/utility/pi-runtime.ts'),
+    outfile: resolve(projectDir, 'dist/pi-runtime.cjs'),
+    external: [
+      'electron',
+      '@earendil-works/pi-agent-core',
+      '@earendil-works/pi-ai',
+      '@earendil-works/pi-ai/*',
+      '@earendil-works/pi-coding-agent',
+    ],
+  },
 }
 
 function parseArgs(argv: string[]) {
   const [targetArg, ...flags] = argv
 
-  if (targetArg !== 'main' && targetArg !== 'preload') {
-    throw new Error('usage: bun run scripts/build-bundle.ts <main|preload> [--watch]')
+  if (targetArg !== 'main' && targetArg !== 'preload' && targetArg !== 'pi-runtime' && targetArg !== 'utility') {
+    throw new Error('usage: bun run scripts/build-bundle.ts <main|preload|pi-runtime> [--watch]')
   }
 
   return {
-    target: targetArg as BundleTarget,
+    target: (targetArg === 'utility' ? 'pi-runtime' : targetArg) as BundleTarget,
     watch: flags.includes('--watch'),
   }
 }
@@ -78,6 +89,8 @@ function createAtomicWritePlugin(outfile: string, watch: boolean): Plugin {
         // 写入主产物
         const outputFile = resolveOutputFile(result.outputFiles, outfile)
         writeAtomically(outfile, outputFile.contents)
+        if (targetIsMainBundle(outfile)) assertMainBundleBoundary(outfile)
+        if (targetIsPiRuntimeBundle(outfile)) assertPiRuntimeBoundary(outfile)
 
         // 写入 sourcemap（如果存在）
         const mapPath = `${outfile}.map`
@@ -92,6 +105,28 @@ function createAtomicWritePlugin(outfile: string, watch: boolean): Plugin {
       })
     },
   }
+}
+
+function targetIsMainBundle(outfile: string): boolean {
+  return basename(outfile) === 'main.cjs'
+}
+
+function targetIsPiRuntimeBundle(outfile: string): boolean {
+  return basename(outfile) === 'pi-runtime.cjs'
+}
+
+function assertMainBundleBoundary(outfile: string): void {
+  const contents = readFileSync(outfile, 'utf8')
+  const forbidden = ['createAgentSession', 'SessionManager.continueRecent', 'class PiAgentAdapter']
+  const match = forbidden.find((needle) => contents.includes(needle))
+  if (match) throw new Error(`主进程产物越过 Pi Runtime 边界，发现 ${match}`)
+}
+
+function assertPiRuntimeBoundary(outfile: string): void {
+  const contents = readFileSync(outfile, 'utf8')
+  const required = ['process.parentPort', 'runtime.handshake', 'createAgentSession']
+  const missing = required.find((needle) => !contents.includes(needle))
+  if (missing) throw new Error(`Pi Runtime 产物缺少隔离入口标记：${missing}`)
 }
 
 function resolveOutputFile(outputFiles: OutputFile[] | undefined, outfile: string): OutputFile {

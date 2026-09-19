@@ -21,7 +21,7 @@ import type {
   AgentSavedFile,
   AgentStreamEvent,
 } from '@kila/shared'
-import { PiAgentAdapter } from './adapters/pi-agent-adapter'
+import { RemotePiAgentAdapter } from './remote-pi-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
 import { createSessionRuntimeBridge } from './session-service'
@@ -36,7 +36,7 @@ import { createLogger } from './logger'
 const log = createLogger('Agent 服务')
 
 const eventBus = new AgentEventBus()
-const adapter = new PiAgentAdapter()
+const adapter = new RemotePiAgentAdapter()
 const orchestrator = new AgentOrchestrator(adapter, eventBus)
 
 /** 导出 EventBus 供飞书 Bridge 等外部服务订阅事件 */
@@ -233,6 +233,12 @@ export async function resetAgentSession(sessionId: string): Promise<void> {
   sessionWebContents.delete(sessionId)
 }
 
+/** 释放指定 Session 的完整 Agent Runtime，供删除、回收和应用退出前清理使用。 */
+export async function disposeSessionRuntime(sessionId: string): Promise<void> {
+  await orchestrator.disposeSessionRuntime(sessionId)
+  sessionWebContents.delete(sessionId)
+}
+
 /**
  * 检查指定会话是否正在运行
  */
@@ -243,6 +249,11 @@ export function isAgentSessionActive(sessionId: string): boolean {
 /** 中止所有活跃的 Agent 会话（应用退出时调用） */
 export function stopAllAgents(): void {
   orchestrator.stopAll()
+}
+
+/** 应用退出屏障：等待所有 Agent runtime 和 Utility Process 完整退出。 */
+export async function shutdownAgents(): Promise<void> {
+  await orchestrator.shutdown()
 }
 
 // ===== 文件操作 =====

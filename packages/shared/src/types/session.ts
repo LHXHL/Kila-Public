@@ -117,6 +117,15 @@ export interface SessionMeta {
   updatedAt: number
 }
 
+/** 删除中的 Session 事务状态，写入独立 tombstone 而非产品索引。 */
+export interface SessionDeletionTombstone {
+  sessionId: string
+  state: 'deleting' | 'failed'
+  startedAt: number
+  updatedAt: number
+  error?: string
+}
+
 /** 创建 Session 的输入 */
 export interface SessionCreateInput {
   title?: string

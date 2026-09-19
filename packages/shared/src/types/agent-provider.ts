@@ -2,7 +2,7 @@
  * Agent Provider 适配器接口
  *
  * 定义 Kila 自己的 Agent 接口层，让底层 SDK 可替换。
- * 当前实现：PiAgentAdapter（基于 @earendil-works/pi-agent-core）
+ * 当前生产实现：RemotePiAgentAdapter；Pi SDK 仅在 Utility Runtime 内加载。
  * 保持接口稳定，便于后续继续替换底层运行时。
  */
 
@@ -47,8 +47,18 @@ export interface AgentProviderAdapter {
   abort(sessionId: string): void
   /** 丢弃指定会话的内存 runtime；用于 rewind/regenerate/delete 后重建运行时真相。 */
   resetSession?(sessionId: string): Promise<void> | void
-  /** 释放资源 */
-  dispose(): void
+  /** 释放指定会话的完整 runtime；必须在删除 sidecar 前确认底层资源已退出。 */
+  disposeSessionRuntime?(sessionId: string): Promise<void> | void
+  /** 产品 transcript 已持久化，允许 Runtime 将 journal 收敛为 clean。
+   * strict 模式（requireSettledRun）用于续跑迭代间的确认：run 未 settle 却请求继续视为协议错误。 */
+  markRunPersisted?(
+    sessionId: string,
+    runId: string,
+    lastMessageId?: string,
+    options?: { requireSettledRun?: boolean },
+  ): Promise<void> | void
+  /** 释放资源；调用方在应用退出时必须等待其完成。 */
+  dispose(): Promise<void> | void
   /** 运行中注入额外用户指令 */
   steer?(sessionId: string, message: AgentControlMessage): Promise<void> | void
   /** 当前运行结束后继续排队追加用户指令 */

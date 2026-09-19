@@ -27,4 +27,34 @@ describe('Pi Session sidecar 清理', () => {
 
     expect(existsSync(sessionDir)).toBe(false)
   })
+
+  test('Given sidecar 仍存在 runtime.lock, When 清理, Then 拒绝强删并保留 sidecar', () => {
+    const configDir = mkdtempSync(join(tmpdir(), 'kila-pi-state-lock-'))
+    createdDirs.push(configDir)
+    process.env.KILA_CONFIG_DIR = configDir
+    const sessionDir = getPiSessionDir('session-locked')
+    writeFileSync(join(sessionDir, 'runtime.lock'), '{}')
+
+    expect(() => clearPiSessionState('session-locked')).toThrow('runtime_sidecar_locked')
+    expect(existsSync(sessionDir)).toBe(true)
+  })
+
+  test('Given runtime.lock owner PID 已退出 When 清理 Then 回收 stale lock 后删除 sidecar', () => {
+    const configDir = mkdtempSync(join(tmpdir(), 'kila-pi-state-stale-'))
+    createdDirs.push(configDir)
+    process.env.KILA_CONFIG_DIR = configDir
+    const sessionDir = getPiSessionDir('session-stale')
+    writeFileSync(join(sessionDir, 'runtime.lock'), JSON.stringify({
+      pid: 999_999,
+      parentPid: 999_998,
+      processStartTime: 1,
+      appBootId: 'app',
+      bootId: 'boot',
+      generation: 0,
+    }))
+
+    clearPiSessionState('session-stale')
+
+    expect(existsSync(sessionDir)).toBe(false)
+  })
 })

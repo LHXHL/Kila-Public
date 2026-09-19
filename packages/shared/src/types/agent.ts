@@ -6,6 +6,8 @@
 
 import type { SessionContextSnapshot } from '../utils/estimate-session-context'
 import type { FileAttachment } from './attachment'
+import type { ErrorCode } from './agent-error'
+export type { ErrorCode } from './agent-error'
 
 // ===== Agent 工作区 =====
 
@@ -132,34 +134,6 @@ export interface JsonSchemaOutputFormat {
 }
 
 // ===== Agent 事件类型 =====
-
-/** 错误代码 */
-export type ErrorCode =
-  | 'invalid_api_key'
-  | 'permission_denied'
-  | 'region_restricted'
-  | 'request_blocked'
-  | 'protocol_mismatch'
-  | 'invalid_credentials'
-  | 'response_too_large'
-  | 'expired_oauth_token'
-  | 'token_expired'
-  | 'rate_limited'
-  | 'service_error'
-  | 'service_unavailable'
-  | 'network_error'
-  | 'mcp_auth_required'
-  | 'mcp_unreachable'
-  | 'billing_error'
-  | 'model_no_tool_support'
-  | 'invalid_model'
-  | 'data_policy_error'
-  | 'invalid_request'
-  | 'image_too_large'
-  | 'image_not_supported'
-  | 'prompt_too_long'
-  | 'provider_error'
-  | 'unknown_error'
 
 /** 恢复操作 */
 export interface RecoveryAction {
@@ -339,6 +313,8 @@ export type AgentEvent =
     }
   // 单次 runtime 资源边界（不同于应用级月度 Token budget）。
   | { type: 'runtime_limit_reached'; limit: AgentRuntimeLimitReached }
+  // Runtime 资源排队状态，不代表本次运行失败，也不应写入产品 transcript。
+  | { type: 'runtime_queued'; position: number }
   // 上下文压缩
   | { type: 'compacting' }
   | {
@@ -662,6 +638,8 @@ export interface AgentSendInput {
 export interface GetTaskOutputInput {
   /** 任务 ID */
   taskId: string
+  /** 可选 Session ID；用于隔离不同 Runtime 中可能重复的 toolCallId。 */
+  sessionId?: string
   /** 是否阻塞等待完成（默认 false） */
   block?: boolean
 }

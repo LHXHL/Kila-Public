@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type {
   AgentEvent,
   AgentProviderAdapter,
@@ -9,9 +10,10 @@ import type {
   AgentSendInput,
   MemoryRunTrace,
 } from '@kila/shared'
-import type { PiAgentQueryOptions } from './adapters/pi-agent-adapter'
+import type { PiAgentQueryOptions } from '../../utility/pi-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
-import { getAgentMessages } from './agent-message-store'
+import { readAgentRunReceipt } from './agent-run-receipt-store'
+import { appendAgentMessage, getAgentMessages } from './agent-message-store'
 import { runAgentStream } from './agent-orchestrator-stream'
 import { createSession } from './session-manager'
 
@@ -73,22 +75,36 @@ function createAdapter(
   }
 }
 
+/** 模拟 orchestrator 在进入 stream 前落盘本轮用户消息，并返回其 id 作为安全边界。 */
+function appendTurnUserMessage(sessionId: string, text: string): string {
+  const id = randomUUID()
+  appendAgentMessage(sessionId, {
+    id,
+    role: 'user',
+    content: text,
+    createdAt: Date.now(),
+  })
+  return id
+}
+
 async function runWithAdapter(
   adapter: AgentProviderAdapter,
   input: AgentSendInput,
   shouldContinue?: () => boolean,
-): Promise<{ errors: string[]; outcomes: AgentRunOutcome[]; events: AgentEvent[] }> {
+): Promise<{ errors: string[]; outcomes: AgentRunOutcome[]; events: AgentEvent[]; turnUserMessageId: string }> {
   const eventBus = new AgentEventBus()
   const errors: string[] = []
   const outcomes: AgentRunOutcome[] = []
   const events: AgentEvent[] = []
   eventBus.on((_sessionId, event) => events.push(event))
+  const turnUserMessageId = appendTurnUserMessage(input.sessionId, input.userMessage)
 
   await runAgentStream({
     input,
     adapter,
     eventBus,
     queryOptions: { sessionId: input.sessionId } as PiAgentQueryOptions,
+    turnUserMessageId,
     resolvedModel: input.modelId ?? 'model-a',
     memoryTrace: createMemoryTrace(),
     shouldContinue: shouldContinue ? () => shouldContinue() : undefined,
@@ -96,7 +112,7 @@ async function runWithAdapter(
     onComplete: (_messages, outcome = 'success') => outcomes.push(outcome),
   })
 
-  return { errors, outcomes, events }
+  return { errors, outcomes, events, turnUserMessageId }
 }
 
 describe('Agent stream 终态收敛', () => {
@@ -123,6 +139,49 @@ describe('Agent stream 终态收敛', () => {
     expect(result.outcomes).toEqual(['error'])
     expect(messages.some((message) => message.role === 'assistant' && message.content === '部分回复')).toBe(true)
     expect(messages.some((message) => message.role === 'status' && message.errorCode === 'rate_limited')).toBe(true)
+  })
+
+  test('Given Runtime 尚未确认 persisted，When 产品消息已落盘，Then onComplete 等待 run.persisted_ack', async () => {
+    const context = createContext()
+    let resolvePersisted!: () => void
+    let persistStarted = false
+    const persisted = new Promise<void>((resolve) => {
+      resolvePersisted = resolve
+    })
+    const outcomes: AgentRunOutcome[] = []
+    const adapter: AgentProviderAdapter = {
+      ownsRetry: true,
+      query: async function* () {
+        yield { type: 'text_delta', text: '等待安全边界' }
+        yield { type: 'complete', stopReason: 'stop' }
+      },
+      abort: () => {},
+      dispose: () => {},
+      markRunPersisted: async () => {
+        persistStarted = true
+        await persisted
+      },
+    }
+
+    const runPromise = runAgentStream({
+      input: context.input,
+      adapter,
+      eventBus: new AgentEventBus(),
+      queryOptions: { sessionId: context.sessionId, runId: 'run-persist-barrier' } as PiAgentQueryOptions,
+      turnUserMessageId: appendTurnUserMessage(context.sessionId, context.input.userMessage),
+      resolvedModel: context.input.modelId ?? 'model-a',
+      memoryTrace: createMemoryTrace(),
+      onError: () => {},
+      onComplete: (_messages, outcome = 'success') => outcomes.push(outcome),
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(persistStarted).toBe(true)
+    expect(outcomes).toEqual([])
+
+    resolvePersisted()
+    await runPromise
+    expect(outcomes).toEqual(['success'])
   })
 
   test('Given Pi 返回未知 error 事件，When 流结束，Then 不得误报成功', async () => {
@@ -245,6 +304,43 @@ function createPromptAwareAdapter(
     dispose: () => {},
   }
   return { adapter, prompts }
+}
+
+interface RecordedPersistCall {
+  runId: string
+  lastMessageId?: string
+  options?: { requireSettledRun?: boolean }
+}
+
+/** 记录每次 query 的 runId 与 markRunPersisted 调用，用于断言续跑迭代的轮转与确认时序。 */
+function createRunRecordingAdapter(passes: Array<() => AgentEvent[]>, options?: {
+  ownsRetry?: boolean
+  onMarkRunPersisted?: (call: RecordedPersistCall) => Promise<void> | void
+}): {
+  adapter: AgentProviderAdapter
+  runIds: Array<string | undefined>
+  persistCalls: RecordedPersistCall[]
+} {
+  const runIds: Array<string | undefined> = []
+  const persistCalls: RecordedPersistCall[] = []
+  const adapter: AgentProviderAdapter = {
+    ownsRetry: options?.ownsRetry ?? true,
+    query: (queryOptions) => {
+      runIds.push((queryOptions as PiAgentQueryOptions).runId)
+      const events = passes[Math.min(runIds.length - 1, passes.length - 1)]?.() ?? []
+      return (async function* () {
+        yield* events
+      })()
+    },
+    abort: () => {},
+    dispose: () => {},
+    markRunPersisted: async (_sessionId, runId, lastMessageId, callOptions) => {
+      const call = { runId, lastMessageId, options: callOptions }
+      persistCalls.push(call)
+      await options?.onMarkRunPersisted?.(call)
+    },
+  }
+  return { adapter, runIds, persistCalls }
 }
 
 describe('压缩后自动续跑', () => {
@@ -387,5 +483,141 @@ describe('/goal 持续执行', () => {
     expect(getAgentMessages(context.sessionId).some((message) => (
       message.role === 'status' && message.content.includes('目标尚未确认完成')
     ))).toBe(true)
+  })
+})
+
+describe('续跑迭代的 runId 轮转与 persisted 确认', () => {
+  test('Given goal loop 需要两次迭代 When 第二次 query 发起 Then runId 已轮转且第一次 runId 先收到严格确认', async () => {
+    const context = createContext()
+    const { adapter, runIds, persistCalls } = createRunRecordingAdapter([
+      () => [{ type: 'text_delta', text: '第一步完成。' }, { type: 'complete', stopReason: 'stop' }],
+      () => [{ type: 'text_delta', text: '已全部完成 <!-- KILA_GOAL_COMPLETE -->' }, { type: 'complete', stopReason: 'stop' }],
+    ])
+
+    const result = await runWithAdapter(adapter, { ...context.input, goalLoop: true })
+
+    expect(result.outcomes).toEqual(['success'])
+    expect(runIds).toHaveLength(2)
+    expect(runIds[0]).toBeTruthy()
+    expect(runIds[1]).not.toBe(runIds[0])
+    // 中间确认：轮转前的 runId + 本轮用户消息作为安全边界 + 严格模式
+    expect(persistCalls).toHaveLength(2)
+    expect(persistCalls[0]?.runId).toBe(runIds[0])
+    expect(persistCalls[0]?.lastMessageId).toBe(result.turnUserMessageId)
+    expect(persistCalls[0]?.options).toEqual({ requireSettledRun: true })
+    // 终态确认：最后一次迭代的 runId，宽松模式（不带 options）
+    expect(persistCalls[1]?.runId).toBe(runIds[1])
+    expect(persistCalls[1]?.options).toBeUndefined()
+    // 最终 receipt 只保留最后一次迭代的 runId
+    const receipt = readAgentRunReceipt(context.sessionId)
+    expect(receipt?.runId).toBe(runIds[1])
+    expect(receipt?.runtimeSettled).toBe(true)
+  })
+
+  test('Given 压缩后回复被截断 When 自动续跑 Then 第二段 query 使用新 runId 且前置严格确认', async () => {
+    const context = createContext()
+    const { adapter, runIds, persistCalls } = createRunRecordingAdapter([
+      () => [
+        { type: 'text_delta', text: '前半段' },
+        { type: 'compact_complete', reason: 'threshold', willRetry: false },
+        { type: 'complete', stopReason: 'length' },
+      ],
+      () => [{ type: 'text_delta', text: '后半段' }, { type: 'complete', stopReason: 'stop' }],
+    ])
+
+    const result = await runWithAdapter(adapter, context.input)
+
+    expect(result.outcomes).toEqual(['success'])
+    expect(runIds).toHaveLength(2)
+    expect(runIds[1]).not.toBe(runIds[0])
+    expect(persistCalls).toHaveLength(2)
+    expect(persistCalls[0]?.runId).toBe(runIds[0])
+    expect(persistCalls[0]?.lastMessageId).toBe(result.turnUserMessageId)
+    expect(persistCalls[0]?.options).toEqual({ requireSettledRun: true })
+  })
+
+  test('Given 外层重试进入第二次 attempt When 重新 query Then runId 已轮转且确认走宽松模式', async () => {
+    const context = createContext()
+    const { adapter, runIds, persistCalls } = createRunRecordingAdapter([
+      () => [{
+        type: 'typed_error',
+        error: { code: 'rate_limited', title: '请求频率限制', message: '稍后再试', canRetry: true, actions: [] },
+      }],
+      () => [{ type: 'text_delta', text: '重试成功' }, { type: 'complete', stopReason: 'stop' }],
+    ], { ownsRetry: false })
+
+    const result = await runWithAdapter(adapter, context.input)
+
+    expect(result.outcomes).toEqual(['success'])
+    expect(runIds).toHaveLength(2)
+    expect(runIds[1]).not.toBe(runIds[0])
+    // 重试确认走宽松模式：rejected / 未 settle 的上一 attempt 合法缺席
+    expect(persistCalls.some((call) => (
+      call.runId === runIds[0] && call.options?.requireSettledRun === false
+    ))).toBe(true)
+  })
+
+  test('Given markRunPersisted 拒绝 When 续跑确认失败 Then 收敛 error、单次确认、不再发起后续 query', async () => {
+    const context = createContext()
+    const { adapter, runIds, persistCalls } = createRunRecordingAdapter([
+      () => [{ type: 'text_delta', text: '第一步。' }, { type: 'complete', stopReason: 'stop' }],
+    ], {
+      onMarkRunPersisted: async () => {
+        throw new Error('runtime_unresponsive: 等待 run.persisted_ack 超时')
+      },
+    })
+
+    const result = await runWithAdapter(adapter, { ...context.input, goalLoop: true })
+
+    expect(result.outcomes).toEqual(['error'])
+    expect(runIds).toHaveLength(1)
+    // 收敛路径跳过终态处的二次确认（该 run 已确认失败），全程只调用一次
+    expect(persistCalls).toHaveLength(1)
+    const messages = getAgentMessages(context.sessionId)
+    expect(messages.some((message) => (
+      message.role === 'status' && message.errorCode === 'runtime_unresponsive'
+    ))).toBe(true)
+    expect(result.errors.length).toBeGreaterThan(0)
+    // 确认失败后 receipt 必须保守声明 runtimeSettled=false
+    expect(readAgentRunReceipt(context.sessionId)?.runtimeSettled).toBe(false)
+  })
+
+  test('Given 严格确认发现 run 未 settle When markRunPersisted 抛协议错误 Then 本轮收敛 error', async () => {
+    const context = createContext()
+    const { adapter, runIds, persistCalls } = createRunRecordingAdapter([
+      () => [{ type: 'text_delta', text: '第一步。' }, { type: 'complete', stopReason: 'stop' }],
+    ], {
+      onMarkRunPersisted: async (call) => {
+        if (call.options?.requireSettledRun) {
+          throw new Error('runtime_protocol_desync: 上一 run 未 settle 却请求继续')
+        }
+      },
+    })
+
+    const result = await runWithAdapter(adapter, { ...context.input, goalLoop: true })
+
+    expect(result.outcomes).toEqual(['error'])
+    expect(runIds).toHaveLength(1)
+    expect(persistCalls).toHaveLength(1)
+    expect(persistCalls[0]?.options).toEqual({ requireSettledRun: true })
+  })
+
+  test('Given 传入的 turnUserMessageId 与实际落盘消息不匹配 When stream 启动 Then fail-fast 抛协议错误', async () => {
+    const context = createContext()
+    const adapter = createAdapter(async function* () {
+      yield { type: 'complete', stopReason: 'stop' }
+    })
+
+    await expect(runAgentStream({
+      input: context.input,
+      adapter,
+      eventBus: new AgentEventBus(),
+      queryOptions: { sessionId: context.sessionId } as PiAgentQueryOptions,
+      turnUserMessageId: 'bogus-turn-user-message-id',
+      resolvedModel: 'model-a',
+      memoryTrace: createMemoryTrace(),
+      onError: () => {},
+      onComplete: () => {},
+    })).rejects.toThrow('runtime_protocol_desync')
   })
 })

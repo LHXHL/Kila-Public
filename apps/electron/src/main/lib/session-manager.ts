@@ -436,7 +436,18 @@ export function deleteSession(id: string, deps?: SessionManagerDeps): void {
   const index = readIndexCached(deps)
   const idx = index.sessions.findIndex((session) => session.id === id)
   if (idx < 0) {
-    throw new Error(`Session 不存在: ${id}`)
+    // 删除 tombstone 可能在索引已落盘移除、旁路文件尚未清完时被启动恢复。
+    // 这里清理残留文件并幂等返回，避免失败事务永久卡在 deleting。
+    const filePath = getMessagePath(id, deps)
+    for (const persistedPath of [filePath, `${filePath}.offsets.json`, `${filePath}.corrupt`]) {
+      if (existsSync(persistedPath)) {
+        unlinkSync(persistedPath)
+      }
+    }
+    cleanupSessionBoard(id)
+    invalidateMessageCache(id)
+    if (!deps?.paths) markSessionSearchIndexDirty(id)
+    return
   }
   const removed = index.sessions[idx]!
 

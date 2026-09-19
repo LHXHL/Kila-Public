@@ -85,12 +85,24 @@ jobs:
       - name: Build CLI resource
         run: bun run --cwd apps/cli build
 
-      - name: Build（main + preload + renderer + external deps）
+      - name: Build（main + preload + pi-runtime + renderer + external deps）
         working-directory: apps/electron
         run: |
           bun run build:provider-db
           bun run build:main
           bun run build:preload
+          bun run build:pi-runtime
           bun run build:renderer
           bun run build:resources
           bun run scripts/copy-external-deps.ts
+
+      - name: Runtime 资源压力基准（1/4/8/16）
+        working-directory: apps/electron
+        run: xvfb-run -a bun run benchmark:runtime | tee runtime-pressure.jsonl
+
+      - name: 上传 Runtime 资源基准
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-pressure-benchmark
+          path: apps/electron/runtime-pressure.jsonl
+          retention-days: 14

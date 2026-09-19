@@ -28,7 +28,7 @@ import { initializeRuntime } from './lib/runtime-init'
 import { setMainWindow } from './lib/settings-window-manager'
 import { loadWindowState, saveWindowState } from './lib/window-state'
 import { bootstrapUnifiedSessions } from './lib/session-manager'
-import { stopAllAgents } from './lib/agent-service'
+import { shutdownAgents } from './lib/agent-service'
 import { initAutoUpdater, cleanupUpdater } from './lib/updater/auto-updater'
 import { startWorkspaceWatcher, stopWorkspaceWatcher } from './lib/workspace-watcher'
 import { startAgentToolsWatcher, stopAgentToolsWatcher } from './lib/agent-tools-watcher'
@@ -57,6 +57,8 @@ import {
   isAllowedWebPreviewUrl,
   WEB_PREVIEW_PARTITION,
 } from './lib/web-preview-security'
+import { cleanupRuntimeTransferBundles } from './lib/agent-runtime-transfer-store'
+import { resumePendingSessionDeletions } from './lib/session-cleanup-service'
 
 const log = createLogger('主进程')
 
@@ -440,7 +442,13 @@ app.whenReady().then(async () => {
   syncBuiltinSkillsToGlobalAgent()
 
   // 单一 Session 首启清理：旧 chat / agent 存储直接丢弃
+  cleanupRuntimeTransferBundles({ appBootId: `app-${process.pid}-${Date.now()}` })
   bootstrapUnifiedSessions()
+  try {
+    await resumePendingSessionDeletions()
+  } catch (error) {
+    log.error('[Session 删除事务] 启动扫描失败，保留 tombstone 并等待下次启动:', error)
+  }
   // 初始化全局 MCP 服务器长连接
   mcpServerManager.initialize().catch((error) => {
     log.error('[MCP] 初始化失败，将在首次使用时重试:', error)
@@ -553,12 +561,24 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
+let quitShutdownPromise: Promise<void> | undefined
+let allowQuit = false
+
+app.on('before-quit', (event) => {
+  if (allowQuit) return
+  event.preventDefault()
+  if (quitShutdownPromise) return
+
   // 标记正在退出，让 close 事件不再阻止关闭
   setQuitting()
 
-  // 中止所有活跃的 Agent 子进程
-  stopAllAgents()
+  // 等待所有活跃 Agent 的 transcript、sidecar 与 Utility Process 完整收敛。
+  quitShutdownPromise = shutdownAgents().catch((error) => {
+    log.error('[Agent Runtime] 退出屏障失败:', error)
+  }).finally(() => {
+    allowQuit = true
+    app.quit()
+  })
   scheduledTaskManager.shutdown()
   // 清理更新器定时器
   cleanupUpdater()

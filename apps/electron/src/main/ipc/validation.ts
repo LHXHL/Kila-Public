@@ -552,6 +552,7 @@ export function validateGetTaskOutputInput(value: unknown): GetTaskOutputInput {
   const input = assertRecord(value, 'task output input')
   return {
     taskId: assertString(input.taskId, 'taskId', { nonEmpty: true, max: 128 }),
+    sessionId: assertOptionalString(input.sessionId, 'sessionId', 128),
     block: assertOptionalBoolean(input.block, 'block'),
   }
 }

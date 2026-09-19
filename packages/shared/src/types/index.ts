@@ -29,6 +29,7 @@ export * from './provider-message'
 
 // Agent 相关类型
 export * from './agent'
+export * from './agent-error'
 
 // Unified session 相关类型
 export * from './session'
@@ -47,6 +48,15 @@ export * from './file-preview'
 
 // Agent Provider 适配器接口
 export * from './agent-provider'
+
+// Agent Runtime transfer bundle 协议
+export * from './agent-runtime-transfer'
+
+// Agent Runtime RPC 协议
+export * from './agent-runtime-protocol'
+
+// Agent run receipt / Pi sidecar journal
+export * from './agent-run-receipt'
 
 // 环境检测相关类型
 export * from './environment'
@@ -68,6 +78,9 @@ export * from './widget-intent'
 
 // Agent 工具（function calling）相关类型
 export * from './agent-tool'
+
+// Kila 自有 coding tools 相关类型
+export * from './coding-tools'
 
 // IM bridge 相关类型
 export * from './im-bridge'

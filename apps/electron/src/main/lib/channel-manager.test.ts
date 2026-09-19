@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChannelCreateInput, ChannelsConfig } from '@kila/shared'
-import { createChannel, deleteChannel, listChannels, updateChannel } from './channel-manager'
+import { createChannel, decryptApiKey, deleteChannel, listChannels, updateChannel } from './channel-manager'
 
 const tempDirs: string[] = []
 const originalConfigDir = process.env.KILA_CONFIG_DIR
@@ -52,6 +52,7 @@ describe('渠道配置持久化护栏', () => {
     expect(readFileSync(`${configPath}.bak`, 'utf-8')).toBe(readFileSync(configPath, 'utf-8'))
     expect(readChannelsFile(configDir).channels).toHaveLength(1)
     expect(readChannelsFile(configDir).channels[0]!.id).toBe(created.id)
+    expect(decryptApiKey(created.id)).toBe('secret-渠道甲')
     expect(readdirSync(configDir).filter((name) => name.endsWith('.tmp'))).toHaveLength(0)
   })
 

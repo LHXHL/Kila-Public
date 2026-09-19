@@ -5,6 +5,7 @@ import {
   formatPayloadPreview,
   getMessagePreviewText,
   getRenderablePayloadText,
+  isAgentMessageRetryable,
 } from './agent-messages-utils'
 
 describe('工具过程输出性能边界', () => {
@@ -45,5 +46,26 @@ describe('工具过程输出性能边界', () => {
 
     expect(preview.startsWith('开头摘要')).toBe(true)
     expect(preview.length).toBeLessThanOrEqual(2_048)
+  })
+})
+
+describe('Agent 错误恢复入口', () => {
+  test('Given Runtime 不可重试错误 When 判断消息 Then 不显示重试入口', () => {
+    expect(isAgentMessageRetryable({
+      id: 'error-1',
+      role: 'status',
+      content: 'Runtime 数据超限',
+      createdAt: Date.now(),
+      errorCanRetry: false,
+    })).toBe(false)
+  })
+
+  test('Given 旧消息没有 retry 字段 When 判断消息 Then 保持兼容并允许重试', () => {
+    expect(isAgentMessageRetryable({
+      id: 'error-2',
+      role: 'status',
+      content: '执行失败',
+      createdAt: Date.now(),
+    })).toBe(true)
   })
 })

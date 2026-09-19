@@ -70,6 +70,7 @@ export function registerAgentHandlers(): void {
         input = validateGetTaskOutputInput(input)
         return await processRegistry.getOutput(input.taskId, {
           block: input.block,
+          sessionId: input.sessionId,
         })
       } catch (error) {
         log.error('[IPC] 获取任务输出失败:', error)
@@ -84,7 +85,7 @@ export function registerAgentHandlers(): void {
       try {
         input = validateStopTaskInput(input)
         if (input.type === 'shell') {
-          processRegistry.stop(input.taskId)
+          processRegistry.stopForSession(input.sessionId, input.taskId)
         } else {
           log.warn('[IPC] STOP_TASK: Agent 任务暂不支持单独停止')
         }

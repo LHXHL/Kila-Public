@@ -59,7 +59,6 @@ function appendProcessEvent(events: AgentEvent[], event: AgentEvent): AgentEvent
   return next.length > MAX_PROCESS_EVENTS ? next.slice(-MAX_PROCESS_EVENTS) : next
 }
 
-
 function upsertRetryAttempt(history: RetryAttempt[], attempt: RetryAttempt): RetryAttempt[] {
   const existingIndex = history.findIndex((item) => item.attempt === attempt.attempt)
   if (existingIndex < 0) return [...history, attempt]
@@ -97,7 +96,6 @@ export interface ActivityGroup {
   parent: ToolActivity
   children: ToolActivity[]
 }
-
 /** Agent 会话的流式状态 */
 export interface AgentStreamState {
   running: boolean
@@ -748,6 +746,8 @@ export function applyAgentEvent(prev: AgentStreamState, event: AgentEvent): Agen
         processEvents: appendProcessEvent(prev.processEvents, event),
       }
 
+    case 'runtime_queued':
+      return { ...prev, running: true }
     case 'text_delta':
       return {
         ...prev,

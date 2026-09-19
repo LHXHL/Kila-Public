@@ -52,7 +52,7 @@ export function useBackgroundTasks(sessionId: string): UseBackgroundTasksResult 
       try {
         const snapshots = await Promise.all(shellTasks.map(async (task) => {
           try {
-            const snapshot = await window.electronAPI.getTaskOutput({ taskId: task.id })
+            const snapshot = await window.electronAPI.getTaskOutput({ taskId: task.id, sessionId })
             reportedPollErrorsRef.current.delete(task.id)
             return { task, snapshot }
           } catch (error) {
